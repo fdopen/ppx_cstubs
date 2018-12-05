@@ -1,0 +1,59 @@
+.PHONY: clean all distclean install uninstall lib
+
+VERSION=0.0.1
+PROJNAME=ppx_cstubs
+USE_OCAMLFIND=true
+BYTE_ENABLED=true
+OCAMLPACKS=$(EMPTY)
+
+static.=
+	export
+	if $(not $(equal $(getenv DEBUG_MY_CODE, $(EMPTY)), $(EMPTY)))
+		export
+		OCAMLFLAGS= -absname -strict-sequence -principal -safe-string -w A -warn-error +1..49+59
+	else
+		export
+		OCAMLFLAGS= -strict-sequence -safe-string -warn-error +4+8+33 # 33 and 4 are used in generated code
+	OCAMLCFLAGS= -g -bin-annot
+	OCAMLOPTFLAGS= -g
+	COMPILER_LIBS=$(nth 0,$(shella ocamlfind query compiler-libs))
+
+setenv(OCAMLFIND_IGNORE_DUPS_IN, $(COMPILER_LIBS))
+
+include OMakeIncludes
+
+static.=
+	export
+	OCAMLPACKS=$(OCAMLPACKS)
+	OCAMLFLAGS=$(OCAMLFLAGS)
+	OCAMLFLAGS_RESULT=$(EMPTY)
+	BISECT=
+		if $(or $(equal $(string $(lowercase $(GetVarEnv BISECT))),true), $(equal $(GetVarEnv BISECT),1))
+			value true
+		else
+			value false
+	if $(or $(lt $(OCAMLC_VERSION_MAJOR),4),$(and $(eq 4,$(OCAMLC_VERSION_MAJOR)),$(lt $(OCAMLC_VERSION_MINOR),3)))
+		export
+		OCAMLFLAGS_RESULT= -open Result
+		OCAMLFLAGS+= -warn-error -45
+		OCAMLPACKS+= result
+	if $(or $(gt $(OCAMLC_VERSION_MAJOR),4),$(and $(eq 4,$(OCAMLC_VERSION_MAJOR)),$(ge $(OCAMLC_VERSION_MINOR),4)))
+		export
+		OCAMLFLAGS+=-no-keep-locs
+	if $(and $(eq 4,$(OCAMLC_VERSION_MAJOR)),$(lt $(OCAMLC_VERSION_MINOR),6))
+		OCAMLFLAGS+= -warn-error -32
+		export
+
+.DEFAULT: all
+.SUBDIRS: src examples #test
+
+.PHONY: echo-pkg
+echo-pkg:
+	@echo $(PROJNAME)-$(VERSION)
+
+clean::
+	clean-helper()
+	rm -f oUnit*.log setup.data setup.log
+
+distclean:: clean
+	rm -f *~ .*~ setup.ml _oasis *.xz *.gz

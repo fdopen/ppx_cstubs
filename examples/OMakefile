@@ -1,0 +1,46 @@
+.DEFAULT: all
+.PHONY: show
+
+chmod_exists(mode,files)=
+	if $(not $(equal $(OSTYPE), Win32))
+		foreach(f, $(files))
+			if $(file-exists $(f))
+				chmod($(mode) $(f))
+
+CPP_FILES(t)=
+	LocalOCamlGeneratedFiles($(mapsuffix _stubs.c, $(t)) $(mapsuffix .ml, $(t)))
+	foreach(f, $(t))
+		$(f)_stubs.c $(f).ml: $(f).c.ml ../src/ppx_cstubs.run
+			chmod_exists(0644, $(f)_stubs.c $(f).ml)
+			../src/ppx_cstubs.run -o-ml $(f).ml -o-c $(f)_stubs.c $(f).c.ml -pretty
+			chmod_exists(0444,$(f)_stubs.c $(f).ml)
+		clean::
+			rm -f $(f).ml $(f)_stubs.c
+
+static.=
+	export
+	C = $(shell $(OCAMLFIND) c $'-only-show' $'-custom' $'-I' $'../src' $'-package' $'ctypes,ctypes.foreign' $'-linkpkg' || echo false)
+	OPT = $(shell $(OCAMLFIND) opt $'-only-show' $'-I' $'../src' $'-package' $'ctypes,ctypes.foreign' $'-linkpkg' || echo false)
+
+EXAMPLE(t)=
+	section
+		CPP_FILES($(t))
+		$(t).run: $(t).ml $(t)_stubs.c ../src/ppx_cstubs_runtime.cma
+			$(C) -g $(OCAMLFLAGS) ppx_cstubs_runtime.cma $(t)_stubs.c $(t).ml -o $(t).run 
+		$(t).opt: $(t).ml $(t)_stubs.c ../src/ppx_cstubs_runtime.cmxa
+			$(OPT) -g $(OCAMLFLAGS) ppx_cstubs_runtime.cmxa $(t)_stubs.c $(t).ml -o $(t).opt
+
+		$(t)$(EXE): $(if $(NATIVE_ENABLED), $(t).opt, $(t).run)
+			ln-or-cp $< $(t)$(EXE)
+		all:: $(t)$(EXE)
+		clean::
+			rm -f $(t)$(EXE) $(t).cmi $(t).cmo $(t)_stubs$(EXT_OBJ) $(t).cmx $(t)$(EXT_OBJ) $(t).run $(t).opt
+		show:: $(t)$(EXE)
+			./$(t)$(EXE)
+
+if $(not $(equal $(OSTYPE), Win32))
+	EXAMPLE(getpwent)
+	EXAMPLE(ftw)
+
+EXAMPLE(time)
+EXAMPLE(inline)

@@ -1,0 +1,71 @@
+.DEFAULT: lib
+.PHONY: test install uninstall install-lib uninstall-lib
+
+ConfReplace(META)
+
+install:: uninstall
+
+section
+	LIB_RUNTIME=ppx_cstubs_runtime
+	OCAMLPACKS=ctypes
+	OCAMLFLAGS+= -w -4 -warn-error -4
+	FILES=ppx_cstubs_internals ppx_cstubs_shadow
+	Repeat_targets($(FILES))
+	LIB=$(MOCamlLibrary $(LIB_RUNTIME),$(FILES))
+	Install_helper($(PROJNAME),$(LIB),ppx_cstubs_shadow.ml)
+	lib:: $(LIB)
+
+static. =
+	section
+		FINDLIB_DESTDIR=$(shell $(OCAMLFIND) printconf destdir)
+		export
+
+OCAMLFLAGS+=$(OCAMLFLAGS_RESULT)
+section
+	OCAMLPACKS+=integers containers num ppx_tools_versioned ocaml-migrate-parsetree ctypes compiler-libs.bytecomp compiler-libs.toplevel findlib findlib.top $(if $(BISECT),bisect_ppx)
+	NATIVE_ENABLED=false
+	OCAML_BYTE_LINK_FLAGS=-custom -linkall
+	OCamlGeneratedFiles(inline_lexer.ml)
+	FILES_FRAGILE=ctypes_type_printing_fake main
+	FILES=script_result extract_c ocaml_config options std gen_c inline_lexer marshal_types keywords attributes evil_hack
+	FILES_CPP=toplevel
+	FILES_QUOT=extract_c_ml
+	FILES_QUOT_FRAGILE=ppxc__script ppx_cstubs gen_ml
+	Repeat_targets($(FILES))
+	section
+		OCAMLFINDFLAGS+= -pp "cppo -V OCAML:$(OCAMLC_VERSION)"
+		Repeat_targets($(FILES_CPP))
+	section
+		OCAMLFLAGS+= -w -4 -warn-error -4
+		Repeat_targets($(FILES_FRAGILE))
+	section
+		OCAMLFLAGS+= -w -4 -warn-error -4
+		OCAMLPACKS+= ppx_tools_versioned.metaquot_405
+		Repeat_targets($(FILES_QUOT_FRAGILE))
+	section
+		OCAMLPACKS+= ppx_tools_versioned.metaquot_405
+		Repeat_targets($(FILES_QUOT))
+	PROG=$(MOCamlProgram ppx_cstubs,$(FILES) $(FILES_FRAGILE) $(FILES_QUOT) $(FILES_QUOT_FRAGILE) $(FILES_CPP))
+	lib:: $(PROG)
+	clean::
+		rm -f inline_lexer.ml
+	install:: install-lib $(PROG)
+		mkdir -p $(FINDLIB_DESTDIR)/$(PROJNAME)/internal
+		cp ppxc__script.cmi $(FINDLIB_DESTDIR)/$(PROJNAME)/internal
+		section
+			prefix=
+				if $(equal $(GetVarEnv PREFIX),$(EMPTY))
+					value $(dirname $(dirname $(which $(OCAMLFIND))))
+				else
+					value $(x)
+			cp ppx_cstubs.run $(prefix)/bin/ppx_cstubs$(EXE)
+			cd $(FINDLIB_DESTDIR)/$(PROJNAME) && ln-or-cp $(prefix)/bin/ppx_cstubs$(EXE) ppx-merlin.exe
+	uninstall:
+		rm $(FINDLIB_DESTDIR)/$(PROJNAME)/internal/ppxc__script.cmi || true
+		rmdir $(FINDLIB_DESTDIR)/$(PROJNAME)/internal || true
+		$(OCAMLFIND) remove $(PROJNAME) || true
+
+all:: lib
+
+distclean:: clean
+	rm -f *~ .*~ setup.ml _oasis *.xz *.gz

@@ -1,0 +1,15 @@
+S src test
+B src test
+
+PKG bigarray
+PKG containers
+PKG ctypes
+PKG findlib
+PKG integers
+PKG oUnit
+PKG ocaml-compiler-libs.bytecomp
+PKG ocaml-migrate-parsetree
+PKG ppx_tools_versioned.metaquot_405
+PKG str
+PKG threads
+PKG num

@@ -1,0 +1,35 @@
+opam-version: "2.0"
+maintainer: "andreashauptmann@t-online.de"
+authors: [ "andreashauptmann@t-online.de" ]
+license: "GPLv3"
+homepage: "https://github.com/fdopen/ppx_cstubs"
+dev-repo: "git+https://github.com/fdopen/ppx_cstubs.git"
+bug-reports: "https://github.com/fdopen/ppx_cstubs/issues"
+
+build: ["omake" "-j%{jobs}%" "lib" "PREFIX=%{prefix}%"]
+install: [
+  ["omake" "install" "PREFIX=%{prefix}%"]
+]
+depends: [
+  "ctypes" {>= "0.13.0" & <= "0.15.0"}
+  "integers"
+  "num"
+  "result"
+  "containers" {>= "2.2"}
+  "cppo" {build & >= "1.3"}
+  "ocaml" {>= "4.02.3" & < "4.08.0"}
+  "ocaml-migrate-parsetree"
+  "ocamlfind" # not only a build dependency, it depends on findlib.top
+  "omake" {build}
+  "ppx_tools_versioned" {>= "5.0.1"}
+]
+
+synopsis: """
+Preprocessor for quick and dirty stub generation
+"""
+
+description: """
+ppx_cstubs is a ppx-based preprocessor for quick and dirty stub generation with
+ctypes. ppx_cstubs creates two files from a single ml file: a file with c stub
+code and a OCaml file with all additional boilerplate code.
+"""
