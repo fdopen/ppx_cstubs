@@ -39,7 +39,7 @@ ppx_cstubs myfile.c.ml -o-c myfile_stubs.c -o-ml myfile.ml
 ```
 
 
-## Inline code
+## inline code
 
 As a slight extension of the scheme above, you can also label your
 parameters, annotate external (`%c`) and write a few lines of C code:
@@ -53,7 +53,6 @@ external%c puts_flush : str:string -> bool = {|
   r = fflush(stdout);
   return (r == 0); /* `return` is mandatory, unless your function is void */
 |} [@@ release_runtime_lock]
-(* further possible attributes are 'return_errno' and 'noalloc' *)
 
 let _ : int = puts_flush ~str:"Hello World"
 ```
@@ -64,7 +63,7 @@ the heap; constant parameters don't need to allocated inside OCaml,
 just to pass them to the C function, and so forth.
 
 
-## Scope and custom types
+## scope and custom types
 
 The types inside external declarations have their own environment.
 Normal let-bindings or statements like `open` won't have any affect on
@@ -113,7 +112,21 @@ external bsearch:
 (* other pseudo types: ptr_opt, funptr_opt, static_funptr *)
 ```
 
-## enums
+## compiling
+
+The generated code must be linked against the findlib package `ppx_cstubs`.
+
+
+## merlin
+
+`ppx_cstubs.merlin` can be used to inform merlin about the special
+syntax. It produces a correctly typed syntax tree faster than the real
+preprocessor. (The generated code is however semantically incorrect
+and would quit the program with an exception at runtime.)
+
+## details
+
+### enums
 
 Enumerations can be written as sum types with only constants - with
 special annotations, if it's required by the OCaml syntax:
@@ -139,7 +152,7 @@ type%c state =
 [@@ cname "State"] [@@ typedef]
 ```
 
-## structs
+### structs
 
 There is also a special syntax for creating and accessing c structs:
 
@@ -160,7 +173,8 @@ struct point add (struct point a, struct point b) {
 void add_ptr(struct point *a, struct point *b, struct point *res){
   res->x = a->x + b->x;
   res->y = a->y + b->y;
-}```
+}
+```
 
 ```ocaml
 
@@ -224,7 +238,7 @@ generated code for automatic boxing and unboxing can't handle
 such subtle issues for you.
 
 
-## unions
+### unions
 
 unions can declared in a similar way:
 
@@ -242,7 +256,7 @@ type%c_union data = {
 ```
 
 
-## constants
+### constants
 
 Compile-time constants can be retrieved from C code and inserted it
 into your OCaml code at an arbitrary location:
@@ -262,8 +276,16 @@ Note: Const-qualified objects (of any type) are not constants. It only
 works for enums and constant expressions that are usually exposed through
 macros.
 
+Only integer and string literals can be retrieved. Integer values are
+checked for overflows that will trigger an error at compile time. Try
+to compile your code on a 32-bit system and under a different platform
+before you release it 😉
 
-## c headers
+Values of any other kinds can be imported at runtime with `[%c
+foreign_value ... ]`, as explained below.
+
+
+### c headers
 
 The necessary C headers files can be included through the `header`
 pseudo-function. The code will be removed from the generated ml file
@@ -290,14 +312,62 @@ at the top of your file and don't spread several statements across
 your file or in different modules. Otherwise a casual reader of your
 code might draw a wrong conclusion ...
 
+### pointers to C objects
 
-## compiling
+Pointers to C objects can be retrieved with a function similar to
+[Foreign.foreign_value](https://github.com/ocamllabs/ocaml-ctypes/blob/e192f74421c2755c51ba90dfac19b9593fa72df9/src/ctypes-foreign-unthreaded/foreign.mli#L44):
 
-The generated code must be linked against the findlib package `ppx_cstubs`.
+```c
+extern char **environ; /* see `man 7 environ` */
+```
 
+```ocaml
+let () =
+  let environ = [%c foreign_value "environ" (ptr string_opt)] in
+  let rec iter env =
+    match !@env with
+    | None -> ();
+    | Some s ->
+      print_endline s;
+      iter (env +@ 1)
+  in
+  iter !@environ
+```
 
-## merlin
+This feature can also be used to import const qualified objects or
+double literals at runtime:
 
-`ppx_cstubs.merlin` can be used to inform merlin about the special
-syntax. It produces a correctly typed syntax tree faster than the real
-preprocessor.
+```ocaml
+let%c () = header {|
+#include <math.h>
+static const double m_2_sqrtpi = M_2_SQRTPI;
+|}
+
+let _M_2_SQRTPI = !@ [%c foreign_value "m_2_sqrtpi" double]
+```
+
+### attributes for external declarations
+
+External declarations can be annotated with three different
+attributes:
+
+```ocaml
+external foo : void -> bar = "cfoo" [@@ release_runtime_lock] [@@ return_errno] [@@ noalloc]
+```
+
+- **release_runtime_lock**: If `[@@ release_runtime_lock]` is
+  specified, the OCaml runtime lock should be released during the call
+  to the C function, allowing other threads to run. You can't pass
+  arguments, that point to the OCaml heap (like `Ctypes.ocaml_string`)
+  to such functions.
+- **return_errno**: If `[@@ return_errno]` is given, the function
+  returns a pair as result. The first value is the regular result, the
+  second value is the errno code of type `Signed.sint`.
+- **noalloc**: If the C function doesn't interact with the OCaml
+  runtime, e.g. by calling a callback you have provided, you can add
+  `[@@ noalloc]` to the declaration. The generated code will be
+  slightly faster. Note: `noalloc` is here intended as an attribute
+  for your c function, not for the generated stub code and the c
+  function. You can add it, even if you (believe to) know, that the
+  generated stub code must allocated memory in the OCaml heap. The
+  generated code will still differ.
