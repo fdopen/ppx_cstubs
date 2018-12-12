@@ -46,5 +46,96 @@ let rec add_field :
       { ftype; foffset; fname }
     | _ -> failwith ("Unexpected field "^ fname)
 
+external identity : int64 -> int64 = "%identity"
+
+let build_enum :
+  type a b.
+  string -> a Ctypes.typ -> typedef:bool ->
+  ?unexpected:(int64 -> b) -> (b * a) list -> b Ctypes.typ =
+  fun name typ ~typedef ?unexpected alist ->
+  let fail t =
+    Printf.ksprintf failwith
+      "Invalid enum type %s" (Ctypes.string_of_typ t) in
+  let typedef = if typedef then "" else "enum " in
+  let rlist = List.map (fun (l, r) -> r,l) alist in
+  let unexpected = match unexpected with
+  | None ->
+    let to_string = match typ with
+    | Ctypes_static.Primitive p ->
+      ((match p with
+       | Ctypes_primitive_types.Int8_t -> string_of_int
+       | Ctypes_primitive_types.Int32_t -> (Int32.to_string : a -> string)
+       | Ctypes_primitive_types.Int16_t -> string_of_int
+       | Ctypes_primitive_types.Int -> string_of_int
+       | Ctypes_primitive_types.Int64_t -> Int64.to_string
+       | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_string
+       | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_string
+       | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_string
+       | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_string
+       | _ -> fail typ) : a -> string)
+    | _ -> fail typ in
+    fun k ->
+      Printf.ksprintf failwith "Unexpected enum value for %s: %s"
+        name (to_string k)
+  | Some f ->
+    let to_int64 = match typ with
+    | Ctypes_static.Primitive p ->
+      ((match p with
+       | Ctypes_primitive_types.Int8_t -> Int64.of_int
+       | Ctypes_primitive_types.Int32_t -> Int64.of_int32
+       | Ctypes_primitive_types.Int16_t -> Int64.of_int
+       | Ctypes_primitive_types.Int -> Int64.of_int
+       | Ctypes_primitive_types.Int64_t -> identity
+       | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_int64
+       | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_int64
+       | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_int64
+       | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_int64
+       | _ -> fail typ) : (a -> int64))
+    | _ -> fail typ in
+    fun k -> f (to_int64 k) in
+  let write k = List.assoc k alist
+  and read k =
+    try
+      List.assoc k rlist
+    with
+    | Not_found -> unexpected k
+  and format_typ k fmt = Format.fprintf fmt "%s%s%t" typedef name k in
+  Ctypes_static.view ~format_typ ~read ~write typ
+
+let build_enum_bitmask :
+  type a b.
+  string -> a Ctypes.typ -> typedef:bool -> (b * a) list ->
+  b list Ctypes.typ =
+  fun name typ ~typedef alist ->
+  let fail t =
+    Printf.ksprintf failwith
+      "Invalid enum type %s" (Ctypes.string_of_typ t) in
+  let (lor',land',zero) =
+    match typ with
+    | Ctypes_static.Primitive p ->
+      ((match p with
+      | Ctypes_primitive_types.Int8_t -> (lor),(land),0
+      | Ctypes_primitive_types.Int16_t -> (lor),(land),0
+      | Ctypes_primitive_types.Int  -> (lor),(land),0
+      | Ctypes_primitive_types.Int32_t -> Int32.(logor,logand,zero)
+      | Ctypes_primitive_types.Int64_t -> Int64.(logor,logand,zero)
+      | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.(logor,logand,zero)
+      | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.(logor,logand,zero)
+      | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.(logor,logand,zero)
+      | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.(logor,logand,zero)
+      | _ -> fail typ) : ((a -> a -> a) * (a -> a -> a) * a))
+    | _ -> fail typ in
+  let typedef = if typedef then "" else "enum " in
+  let (write : b list -> a) = fun l ->
+    List.fold_left (fun ac k ->
+      lor' (List.assoc k alist) ac ) zero l
+  and (read : a -> b list) = fun res ->
+    List.fold_left (fun ac (a,b) ->
+      if land' b res <> zero then a::ac else ac) [] alist
+  (* FIXME: remaining set bits ? *)
+  and format_typ k fmt = Format.fprintf fmt "%s%s%t" typedef name k in
+  Ctypes_static.view ~format_typ ~read ~write typ
+
+
 external to_voidp : nativeint -> Cstubs_internals.voidp = "%identity"
 let invalid_code () = failwith "ppx_cstub generated invalid code"

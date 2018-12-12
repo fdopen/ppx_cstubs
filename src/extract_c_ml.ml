@@ -67,7 +67,7 @@ let prepare : type a. a Ctypes_static.typ -> info option =
     | Uchar -> f false Extr_uchar
     | Bool -> f true Extr_bool
     | Short -> f true ~min:"SHRT_MIN" ~max:"SHRT_MAX" Extr_short
-    | Int -> f true Extr_int
+    | Int -> f true ~min:"INT_MIN" ~max:"INT_MAX" Extr_int
     | Long -> f true ~min:"LONG_MIN" ~max:"LONG_MAX" Extr_long
     | Llong -> f true ~min:"LLONG_MIN" ~max:"LLONG_MAX" Extr_llong
     | Ushort -> f false ~max:"USHRT_MAX" Extr_ushort

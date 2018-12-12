@@ -357,27 +357,40 @@ module Extract = struct
       ~typedef
       [(`A,1L)]
 
-  let enum2 (l : 'a list) (p:string) : 'a Ctypes.typ =
+  let get_enum_id = function
+  | Marshal_types.E_normal(x)
+  | Marshal_types.E_bitmask(x)
+  | Marshal_types.E_normal_bitmask(x,_) -> x
+
+  let enum_fake_view (l : 'a list) (typedef:bool) (name:string)
+      (typ: 'b Ctypes.typ) : 'a Ctypes.typ * 'a list Ctypes.typ =
+    let () = ignore (l : 'a list) in (* just to type the function *)
+    let typedef = if typedef then "" else "enum " in
+    let format_typ k fmt = Format.fprintf fmt "%s%s%t" typedef name k in
+    let write _ = assert false in
+    let read _ = assert false in
+    Ctypes.view ~read ~write ~format_typ typ,
+    Ctypes.view ~read ~write ~format_typ typ
+
+  let enum2 (l : 'a list) (p:string) : 'a Ctypes.typ * 'a list Ctypes.typ =
     let open Marshal_types in
     let {enum_l; enum_name; enum_is_typedef;
-         enum_id; enum_loc } = Marshal.from_string p 0 in
+         enum_type_id; enum_loc; enum_unexpected = _ } = Marshal.from_string p 0 in
     U.with_loc enum_loc @@ fun () ->
     let info_str = "enum_type " ^ enum_name in
     let str = match enum_is_typedef with
     | false -> String.concat " " ["enum"; enum_name]
     | true -> enum_name in
     let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ str ^ ")" in
-    Const.add ~info_str enum_id enum_loc Ctypes.camlint str;
-    ListLabels.iter enum_l ~f:(fun (id,loc,s) ->
-      U.with_loc loc @@ fun () ->
-      let info_str = "enum constant " ^ s in
-      Const.add ~info_str id loc Ctypes.int64_t s);
-    let l = List.mapi l ~f:(fun i t -> t, Int64.of_int i) in
-    Cstubs_internals.build_enum_type
-      enum_name
-      Ctypes_static.Int32
-      ~typedef:enum_is_typedef
-      l
+    Const.add ~info_str (get_enum_id enum_type_id) enum_loc Ctypes.camlint str;
+    ListLabels.iter enum_l ~f:(fun c ->
+      U.with_loc c.ee_loc @@ fun () ->
+      let info_str = "enum constant " ^ c.ee_cname in
+      Const.add ~info_str c.ee_signed_id c.ee_loc Ctypes.int64_t c.ee_cname;
+      Const.add ~info_str c.ee_unsigned_id c.ee_loc Ctypes.uint64_t c.ee_cname);
+    (* wrong size, but not used inside extraction script *)
+    enum_fake_view l enum_is_typedef enum_name Ctypes.int32_t
+
 end
 
 module Build = struct
@@ -540,8 +553,7 @@ module Build = struct
     Hashtbl.replace G.htl_stri id_external res.Gen_ml.extern;
     Hashtbl.replace G.htl_stri id_stri_expr res.Gen_ml.intern
 
-  let enum id_loc name ?(typedef=false) ?unexpected l =
-    let id,_loc = U.from_id_loc_param id_loc in
+  let enum_size_unsigned id name =
     Const.extract_single id;
     let res =
       try
@@ -558,7 +570,11 @@ module Build = struct
     let size = size land (lnot (1 lsl unsigned_flag_bit)) in
     if is_float then
       U.error "Enum type detected as floating type: %s" name;
-    let a_type,a_type_expr = match size,is_unsigned with
+    size,is_unsigned
+
+  let enum id_loc name ?(typedef=false) ?unexpected l =
+    let id,_loc = U.from_id_loc_param id_loc in
+    let a_type,a_type_expr = match enum_size_unsigned id name with
     | 1, false -> Ctypes_static.Int8, [%expr Ctypes_static.Int8]
     | 2, false -> Ctypes_static.Int16, [%expr Ctypes_static.Int16]
     | 4, false -> Ctypes_static.Int32, [%expr Ctypes_static.Int32]
@@ -571,21 +587,95 @@ module Build = struct
     Hashtbl.replace G.htl_expr id a_type_expr;
     Cstubs_internals.build_enum_type name a_type ~typedef ?unexpected l
 
-  let enum2 (l : 'a list) (p:string) : 'a Ctypes.typ =
+  let enum2 (l : 'a list) (p:string) : 'a Ctypes.typ * 'a list Ctypes.typ =
     let open Marshal_types in
-    let {enum_l; enum_name; enum_is_typedef;
-         enum_id; enum_loc} = Marshal.from_string p 0 in
-    U.with_loc enum_loc @@ fun () ->
-    let l' = ListLabels.map2 enum_l l ~f:(fun (id,loc,enum_name) at ->
-      U.with_loc loc @@ fun () ->
-      Const.extract_single id;
-      let i =
-        try Hashtbl.find Const.htl_id_str_result id |> Int64.of_string
-        with Not_found | Failure _ ->
-          U.error "can't determine enum constant %S" enum_name in
-      at,i) in
-    let id_loc = Marshal.to_string (enum_id,enum_loc) [] in
-    enum id_loc enum_name ~typedef:enum_is_typedef  l'
+    let {enum_l; enum_name; enum_is_typedef; enum_type_id;
+         enum_unexpected ; enum_loc = _ } = Marshal.from_string p 0 in
+    let type_size, type_unsigned =
+      enum_size_unsigned (Extract.get_enum_id enum_type_id) enum_name in
+    let unboxed_ints =
+      type_unsigned = false &&
+      Ocaml_config.word_size () = 64 &&
+      !Options.toolchain = None &&
+      Ctypes.alignment Ctypes.int32_t = Ctypes.alignment Ctypes.int &&
+      Ctypes.sizeof Ctypes.int32_t = Ctypes.sizeof Ctypes.int in
+    let typ,typ_expr,live_res =
+      let def typ expr =
+        let a = match Extract_c_ml.prepare typ with
+        | None -> assert false
+        | Some x -> x in
+        a, expr, Extract.enum_fake_view l enum_is_typedef enum_name typ in
+      match type_size, type_unsigned with
+      | 1, false -> def Ctypes.int8_t [%expr Ctypes.int8_t]
+      | 2, false -> def Ctypes.int16_t [%expr Ctypes.int16_t]
+      | 4, false ->
+        if unboxed_ints then
+          def Ctypes.int [%expr Ctypes.int]
+        else
+          def Ctypes.int32_t [%expr Ctypes.int32_t]
+      | 8, false -> def Ctypes.int64_t [%expr Ctypes.int64_t]
+      | 1, true -> def Ctypes.uint8_t [%expr Ctypes.uint8_t]
+      | 2, true -> def Ctypes.uint16_t [%expr Ctypes.uint16_t]
+      | 4, true -> def Ctypes.uint32_t [%expr Ctypes.uint32_t]
+      | 8, true -> def Ctypes.uint64_t [%expr Ctypes.uint64_t]
+      | x, _ -> U.error "enum %s has unsupported size of %d" enum_name x in
+    let additional_check =
+      if unboxed_ints && type_size = 4 then
+        Extract_c_ml.prepare Ctypes.int32_t
+      else
+        None in
+    let list =
+      ListLabels.fold_right ~init:([%expr []]) enum_l
+        ~f:(fun c ac ->
+          U.with_loc c.ee_loc @@ fun () ->
+          let id = match type_unsigned with
+          | true -> c.ee_unsigned_id
+          | false -> c.ee_signed_id in
+          Const.extract_single id;
+          let i_str =
+            try Hashtbl.find Const.htl_id_str_result id
+            with Not_found ->
+              U.error "can't determine enum constant %S" c.ee_cname in
+          (* avoid overflow detection in Extract.extract_all *)
+          Hashtbl.remove Const.htl_id_entries c.ee_signed_id;
+          Hashtbl.remove Const.htl_id_entries c.ee_unsigned_id;
+          let f typ = match  Extract_c_ml.gen typ i_str with
+          | None ->
+            U.error "enum constant %S is not of type %S" c.ee_cname enum_name
+          | Some s -> s in
+          let integer = f typ in
+          (match additional_check with
+          | None -> ()
+          | Some t -> ignore ( f t : Marshal_types.expr));
+          let tup = Ast_helper.Exp.tuple [c.ee_expr; integer] in
+          let tup = Ast_helper.Exp.tuple [tup; ac] in
+          Ast_helper.Exp.construct (U.mk_lid "::") (Some tup)) in
+    let name = Std.Util.str_expr enum_name in
+    let typedef = match enum_is_typedef with
+    | true -> [%expr true]
+    | false -> [%expr false] in
+    (match enum_type_id with
+    | Marshal_types.E_normal(id) | Marshal_types.E_normal_bitmask(id,_) ->
+      let e = [%expr
+        Ppx_cstubs_internals.build_enum
+          [%e name]
+          [%e typ_expr]
+          ~typedef:[%e typedef]
+          ?unexpected:[%e enum_unexpected]
+          [%e list] ] in
+      Hashtbl.replace G.htl_expr id e
+    | Marshal_types.E_bitmask _ -> ());
+    (match enum_type_id with
+    | Marshal_types.E_bitmask(id) | Marshal_types.E_normal_bitmask(_,id) ->
+      let e = [%expr
+        Ppx_cstubs_internals.build_enum_bitmask
+          [%e name]
+          [%e typ_expr]
+          ~typedef:[%e typedef]
+          [%e list] ] in
+      Hashtbl.replace G.htl_expr id e
+    | Marshal_types.E_normal _ -> ());
+    live_res
 
   let foreign id_loc_external id_loc_stri_expr ~ocaml_name ~typ_expr
       ?(release_runtime_lock=false) ?(noalloc=false) ?(return_errno=false)

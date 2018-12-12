@@ -31,10 +31,24 @@ type loc = Migrate_parsetree.Ast_405.Ast_helper.loc
 type id_loc_param = id * loc
 type expr = Migrate_parsetree.Ast_405.Parsetree.expression
 
+type enum_type =
+| E_normal of id
+| E_bitmask of id
+| E_normal_bitmask of id * id
+
+type enum_entry = {
+  ee_signed_id: int;
+  ee_unsigned_id: int;
+  ee_loc: Ast_405.Location.t;
+  ee_expr: expr;
+  ee_cname: string;
+}
+
 type enum = {
-  enum_l : (int * Ast_405.Location.t * string) list;
+  enum_l : enum_entry list;
   enum_name: string;
   enum_is_typedef: bool;
-  enum_id: id;
+  enum_type_id: enum_type;
   enum_loc: loc;
+  enum_unexpected: expr;
 }

@@ -207,14 +207,14 @@ let () =
 ```
 
 It's also possible to convert OCaml records to c structs on the fly by
-annotating the type declaration with `[@@ ocaml_record]`:
+annotating the type declaration with `[@@ as_record]`:
 
 ```ocaml
 
 type%c point = {
   x: int;
   y: int;
-} [@@ ocaml_record]
+} [@@ as_record]
 
 external add: point -> point -> point = "add"
 external add_ptr: point ptr -> point ptr -> point ptr -> void = "add_ptr"

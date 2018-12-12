@@ -223,8 +223,9 @@ module Extract : sig
   val field : string -> 'a Ctypes.typ -> string -> unit
   val seal : string -> string -> 'a Ctypes.typ -> unit
   val enum :
-    string -> ?typedef:bool -> string -> [> `A ] Cstubs_internals.typ
-  val enum2 : 'a list -> string -> 'a Cstubs_internals.typ
+    string -> ?typedef:bool -> string -> [> `A ] Ctypes.typ
+  val enum2 :
+    'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 end
 
 module Build : sig
@@ -243,9 +244,10 @@ module Build : sig
     string ->
     ?typedef:bool ->
     ?unexpected:(int64 -> 'a) ->
-    ('a * int64) list -> 'a Cstubs_internals.typ
+    ('a * int64) list ->
+    'a Ctypes.typ
 
-  val enum2 : 'a list -> string -> 'a Cstubs_internals.typ
+  val enum2 : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 
   val foreign :
     string ->

@@ -32,7 +32,7 @@ type%c passwd = {
   pw_gid: uint32_t;
   pw_gecos: string;
   pw_dir: string;
-  pw_shell: string } [@@ ocaml_record]
+  pw_shell: string } [@@ as_record]
 
 external getpwent : void -> passwd ptr_opt = "getpwent"
 external setpwent : void -> void = "setpwent"

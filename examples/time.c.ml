@@ -22,7 +22,7 @@ type%c tm = {
   tm_year: int;
   tm_wday: int;
   tm_yday: int;
-  tm_isdst: int } [@@ ocaml_record]
+  tm_isdst: int } [@@ as_record]
 
 open Ctypes
 open PosixTypes

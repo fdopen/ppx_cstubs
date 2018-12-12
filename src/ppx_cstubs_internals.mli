@@ -26,4 +26,10 @@ val add_field :
 external to_voidp : nativeint -> Cstubs_internals.voidp = "%identity"
 val invalid_code : unit -> 'a
 
+val build_enum:
+  string -> 'a Ctypes.typ -> typedef:bool
+  -> ?unexpected:(int64 -> 'b) -> ('b * 'a) list -> 'b Ctypes.typ
+
+val build_enum_bitmask:
+  string -> 'a Ctypes.typ -> typedef:bool -> ('b * 'a) list -> 'b list Ctypes.typ
 (**/**)

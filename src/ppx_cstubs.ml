@@ -159,12 +159,20 @@ module Extract = struct
     enum_cname: string;
   }
 
+  type enum_type =
+  | Enum_normal
+  | Enum_bitmask
+  | Enum_both
+
   type enum = {
     ename: string;
     el: enum_entry list;
     ename_c: string;
+    enum_type: enum_type;
     etypedef: bool;
-    edecl: type_declaration }
+    edecl: type_declaration;
+    eunexpected: Marshal_types.expr option;
+  }
 
   type field = {
     field_name: string;
@@ -173,13 +181,18 @@ module Extract = struct
     field_loc: Ast_helper.loc;
   }
 
+  type struct_type =
+  | Union
+  | Struct_normal
+  | Struct_record
+  | Struct_both
+
   type structure = {
     sname: string;
     sl: field list;
     sname_c: string;
     stypedef: bool;
-    is_struct: bool;
-    socaml_record: bool;
+    stype: struct_type;
     sloc: Ast_helper.loc }
 
   type ctyp =
@@ -198,6 +211,18 @@ module Extract = struct
     match res with
     | None -> def, l
     | Some x -> x, remove_attrib "cname" l
+
+  let get_unexpected l =
+    let res = List.find_map l ~f:(fun (x,t) ->
+      if x.txt <> "unexpected" then None
+      else match t with
+      | PStr [{pstr_desc = Pstr_eval(
+        ({pexp_desc = Pexp_fun _; _ } as e),[]); _ }] ->
+        Some e
+      | _ -> error ~loc:x.loc "unsupported expression in unexpected") in
+    match res with
+    | None -> None, l
+    | (Some _) as x -> x , remove_attrib "unexpected" l
 
   let extract_enum_entry = function
   | ({pcd_name; pcd_args = Pcstr_tuple []; pcd_res = None; pcd_loc = _;
@@ -221,17 +246,29 @@ module Extract = struct
   let type_decl = function
   | ({ptype_name; ptype_params = []; ptype_cstrs = [];
       ptype_private = Public; ptype_manifest = _; ptype_attributes;
-      ptype_kind = Ptype_variant ((_::_) as l); ptype_loc = _ } as whole) ->
+      ptype_kind = Ptype_variant ((_::_) as l); ptype_loc } as whole) ->
     let ename = ptype_name.txt in
     let ename_c,attribs = get_cname ~def:ename ptype_attributes in
     let etypedef,attribs = get_remove "typedef" attribs in
+    let ebitmask,attribs = get_remove "as_bitmask" attribs in
+    let eunexpected,attribs = get_unexpected attribs in
+    let enum_type = match ebitmask with
+    | false -> Enum_normal
+    | true -> Enum_bitmask in
+    let whithmask,attribs = get_remove "with_bitmask" attribs in
+    let enum_type = match whithmask with
+    | false -> enum_type
+    | true ->
+      if enum_type <> Enum_normal then
+        error ~loc:ptype_loc "either as_bitmask or with_bitmask - not both";
+      Enum_both in
     check_no_attribs attribs;
     let el = List.map l ~f:extract_enum_entry in
     let edecl = {
       whole with
       ptype_kind = Ptype_variant (List.map el ~f:(fun x -> x.cdecl));
       ptype_attributes = [] } in
-    Enum {ename; el; ename_c; etypedef; edecl}
+    Enum {ename; el; ename_c; etypedef; edecl; enum_type; eunexpected}
   | {ptype_name; ptype_params = []; ptype_cstrs = [];
      ptype_private = Public; ptype_manifest = None; ptype_attributes;
      ptype_kind = Ptype_record ((_::_) as l); ptype_loc} ->
@@ -239,12 +276,28 @@ module Extract = struct
     let sname_c,attribs = get_cname ~def:sname ptype_attributes in
     let stypedef,attribs = get_remove "typedef" attribs in
     let union,attribs = get_remove "union" attribs in
-    let socaml_record,attribs = get_remove "ocaml_record" attribs in
+    let as_record,attribs = get_remove "as_record" attribs in
+    let with_record,attribs = get_remove "with_record" attribs in
     check_no_attribs attribs;
-    let is_struct = not union in
+    let stype = match union with
+    | true ->
+      if as_record then
+        error "@@@@union and @@@@as_record are mutually exclusive";
+      if with_record then
+        error "@@@@union and @@@@with_record are mutually exclusive";
+      Union
+    | false ->
+      match as_record with
+      | true ->
+        if with_record then
+          error "@@@@as_record and @@@@with_record are mutually exclusive";
+        Struct_record
+      | false ->
+        match with_record with
+        | true -> Struct_both
+        | false -> Struct_normal in
     let sl = List.map ~f:extract_field l in
-    Struct {sname; sl; sname_c; stypedef; is_struct; sloc = ptype_loc;
-            socaml_record}
+    Struct {sname; sl; sname_c; stypedef; stype; sloc = ptype_loc}
   | {ptype_loc ; _} -> error ~loc:ptype_loc "unsupported type definition"
 
   let type_decl l = List.map ~f:type_decl l
@@ -893,6 +946,9 @@ module H = struct
 
     Ppx_mod.add_named ~attrs binding_name expr
 
+  let record_name s = s ^ "_record"
+  let bitmask_name s = s ^ "_bitmask"
+
   let typ_intern binding_name expr =
     let pat = U.mk_pat binding_name in
 
@@ -912,7 +968,7 @@ module H = struct
     let attrs = typ_intern binding_name expr in
     Ppx_mod.add_named ~attrs binding_name expr
 
-  let type_decl ~enforce_union type_rec_flag = function
+  let type_decl ~enforce_union ~enforce_bitmask type_rec_flag = function
   | [] -> error "empty type definition"
   | tl ->
     let open Extract in
@@ -931,15 +987,22 @@ module H = struct
           loc.loc_start.pos_cnum in
       fun x -> s ^ x in
     let unhide x =
-      let name = match x with
-      | Enum x -> x.ename
-      | Struct x -> x.sname in
-      let pat = U.mk_pat name in
-      let e = Exp.ident (U.mk_lid (private_pref name)) in
-      let stri = [%stri let [%p pat] = [%e e] [@@ ocaml.warning "-32"]] in
-      Top.add_extract stri;
-      Top.add_build_external stri;
-      Ppx_mod.Structure.add_entry stri in
+      let add name =
+        let pat = U.mk_pat name in
+        let e = Exp.ident (U.mk_lid (private_pref name)) in
+        let stri = [%stri let [%p pat] = [%e e] [@@ ocaml.warning "-32"]] in
+        Top.add_extract stri;
+        Top.add_build_external stri;
+        Ppx_mod.Structure.add_entry stri in
+      match x with
+      | Enum { ename ; enum_type ; _ } ->
+        add ename;
+        if enum_type = Enum_both then
+          add @@ bitmask_name ename;
+      | Struct x ->
+        add x.sname;
+        if x.stype = Struct_both then
+          add @@ record_name x.sname; in
 
     let add_type ?(tdl=true) ?params typ' =
       let t = Str.type_ Asttypes.Recursive [typ'] in
@@ -956,9 +1019,10 @@ module H = struct
 
     let fields = function
     | Enum _ -> ()
-    | Struct {sname; sl ; socaml_record ; _ } ->
-      let sname = private_pref sname in
-      let struct_expr = Exp.ident (U.mk_lid sname) in
+    | Struct {sname; sl ; stype ; _ } ->
+      let orig_name = sname in
+      let alias_name = private_pref orig_name in
+      let struct_expr = Exp.ident (U.mk_lid alias_name) in
       let fnames = List.map sl ~f:(function
         {field_name; field_expr; field_cname; field_loc} ->
         U.with_loc field_loc @@ fun () ->
@@ -967,14 +1031,22 @@ module H = struct
           Nolabel, struct_expr;
           Nolabel, str_expr;
           Nolabel, field_expr ] in
-        if socaml_record = false then (
+        (match stype with
+        | Struct_record -> ()
+        | Union | Struct_normal | Struct_both ->
           let x = U.named_stri field_name e in
           Hashtbl.add htl_tdl_entries tdl_entry_id x);
         n ) in
       ignore ( seal [Nolabel,struct_expr] : Parsetree.expression );
-      if socaml_record = false then ()
+      let create_view = match stype with
+      | Union | Struct_normal -> false
+      | Struct_record | Struct_both -> true in
+      if create_view = false then ()
       else
       (* Generate the view for the type *)
+      let alias_name,orig_name =
+        if stype <> Struct_both then alias_name,orig_name
+        else record_name alias_name, record_name orig_name in
 
       let () = (* Generate the type *)
         (* TODO: the type is parameterized. Not sure how to avoid
@@ -991,7 +1063,7 @@ module H = struct
           let b = Type.field n t in
           a,b) in
         let params,fields = List.split params in
-        let n = U.mk_loc sname in
+        let n = U.mk_loc orig_name in
         let typ' = Type.mk ~params ~kind:(Ptype_record fields) n in
         add_type ~params:(List.map ~f:fst params) typ' in
 
@@ -1028,94 +1100,128 @@ module H = struct
         [%expr [%e view] ~read:[%e read] ~write:[%e write] [%e struct_expr]] in
 
       let view = make_view true in
-      let attrs = typ_intern sname view in
+      let attrs = typ_intern alias_name view in
       let view = make_view false in
-      let expr = Ppx_mod.add_named ~attrs sname view in
+      let expr = Ppx_mod.add_named ~attrs alias_name view in
       let expr =
-        let x = Typ.constr (U.mk_lid sname) [Typ.any ()] in
+        let x = Typ.constr (U.mk_lid orig_name) [Typ.any ()] in
         let x = Typ.constr (U.mk_lid "Ctypes.typ") [x] in
         Exp.constraint_ expr x in
-      U.named_stri sname expr |> Hashtbl.add htl_tdl_entries tdl_entry_id
+      U.named_stri orig_name expr |> Hashtbl.add htl_tdl_entries tdl_entry_id
     in
 
     let single_typ = function
-    | Enum {ename; el; ename_c; etypedef; edecl} ->
+    | Enum {ename; el; ename_c; etypedef; edecl; enum_type; eunexpected} ->
       U.with_loc edecl.ptype_loc @@ fun () ->
-      let real_name = ename in
-      let ename = private_pref ename in
+      let orig_name_bitmask = bitmask_name ename in
+      let alias_name_bitmask = private_pref orig_name_bitmask in
+      let orig_name = ename in
+      let alias_name = private_pref orig_name in
 
       add_type edecl;
 
-      let res,exp_l,enum_l =
-        let init = ([%expr []],[%expr []],[]) in
-        ListLabels.fold_right el ~init ~f:(fun cur (l1,l2,l3) ->
+      let exp_l,enum_l =
+        let init = ([%expr []],[]) in
+        ListLabels.fold_right el ~init ~f:(fun cur (l1,l2) ->
           let loc = cur.cdecl.pcd_loc in
           U.with_loc loc @@ fun () ->
-          let id = Id.get ~loc () in
-          let variant_name = Exp.construct (U.mk_lid cur.cdecl.pcd_name.txt) None in
-          let cstr = cur.enum_cname in
-          let tup = Exp.tuple [variant_name; id.Id.expr] in
-          let tup = Exp.tuple [tup; l1] in
-          let tup2 = Exp.tuple [variant_name; l2] in
+          let open Marshal_types in
+          let c = {
+             ee_signed_id = (Id.get ~loc ()).Id.id;
+             ee_unsigned_id = (Id.get ~loc ()).Id.id;
+             ee_loc = loc;
+             ee_cname = cur.enum_cname;
+             ee_expr = Exp.construct (U.mk_lid cur.cdecl.pcd_name.txt) None } in
+          let tup = Exp.tuple [c.ee_expr; l1] in
           Exp.construct (U.mk_lid "::") (Some tup),
-          Exp.construct (U.mk_lid "::") (Some tup2),
-          (id.Id.id,loc,cstr)::l3) in
-      let id = Id.get () in
+          c::l2) in
+      let id,id_bitmask,enum_type_id = match enum_type with
+      | Enum_normal ->
+        let id = Id.get () in
+        Some id, None, Marshal_types.E_normal id.Id.id
+      | Enum_bitmask ->
+        let id = Id.get () in
+        None, Some id, Marshal_types.E_bitmask id.Id.id
+      | Enum_both ->
+        let id1 = Id.get () in
+        let id2 = Id.get () in
+        Some id1, Some id2,
+        Marshal_types.E_normal_bitmask(id1.Id.id,id2.Id.id) in
       let sparam =
+        let enum_unexpected = match eunexpected with
+        | None -> [%expr None]
+        | Some e -> [%expr Some [%e e]] in
         let open Marshal_types in
         let s = Marshal.to_string
             {enum_l; enum_name = ename_c; enum_is_typedef = etypedef;
-             enum_id = id.Id.id; enum_loc = edecl.ptype_name.loc} [] in
+             enum_loc = edecl.ptype_name.loc; enum_type_id; enum_unexpected} [] in
         U.str_expr s in
 
-      let pat = U.mk_pat ename in
+      let pat =
+        let p1 = match enum_type with
+        | Enum_normal | Enum_both -> U.mk_pat alias_name
+        | Enum_bitmask ->  [%pat? _ ] in
+        let p2 = match enum_type with
+        | Enum_normal -> [%pat? _ ]
+        | Enum_bitmask -> U.mk_pat alias_name
+        | Enum_both -> U.mk_pat alias_name_bitmask in
+        [%pat? ([%p p1],[%p p2])] in
       let script = [%stri
-        let [%p pat] : 'a Ctypes.typ =
+        let [%p pat] : 'a Ctypes.typ * 'a list Ctypes.typ =
           Ppxc__script.Extract.enum2 [%e exp_l] [%e sparam]] in
       Top.add_extract script;
 
       let id_expr,attrs = Id.get_usage_id () in
       let script = [%stri
-        let [%p pat] : 'a Ctypes.typ =
-          Ppxc__script.Build.enum2 [%e exp_l] [%e sparam]
-          |> Ppxc__script.Build.reg_trace [%e id_expr]] in
+        let [%p pat] =
+          let ((ppxc__1,ppxc__2) : 'a Ctypes.typ * 'a list Ctypes.typ) =
+            Ppxc__script.Build.enum2 [%e exp_l] [%e sparam] in
+          Ppxc__script.Build.reg_trace [%e id_expr] ppxc__1,
+          Ppxc__script.Build.reg_trace [%e id_expr] ppxc__2 ] in
       Top.add_build_external script;
 
-      let e_typdf = if etypedef then [%expr true] else [%expr false] in
-      let expr = [%expr Cstubs_internals.build_enum_type ~typedef:[%e e_typdf]
-          [%e U.str_expr ename_c] [%e id.Id.expr] [%e res]] in
-      let s2 = Ppx_mod.add_named ~attrs ename expr in
-      let s2 =
-        let x = Typ.constr (U.mk_lid real_name) [] in
-        let x = Typ.constr (U.mk_lid "Ctypes.typ") [x] in
-        Exp.constraint_ s2 x in
-      U.named_stri real_name s2
-      |> Hashtbl.add htl_tdl_entries tdl_entry_id
+      let f ~is_list ?(bitmask_name=false) name = function
+      | None -> ()
+      | Some id ->
+        let constr = Typ.constr (U.mk_lid orig_name) [] in
+        let constr = match is_list with
+        | false -> constr (* FIXME: how to access list and avoid shadowing? *)
+        | true -> Typ.constr (U.mk_lid "list") [constr] in
+        let constr = Typ.constr (U.mk_lid "Ctypes.typ") [constr] in
+        let s2 = Ppx_mod.add_named ~attrs name id.Id.expr in
+        let s2 = Exp.constraint_ s2 constr in
+        let name = match bitmask_name with
+        | false -> orig_name
+        | true -> orig_name_bitmask in
+        U.named_stri name s2
+        |> Hashtbl.add htl_tdl_entries tdl_entry_id in
+      (match enum_type with
+      | Enum_normal -> f ~is_list:false alias_name id
+      | Enum_bitmask -> f ~is_list:true alias_name id_bitmask
+      | Enum_both ->
+        f ~is_list:false alias_name id;
+        f ~is_list:true ~bitmask_name:true alias_name_bitmask id_bitmask);
 
-    | Struct {sname; sl = _ ; sname_c; stypedef; is_struct; sloc;
-              socaml_record} ->
+    | Struct {sname; sl = _ ; sname_c; stypedef; stype; sloc} ->
       U.with_loc sloc @@ fun () ->
-      let real_name = sname in
-      let sname = private_pref sname in
-      let is_struct = if enforce_union then false else is_struct in
-      if socaml_record && is_struct = false then
-        error "unions can't be viewed as OCaml records";
+      let orig_name = sname in
+      let alias_name = private_pref orig_name in
+      let type_name = match stype with
+      | Union | Struct_normal | Struct_both -> orig_name
+      | Struct_record -> "ppxc__" ^ orig_name in
 
-      let type_name =
-        if socaml_record = false then real_name
-        else "ppxc__" ^ real_name in
-
-      let typ' = Type.mk ~kind:Ptype_abstract (U.mk_loc type_name) in
-      add_type ~tdl:(not socaml_record) typ';
+      Type.mk ~kind:Ptype_abstract (U.mk_loc type_name)
+      |> add_type ?params:None ~tdl:(stype <> Struct_record);
 
       let expr =
         let name = if stypedef then "" else sname_c in
         let sexpr = U.str_expr name in
-        match is_struct with
-        | true -> [%expr Ctypes.structure [%e sexpr]]
-        | false -> [%expr Ctypes.union [%e sexpr]] in
+        match stype = Union with
+        | true  -> [%expr Ctypes.union [%e sexpr]]
+        | false -> [%expr Ctypes.structure [%e sexpr]] in
+
       let constr expr =
-        let s = if is_struct then "Ctypes.structure" else "Ctypes.union" in
+        let s = if stype = Union then "Ctypes.union" else "Ctypes.structure" in
         let x = Typ.constr (U.mk_lid type_name) [] in
         let x = Typ.constr (U.mk_lid s) [x] in
         let x = Typ.constr (U.mk_lid "Ctypes.typ") [x] in
@@ -1123,20 +1229,50 @@ module H = struct
       let expr = constr expr in
 
       let add x =
-        let x = U.named_stri real_name (constr x) in
-        if socaml_record = false then
+        if stype <> Struct_record then
+          let x = U.named_stri orig_name (constr x) in
           Hashtbl.add htl_tdl_entries tdl_entry_id x in
-      let x = typ sname expr in
+      let x = typ alias_name expr in
       if stypedef = false then add x
       else
       let sexpr = U.str_expr sname_c in
-      let expr = Exp.ident (U.mk_lid sname) in
+      let expr = Exp.ident (U.mk_lid alias_name) in
       let expr = [%expr Ctypes.typedef [%e expr] [%e sexpr]] in
-      typ sname expr |> add in
+      typ alias_name expr |> add in
+
+
     let tl = Extract.type_decl tl in
     if enforce_union &&
        List.for_all tl ~f:(function Enum _ -> true | Struct _ -> false) then
       error "enum entry marked as union";
+    if enforce_bitmask &&
+       List.for_all tl ~f:(function Enum _ -> false | Struct _ -> true) then
+      error "struct entry marked as bitmask";
+    let tl = List.map tl ~f:(function
+    | Struct s when enforce_union ->
+      let stype = match s.stype with
+      | Struct_normal | Union -> Union
+      | Struct_both ->
+        error "@@@@with_record and type%%c_union are mutually exclusive"
+      | Struct_record ->
+        error "@@@@as_record and type%%c_union are mutually exclusive" in
+      Struct { s with stype }
+    | Enum e  ->
+      let res = match e.enum_type with
+      | _ when enforce_bitmask = false -> e
+      | Enum_both ->
+        error "@@@@with_bitmask and type%%c_bitmask f = ... are incompatible"
+      | Enum_normal ->
+        if e.etypedef then
+          error "@@@@typedef and type%%c_bitmask f = ... are incompatible";
+        { e with enum_type = Enum_bitmask ; etypedef = true }
+      | Enum_bitmask ->
+        error "@@@@as_bitmask and type%%c_bitmask f = ... are redundant" in
+      (match res.enum_type, res.eunexpected with
+      | Enum_bitmask, Some _ -> error "@@@@unexpected not supported for bitmasks"
+      | (Enum_both|Enum_normal|Enum_bitmask),(Some _|None) -> ());
+      Enum res
+    | (Struct _ ) as x -> x) in
     List.iter ~f:single_typ tl;
     List.iter ~f:fields tl;
     if type_rec_flag <> Asttypes.Recursive then
@@ -1305,13 +1441,14 @@ let mapper _config _cookies =
     | {pstr_desc = Pstr_primitive strpri; pstr_loc}
       when !phase = P.Initial_scan && strpri.pval_prim <> [] ->
       external' ~is_inline:false pstr_loc strpri
-    | {pstr_desc = Pstr_extension (({txt = (("c"|"c_union") as txt);_},
-                                    (PStr [{pstr_desc = Pstr_type(rf,tl) ;
-                                            pstr_loc}])), _);_}
+    | {pstr_desc = Pstr_extension (({txt = (("c"|"c_union"|"c_bitmask") as txt);
+                                     _}, (PStr [{pstr_desc = Pstr_type(rf,tl);
+                                                 pstr_loc}])), _);_}
       when !phase = P.Initial_scan ->
       Ast_helper.default_loc := pstr_loc;
       let enforce_union = txt = "c_union" in
-      H.type_decl ~enforce_union rf tl
+      let enforce_bitmask = txt = "c_bitmask" in
+      H.type_decl ~enforce_union ~enforce_bitmask rf tl
 
     | [%stri let%c [%p? pat] = [%e? exp]] when !phase = P.Initial_scan ->
       let t = unbox_box_constr exp @@ fun exp ->
