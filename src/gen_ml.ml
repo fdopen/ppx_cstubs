@@ -400,6 +400,8 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
   let p = Val.mk ~attrs ~prim name t in
   Str.primitive p
 
+(* (fun ~p1:ppxc__x0 -> fun ~p2:ppxc__x1 -> fun ppxc__x2 ->
+      res_transform ($ext_fun (param_trans ppxc__x0) ...) ) *)
 let build_fun param_infos ret_info ~ext_fun =
   let is_simple_fun =
     List.for_all param_infos
@@ -434,6 +436,10 @@ let ignore_fun () =
   else
     [%expr Pervasives.ignore ]
 
+(* if false then (
+     Stdlib.Pervasives.ignore (Ctypes.ptr void : 'ppxc__t_0 Ctypes.typ);
+     Stdlib.Pervasives.ignore ( ... : 'ppxc__t_1 Ctypes.typ);
+     ... ) *)
 let build_ignore_expr (el,params) (retexpr,ret_info) =
   let f ac i e match_pat annot_needed =
     match match_pat, annot_needed with
@@ -454,6 +460,9 @@ let build_ignore_expr (el,params) (retexpr,ret_info) =
   | None -> None
   | Some s -> Some ([%expr if false then [%e s];])
 
+(* match (t1 : 'ppxc__t_1 Ctypes.typ), (t2 : 'ppxc__t_0 Ctypes.typ) with
+   | (Ctypes_static.View ..), (Ctypes_static.Foo ..) -> $func
+   | _ -> Ppx_cstubs_internals.invalid_code () *)
 let build_parallel_pattern (el,param_infos) (retexpr,ret_info) func =
   let cnt = ref 0 in
   let l =
@@ -491,6 +500,15 @@ let build_parallel_pattern (el,param_infos) (retexpr,ret_info) func =
     } :: dummy_end :: [] in
     Exp.match_ ~attrs expr cl
 
+(* match $fn_expr with
+  | Ctypes_static.Function(...,Ctypes_static.Function(...,
+                                         Ctypes_static.Returns(...))) ->
+     $func
+  | _ -> Ppx_cstubs_internals.invalid_code ()
+  with
+  $f_expr:
+  (t1 @-> t2 @-> return t3) : ('ppxc__t_1 -> 'ppxc__t_2 -> 'ppxc__t_3) Ctypes.fn
+*)
 let build_pattern fn fn_expr param_infos ret_info ~func =
   let rec iter : type a. a Ctypes.fn -> 'b -> 'c =
     let open Ctypes_static in
@@ -590,23 +608,24 @@ let rec collect_info :
 let collect_info a cinfo eo =
   collect_info a cinfo (create_param_name ()) eo []
 
+(* (w1:'ppxc__t_1 -> 'ppxc__t_2 -> 'ppxc__t_3),
+   ('ppxc__t_1 -> 'ppxc__t_2 -> 'ppxc__t_3) Ctypes_static.fn *)
 let build_fun_constraint params ~return_errno =
   let length = List.length params in
+  let var n = Typ.var (poly_prefix n) in
   let arrow with_label start =
     ListLabels.fold_right ~init:(pred length,start) params ~f:(fun p (i,last) ->
       let label = if with_label then p.label else Asttypes.Nolabel in
-      let n = Typ.var (poly_prefix i) in
-      pred i, Typ.arrow label n last)
+      pred i, Typ.arrow label (var i) last)
     |> snd in
   let t =
     let start =
-      if return_errno = false then
-        Typ.var (poly_prefix length)
+      if return_errno = false then (var length)
       else
       let errno = Typ.constr (U.mk_lid "Signed.sint") [] in
-      Typ.tuple [Typ.var (poly_prefix length); errno] in
+      Typ.tuple [var length; errno] in
     arrow true start in
-  let fn = arrow false @@ Typ.var (poly_prefix length) in
+  let fn = arrow false (var length) in
   let lid = U.mk_lid "Ctypes_static.fn" in
   let fn = Typ.constr lid [fn] in
   t,fn

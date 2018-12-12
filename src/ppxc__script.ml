@@ -76,7 +76,8 @@ module C_content = struct
         | Extract_text _ -> cnt_ac) in
     if Hashtbl.length htl_id_text <> cnt then
       U.error "fatal: source code incomplete";
-    String.concat "\n\n" l
+    if cnt = 0 then None
+    else Some (String.concat "\n\n" l)
 end
 
 
@@ -107,7 +108,7 @@ module Const = struct
       if Obj.magic t == Obj.magic Ctypes.string then
         `String
       else
-        U.error "cant extract constants of type %s" (Ctypes.string_of_typ t)
+        U.error "can't extract constants of type %s" (Ctypes.string_of_typ t)
     | Some i -> `Int i in
     let c_header = C_content.get_extract_source () in
     init_buffer c_header;
@@ -130,13 +131,26 @@ module Const = struct
     Buffer.add_string extract_source header
 
   let find_failing () =
+    let ebuf = Buffer.create 2048 in
     Std.with_return @@ fun r ->
     CCHashtbl.to_list htl_id_entries
     |> List.sort ~cmp:(fun (a,_) (b,_) -> compare a b)
     |> List.iter ~f:(fun (_id,(loc,_einfo,rinfo,info_str)) ->
       U.with_loc loc @@ fun () ->
-      match Extract_c.compile rinfo.Extract_c.single_prog with
-      | Error _ -> r.Std.return (Some (loc,info_str))
+      Buffer.clear ebuf;
+      match Extract_c.compile ~ebuf rinfo.Extract_c.single_prog with
+      | Error _ ->
+        if Buffer.length ebuf > 0 then
+          if !Options.verbosity > 0 then
+            Buffer.output_buffer stderr ebuf
+          else
+          if !Options.verbosity = 0 then
+            Buffer.contents ebuf
+            |> CCString.split_on_char '\n'
+            |> List.take 7
+            |> List.map ~f:String.trim
+            |> List.iter ~f:prerr_endline;
+        r.Std.return (Some (loc,info_str))
       | Ok _ -> ());
     None
 
@@ -306,7 +320,7 @@ module Extract = struct
 
   let field id_loc stru field_name =
     let id,loc = U.from_id_loc_param id_loc in
-    let ctyp = Gen_c.string_of_typ stru in
+    let ctyp = Gen_c.string_of_typ_exn stru in
     let to_extract = Printf.sprintf "offsetof(%s,%s)" ctyp field_name in
     Const.add
       ~info_str:(Printf.sprintf "offset of %s in %s" ctyp field_name)
@@ -315,9 +329,9 @@ module Extract = struct
   let seal id_loc_size id_loc_align stru =
     let id_size,loc_size = U.from_id_loc_param id_loc_size in
     let id_align,loc_align = U.from_id_loc_param id_loc_align in
-    let ctyp = Gen_c.string_of_typ stru in
+    let ctyp = Gen_c.string_of_typ_exn stru in
     let size_str = Printf.sprintf "sizeof(%s)" ctyp in
-    let struct_name = U.safe_cname ~prefix:"extract_struct" () in
+    let struct_name = U.safe_cname ~prefix:"extract_struct" in
     let dummy_header =
       Printf.sprintf "struct %s {char c; %s x;};\n" struct_name ctyp in
     C_content.add_extract_source dummy_header;
@@ -455,7 +469,7 @@ module Build = struct
     Trace.trace ctypes_t;
     let fun' = Ctypes.(void @-> returning (ptr ctypes_t)) in
     let ptrexpr = [%expr Ctypes.ptr [%e typ_expr]] in
-    let stubname = U.safe_cname ~prefix:("value_" ^ foreign_value) () in
+    let stubname = U.safe_cname ~prefix:("value_" ^ foreign_value) in
     let cinfo = Gen_c.gen_value fun' ~stubname ~value:foreign_value in
     C_content.add_function id_external cinfo.Gen_c.stub_source;
     let res = Gen_ml.foreign_value fun' name ptrexpr cinfo in
@@ -465,14 +479,13 @@ module Build = struct
   let external' id_loc_external id_loc_stri_expr ctypes_fn ~marshal_info =
     let id_external,_loc_external = U.from_id_loc_param id_loc_external in
     let id_stri_expr,_loc_stri_expr = U.from_id_loc_param id_loc_stri_expr in
-    Trace.trace_fn ctypes_fn;
     let open Marshal_types in
     let {el; ret; release_runtime_lock; noalloc; is_inline; remove_labels;
          return_errno; c_name; ocaml_name; prim_name} =
       Marshal.from_string marshal_info 0 in
     let c =
       if is_inline = false then
-        let stubname = U.safe_cname ~prefix:c_name () in
+        let stubname = U.safe_cname ~prefix:c_name in
         Gen_c.gen_fun ctypes_fn ~stubname ~cfunc:c_name
           ~release_runtime_lock ~noalloc ~return_errno
       else
@@ -499,11 +512,11 @@ module Build = struct
           a,s) in
       let c_body = c_name in
       let prim_name = U.safe_ascii_only prim_name in
-      let c_name = U.safe_cname ~prefix:("i" ^ prim_name) () in
+      let c_name = U.safe_cname ~prefix:("i" ^ prim_name) in
       let body =
         Gen_c.build_inline_fun ctypes_fn ~c_name ~c_body ~noalloc names in
       C_content.add_function id_stri_expr body;
-      let stubname = U.safe_cname ~prefix:("f" ^ prim_name) () in
+      let stubname = U.safe_cname ~prefix:("f" ^ prim_name) in
       Gen_c.gen_fun ctypes_fn ~stubname ~cfunc:c_name ~release_runtime_lock
         ~noalloc ~return_errno in
     C_content.add_function id_external c.Gen_c.stub_source;
@@ -579,7 +592,7 @@ module Build = struct
       c_name fn =
     let id_external,_loc_external = U.from_id_loc_param id_loc_external in
     let id_stri_expr,_loc_stri_expr = U.from_id_loc_param id_loc_stri_expr in
-    let stubname = U.safe_cname ~prefix:c_name () in
+    let stubname = U.safe_cname ~prefix:c_name in
     Trace.trace_fn fn;
     let c = Gen_c.gen_fun fn
         ~stubname ~cfunc:c_name ~release_runtime_lock ~noalloc ~return_errno in
@@ -799,7 +812,7 @@ module Main = struct
 
   let run () =
     Const.extract_all ();
-    G.c_source := Some(C_content.get_source ());
+    G.c_source := C_content.get_source ();
     clear ()
 
 end

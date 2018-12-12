@@ -29,5 +29,6 @@
 *.idoc
 /.omakedb*
 src/inline_lexer.ml
+src/toplevel.ml
 src/ppx_cstubs
 test/generated_*

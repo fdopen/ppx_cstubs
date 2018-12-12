@@ -16,7 +16,7 @@ val gen_fun: 'a Ctypes.fn ->
 
 val gen_value: 'a Ctypes.fn -> stubname:string -> value:string -> info
 
-val string_of_typ : ?name:string -> 'a Ctypes.typ -> string
+val string_of_typ_exn : ?name:string -> 'a Ctypes.typ -> string
 
 val build_inline_fun :
   'a Ctypes.fn ->

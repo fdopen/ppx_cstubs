@@ -43,7 +43,7 @@ and check_printable_fn : type b. b fn -> bool =
   | Returns a -> check_printable a
   | Function (a, b) ->
     check_printable_fn b && (check_printable a)
-let string_of_typ ?name t =
+let string_of_typ_exn ?name t =
   if check_printable t then
     Ctypes_type_printing_fake.string_of_typ ?name t
   else
@@ -418,25 +418,25 @@ let rec pinfo:
       native_param_type = "value" } in
     let stru () =
       standard (fun () ->
-        let cast_name = string_of_typ (ptr orig) in
+        let cast_name = string_of_typ_exn (ptr orig) in
         Printf.sprintf
           "%s = *(%s)(CTYPES_ADDR_OF_FATPTR(Field(Field(%s,0),0)));"
-          (string_of_typ ~name:c_var orig) cast_name ocaml_param) in
+          (string_of_typ_exn ~name:c_var orig) cast_name ocaml_param) in
     let f ?noalloc_possible s =
       standard ?noalloc_possible (fun () ->
         Printf.sprintf "%s = %s(%s);"
-          (string_of_typ ~name:c_var orig) s ocaml_param) in
+          (string_of_typ_exn ~name:c_var orig) s ocaml_param) in
     let str () = f "CTYPES_PTR_OF_OCAML_STRING" in
     let hptr noalloc_possible =
       standard ~noalloc_possible (fun () ->
           Printf.sprintf "%s = CTYPES_ADDR_OF_FATPTR(Field(%s,0));"
-            (string_of_typ ~name:c_var orig) ocaml_param) in
+            (string_of_typ_exn ~name:c_var orig) ocaml_param) in
     match p with
     | C.Void ->
       standard ~runtime_protect:false ~is_void:true
         (fun () -> Printf.sprintf "(void)%s;" ocaml_param)
     | C.Primitive x ->
-      let ct = string_of_typ p in
+      let ct = string_of_typ_exn p in
       pinfo_prim ~ctype:ct x ~c_var ~ocaml_param
     | C.Array (_,_) -> report_unpassable "arrays"
     | C.Bigarray _  -> report_unpassable "bigarrays"
@@ -468,7 +468,7 @@ let extract =
     | Returns t ->
       let ocaml_ret_var = name () in
       let c_rvar = name () in
-      let decl_rvar = fun () -> string_of_typ ~name:c_rvar t in
+      let decl_rvar = fun () -> string_of_typ_exn ~name:c_rvar t in
       let r = ret_info t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar in
       r,[]
     | Function(a,b) ->
@@ -516,7 +516,8 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
   let ret,params = extract ~user_noalloc a in
   let params_length = List.length params in
   if params_length > 1 && List.exists ~f:(fun s -> s.is_void) params then
-    report_unpassable "void for functions with two or more parameters" ;
+    report_unpassable
+      "void as parameter in a function with two or more parameters";
   if release_runtime_lock then
     check_no_ocaml a;
   let noalloc =
@@ -794,11 +795,11 @@ module Inline = struct
       match t with
       | Returns a ->
         check ~noalloc a;
-        string_of_typ a,[]
+        string_of_typ_exn a,[]
       | Function(a,b) ->
         check ~noalloc a;
         let is_void = is_void a in
-        let f s = string_of_typ ~name:s a in
+        let f s = string_of_typ_exn ~name:s a in
         let r,l = extract ~noalloc b in
         r,(is_void,f)::l
 

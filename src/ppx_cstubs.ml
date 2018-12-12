@@ -54,13 +54,13 @@ module Extract = struct
   let remove_attrib str l = List.filter l ~f:(fun (x,_) -> x.txt <> str )
 
   let get_remove name attr =
-    let typedef = List.exists attr ~f:(fun (x,t) ->
+    let at = List.exists attr ~f:(fun (x,t) ->
         if x.txt <> name then false
         else match t with
         | PStr [] -> true
         | _ -> error ~loc:x.loc "surprising content in %s" name) in
-    typedef,
-    if false then attr else remove_attrib name attr
+    at,
+    if not at then attr else remove_attrib name attr
 
   let rec is_simple =
     let open Longident in function
@@ -426,17 +426,22 @@ end
 module C_content = struct
 
   let write_file () : unit =
-    match !Options.c_output_file,!Script_result.c_source with
+    if Options.(!mode = Emulate) then ()
+    else match !Options.c_output_file,!Script_result.c_source with
     | Some fln, Some source ->
       Options.c_output_file := None;
       (match fln with
       | "-" -> output_string stdout source
       | _ ->
         CCIO.with_out
-          ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] fln @@ fun ch ->
-        output_string ch source)
-    | _ -> ()
-
+          ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] fln @@
+        fun ch -> output_string ch source)
+    | Some _, None ->
+      prerr_endline
+        "no c file necessary, set -o-c to 'none' and update your build instructions";
+      exit 2
+    | None, None -> ()
+    | None, Some _ -> failwith "internal error: c source not generated"
 end
 
 module Id = struct

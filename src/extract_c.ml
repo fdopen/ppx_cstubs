@@ -89,7 +89,8 @@ let prologue = {|
    __builtin_types_compatible_p (__typeof__ (x), unsigned char) ||    \
    __builtin_types_compatible_p (__typeof__ (x), unsigned int) ||     \
    __builtin_types_compatible_p (__typeof__ (x), unsigned long) ||    \
-   __builtin_types_compatible_p (__typeof__ (x), unsigned long long))
+   __builtin_types_compatible_p (__typeof__ (x), unsigned long long) || \
+   __builtin_types_compatible_p (__typeof__ (x), size_t))
 
 #else
 #define PPXC_IS_INTEGER(x) (1)
@@ -221,40 +222,51 @@ const char *ppx_c_extract_char_string%x = "PPXC_CONST_NR_%x#" %s "#%x_RN_TSNOC_C
 
 type obj = string
 
-let compile c_prog =
-  let c_flags = !Options.c_flags in
+let compile ?ebuf c_prog =
   let ocaml_flags = !Options.ocaml_flags in
   let cfln = Filename.temp_file "ppxc_extract" ".c" in
-  finally ~h:(fun () -> if not !Options.debug then remove_file cfln) @@ fun () ->
+  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln) @@ fun () ->
   CCIO.with_out
     ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] cfln (fun ch ->
       output_string ch c_prog);
-  let cwd = Sys.getcwd () in
-  finally ~h:(fun () -> Sys.chdir cwd) @@ fun () ->
-  let dir = Filename.dirname cfln
-  and file = Filename.basename cfln in
-  Sys.chdir dir; (* ocamlc -c source.c -o source.o not possible *)
-  (* TODO: use Unix.create_process instead of quoting hell ... *)
-  let l = List.map c_flags ~f:(fun c -> "-ccopt"::(Filename.quote c)::[] )
-          |> List.flatten in
-  let l = (List.map ~f:Filename.quote ocaml_flags) @ l in
-  let l = "c"::"-c"::(Filename.quote file)::l in
-  let l = match !Options.toolchain with
-  | None -> l
-  | Some s -> "-toolchain"::(Filename.quote s)::l in
-  let l = "ocamlfind":: l in
-  let cmd = String.concat " " l in
-  (* output too verbose to be helpful *)
-  let cmd = String.concat "" [cmd ; " >"; Ocaml_config.dev_null; " 2>&1"] in
-  (*let cmd = if Sys.win32 then "\"" ^ cmd ^ "\"" else cmd in*)
-  let ec = Sys.command cmd in
-  let obj = Filename.chop_suffix file ".c" ^ (Ocaml_config.ext_obj ()) in
-  finally ~h:(fun () -> if not !Options.debug then remove_file obj) @@ fun () ->
-  if ec <> 0 then
-    Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec) else
-  if Sys.file_exists obj = false then
-    Error "`ocamlfind ocamlc -c` didn't create an object file"
-  else
+  let obj = Filename.chop_suffix cfln ".c" ^ (Ocaml_config.ext_obj ()) in
+  let c_flags =
+    (* that's a suboptimal solution. `ocamlc -c foo.c -o foo.o` doesn't work:
+        "Options -c and -o are incompatible when compiling C files"
+       But I might have no write access in the current directory and I'm
+       unsure how '-I' flags and similar options are affected, if I change the
+       current working directory ... *)
+    match Ocaml_config.system () |> CCString.lowercase_ascii with
+    | "win32" | "win64" -> ["-Fo:" ^ obj]
+    | _ -> ["-o";obj] in
+  let dir = match !Options.ml_input_file with
+  | None -> failwith "ml_input_file not set"
+  | Some s -> Filename.dirname s in
+  let c_flags = "-I"::dir::c_flags in
+  let c_flags = !Options.c_flags @ c_flags in
+  let args = List.map c_flags ~f:(fun c -> "-ccopt"::c::[]) |> List.flatten in
+  let args = ocaml_flags @ args in
+  let args = "c"::"-c"::cfln::args in
+  let args = match !Options.toolchain with
+  | None -> args
+  | Some s -> "-toolchain"::s::args in
+  let stdout = if !Options.verbosity > 0 then `Stdout else `Null in
+  let stderr =
+    if !Options.verbosity > 1 then `Stderr
+    else match ebuf with
+    | None -> `Null
+    | Some ebuf -> `Buffer ebuf in
+  let prog = Options.ocamlfind in
+  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file obj) @@ fun () ->
+  if !Options.verbosity > 0 then
+    Run.cmd_to_string prog args |> prerr_endline;
+  match Run.run prog args ~stdout ~stderr with
+  | exception (Unix.Unix_error(e,s,_)) ->
+    let cmd = Run.cmd_to_string prog args in
+    Error (Printf.sprintf
+             "Process creation \"%s\" failed with %s (%S)"
+             cmd (Unix.error_message e) s)
+  | 0 ->
     CCIO.with_in
       ?mode:None ~flags:[Open_binary] obj @@ fun ch ->
     let s = CCIO.read_all ch in
@@ -262,6 +274,7 @@ let compile c_prog =
       Error "`ocamlfind ocamlc -c` created an empty obj file"
     else
       Ok s
+  | ec -> Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
 
 type extract_error =
   | Info_not_found

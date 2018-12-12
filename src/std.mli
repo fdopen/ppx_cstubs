@@ -9,7 +9,7 @@ module Util :
       ('a, unit, string, 'b) format4 -> 'a
     val safe_ascii_only : string -> string
     val safe_ascii_only_ml : string -> string
-    val safe_cname : ?prefix:string -> unit -> string
+    val safe_cname : prefix:string -> string
     val safe_mlname : ?prefix:string -> unit -> string
     val with_loc : Ast_helper.loc -> (unit -> 'a) -> 'a
     val str_expr : ?loc:Ast_helper.loc ->
@@ -23,5 +23,3 @@ module Util :
     val mk_lid: ?loc:Ast_helper.loc -> string -> Longident.t Location.loc
     val mk_pat: string -> Parsetree.pattern
   end
-
-

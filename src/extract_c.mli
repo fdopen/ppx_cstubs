@@ -23,7 +23,7 @@ val prepare_extract_string :
 
 type obj
 
-val compile : string -> (obj, string) result
+val compile : ?ebuf:Buffer.t -> string -> (obj, string) result
 
 type extract_error =
   | Info_not_found

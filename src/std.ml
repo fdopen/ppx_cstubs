@@ -69,7 +69,7 @@ module Util = struct
 
   let safe_cname =
     let i = ref (-1) in
-    fun ?prefix () ->
+    fun ~prefix ->
       let module Lo = Location in
       let module Le = Lexing in
       let loc = !Ast_helper.default_loc in
@@ -77,9 +77,7 @@ module Util = struct
       let name = match CCString.Split.left ~by:"." name with
       | None -> ""
       | Some(s,_) -> safe_ascii_only s in
-      let s,p = match prefix with
-      | None -> "",""
-      | Some s -> safe_ascii_only s,"_" in
+      let s = safe_ascii_only prefix in
       let cutmax s maxlen =
         let len = String.length s in
         if len > maxlen then
@@ -90,11 +88,11 @@ module Util = struct
       let s = cutmax s 20 in
       let name = cutmax name 40 in
       incr i;
-      Printf.sprintf "ppxc%x_%s_%x_%x%s%s"
+      Printf.sprintf "ppxc%x_%s_%x_%x_%s"
         !i name
         loc.Lo.loc_start.Le.pos_lnum
         loc.Lo.loc_start.Le.pos_cnum
-        p s
+        s
 
   let safe_mlname =
     let i = ref (-1) in
@@ -105,6 +103,5 @@ module Util = struct
       let loc = !Ast_helper.default_loc in
       let line = loc.Location.loc_start.Lexing.pos_lnum in
       incr i;
-      Printf.sprintf
-        "ppxc__%s%sline%d_%d" s p line !i
+      Printf.sprintf "ppxc__%s%sline%d_%d" s p line !i
 end

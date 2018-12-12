@@ -253,3 +253,20 @@ NULL_DEVICE=
 		value /dev/null
 	else
 		value NUL
+
+chmod_exists(mode,files)=
+	if $(not $(equal $(OSTYPE), Win32))
+		foreach(f, $(files))
+			if $(file-exists $(f))
+				chmod($(mode) $(f))
+
+CPPO_FILES(t)=
+	LocalOCamlGeneratedFiles($(t))
+	foreach(f, $(t))
+		$(f): $(removesuffix $(f)).cppo$(suffix $(f))
+			section
+				chmod_exists(0666,$(f))
+				cppo -V $"OCAML:$(OCAMLC_VERSION)" -o $(f) $<
+				chmod_exists(0400,$(f))
+		clean::
+			rm -f $(f)

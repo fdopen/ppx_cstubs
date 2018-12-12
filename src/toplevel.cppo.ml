@@ -15,6 +15,17 @@
 
 let toplevel_env = ref Env.empty
 
+let findlib_protect f a =
+  try
+    f a
+  with
+  | Fl_package_base.No_such_package(s,s') ->
+    if s' = "" then
+      Printf.eprintf "error: findlib package %s not found\n%!" s
+    else
+      Printf.eprintf "error: findlib package %s (%S) not found\n%!" s s';
+    exit 2
+
 let init = lazy (
   toplevel_env := Compmisc.initial_env ();
   Topfind.log := ignore;
@@ -37,17 +48,24 @@ let init = lazy (
     Topdirs.dir_directory (Filename.dirname Sys.executable_name);
 
   if !Options.findlib_pkgs <> [] then (
-    let l = [ "ctypes"; "num"; "findlib.top"; "compiler-libs.toplevel";
-              "containers"; "ocaml-migrate-parsetree" ] in
+    let l = [
+      "compiler-libs.bytecomp";
+      "compiler-libs.toplevel";
+      "containers";
+      "ctypes";
+      "findlib.top";
+      "integers";
+      "num";
+      "ocaml-migrate-parsetree";
+      "ppx_tools_versioned";
+    ] in
     let l =
-      let v = Scanf.sscanf Sys.ocaml_version "%u.%u.%u" (fun m n p -> m,n,p) in
-      if v >= (4,3,0) then
-        l
-      else
-        "result"::l in
-    Topfind.don't_load_deeply l;
+      if Ocaml_config.runtime_version >= (4,3,0) then l
+      else "result"::l in
+    let l = if add_cmi_dir_findlib then "ppx_cstubs"::l else l in
     Topfind.predicates := ["byte"];
-    Topfind.load_deeply !Options.findlib_pkgs
+    findlib_protect Topfind.don't_load_deeply l;
+    findlib_protect Topfind.load_deeply !Options.findlib_pkgs
   );
 
   ListLabels.iter !Options.cma_files ~f:(fun s ->

@@ -1,12 +1,6 @@
 .DEFAULT: all
 .PHONY: show
 
-chmod_exists(mode,files)=
-	if $(not $(equal $(OSTYPE), Win32))
-		foreach(f, $(files))
-			if $(file-exists $(f))
-				chmod($(mode) $(f))
-
 CPP_FILES(t)=
 	LocalOCamlGeneratedFiles($(mapsuffix _stubs.c, $(t)) $(mapsuffix .ml, $(t)))
 	foreach(f, $(t))
@@ -39,8 +33,12 @@ EXAMPLE(t)=
 			./$(t)$(EXE)
 
 if $(not $(equal $(OSTYPE), Win32))
-	EXAMPLE(getpwent)
 	EXAMPLE(ftw)
 
-EXAMPLE(time)
-EXAMPLE(inline)
+if $(or $(gt $(OCAMLC_VERSION_MAJOR),4),$(and $(eq 4,$(OCAMLC_VERSION_MAJOR)),$(ge $(OCAMLC_VERSION_MINOR),3)))
+
+	if $(equal $(OCAMLC_SYSTEM), linux)
+		EXAMPLE(getpwent)
+
+	EXAMPLE(inline)
+	EXAMPLE(time)
