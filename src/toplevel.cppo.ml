@@ -27,6 +27,8 @@ let findlib_protect f a =
     exit 2
 
 let init = lazy (
+  if !Options.nopervasives then
+    Clflags.nopervasives := true;
   toplevel_env := Compmisc.initial_env ();
   Topfind.log := ignore;
   Topdirs.dir_directory @@ Findlib.package_directory "integers";
@@ -58,6 +60,7 @@ let init = lazy (
       "num";
       "ocaml-migrate-parsetree";
       "ppx_tools_versioned";
+      "re.perl";
     ] in
     let l =
       if Ocaml_config.runtime_version >= (4,3,0) then l
@@ -83,19 +86,19 @@ let init () = Lazy.force init
 
 let eval_expression =
   let module M = Migrate_parsetree in
-  let module A = M.Ast_405 in
+  let module A = Mparsetree.Ast_cur in
   let module P = A.Parsetree in
-  let to_current = M.Versions.(migrate ocaml_405 ocaml_current) in
+  let to_current = M.Versions.(migrate Mparsetree.ast_version ocaml_current) in
   (* see OCaml's toplevel/toploop.ml for details *)
   fun expr ->
+    let loc = !A.Ast_helper.default_loc in
     let str = [{
         P.pstr_desc = P.Pstr_eval(expr,[]);
-        P.pstr_loc = !A.Ast_helper.default_loc;
+        P.pstr_loc = loc;
       }] in
     let st = to_current.M.Versions.copy_structure str in
     Typecore.reset_delayed_checks ();
-    let old_env = !toplevel_env in
-    let str, _sg, newenv = Typemod.type_toplevel_phrase old_env st in
+    let str, _sg, newenv = Typemod.type_structure !toplevel_env st loc in
     let lam = Translmod.transl_toplevel_definition str in
     Warnings.check_fatal ();
     let init_code, fun_code = Bytegen.compile_phrase lam in

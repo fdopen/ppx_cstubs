@@ -16,17 +16,16 @@
 open Ctypes
 
 module List = CCListLabels
-
-let report_unpassable what =
-  let msg = Printf.sprintf "cstubs does not support passing %s" what in
-  raise (Unsupported msg)
+let error = Std.Util.error
 
 (* structs need a name and I can't print bigarrays ... *)
 let rec check_printable : type a. a typ -> bool =
   let open Ctypes_static in function
-  | Struct { tag = ""; _ } -> report_unpassable "unnamed structs"
+  | Struct { tag = ""; _ } ->
+    error "passing or returning unnamed structs is not supported"
   | Struct _ -> true
-  | Union { utag = ""; _ } -> report_unpassable "unnamed unions"
+  | Union { utag = ""; _ } ->
+    error "passing or returning unnamed unions is not supported"
   | Union _ -> true
   | View { format_typ = Some _ ; _ } -> true
   | View { ty ; _ } -> check_printable ty
@@ -203,6 +202,7 @@ let rec ret_info : type a. a typ
   -> user_noalloc:bool -> ocaml_ret_var:string -> c_rvar:string
   -> decl_rvar:(unit -> string) -> ret =
   let open Ctypes_static in
+  let error s = error "cstubs does not support returning %s" s in
   fun t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar ->
     let pptr () = {
       is_rvoid = false;
@@ -247,7 +247,7 @@ let rec ret_info : type a. a typ
     | Funptr _ -> pptr ()
     | Struct _ -> cp ()
     | Union _ -> cp ()
-    | Abstract _ -> report_unpassable "values of abstract type"
+    | Abstract _ -> error "values of abstract type"
     | View { format_typ = Some ft; _ }
       when ft == Evil_hack.format_typ ->
       let inj () =
@@ -257,9 +257,9 @@ let rec ret_info : type a. a typ
       standard ~inj_noalloc_possible:user_noalloc inj
     | View { ty; _ } ->
       ret_info ty ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar
-    | Array _ -> report_unpassable "arrays"
-    | Bigarray _ -> report_unpassable "bigarrays"
-    | OCaml _ -> report_unpassable "ocaml references as return values"
+    | Array _ -> error "arrays"
+    | Bigarray _ -> error "bigarrays"
+    | OCaml _ -> error "ocaml references as return values"
 
 type param = {
   is_void: bool;
@@ -403,6 +403,7 @@ let rec pinfo:
   -> ocaml_param:string
   -> param =
   let module C = Ctypes_static in
+  let error s = error "cstubs does not support passing %s" s in
   fun p orig ~user_noalloc ~c_var ~ocaml_param ->
     let standard ?(runtime_protect=true) ?(noalloc_possible=true)
         ?(is_void=false) f = {
@@ -438,13 +439,13 @@ let rec pinfo:
     | C.Primitive x ->
       let ct = string_of_typ_exn p in
       pinfo_prim ~ctype:ct x ~c_var ~ocaml_param
-    | C.Array (_,_) -> report_unpassable "arrays"
-    | C.Bigarray _  -> report_unpassable "bigarrays"
+    | C.Array (_,_) -> error "arrays"
+    | C.Bigarray _  -> error "bigarrays"
     | C.Pointer _ -> hptr true
-    | C.Abstract _ -> report_unpassable "values of abstract type"
+    | C.Abstract _ -> error "values of abstract type"
     | C.View { C.format_typ = Some ft; _ }
       when ft == Evil_hack.format_typ ->
-      standard ~noalloc_possible:user_noalloc
+      standard ~noalloc_possible:user_noalloc ~runtime_protect:false
         (fun () -> Printf.sprintf "value %s = %s;" c_var ocaml_param)
     | C.View { C.ty; _ } -> pinfo ty p ~user_noalloc ~c_var ~ocaml_param
     | C.Struct _ -> stru ()
@@ -456,28 +457,39 @@ let rec pinfo:
 
 let pinfo p = pinfo p p
 
+let with_loc locs f =
+  let loc,locs = match locs with
+  | [] -> !Ast_helper.default_loc, []
+  | hd::tl -> hd,tl in
+  Std.Util.with_loc loc @@ fun () ->
+  f locs
+
 let extract =
   let open Ctypes_static in
-  fun ~user_noalloc a ->
+  fun ~user_noalloc ~locs a ->
     let i = ref 0 in
     let name () =
       let res = Printf.sprintf "ppxc__%x" !i in
       incr i;
       res in
-    let rec extract : type a. a Ctypes.fn -> ret * param list = function
-    | Returns t ->
-      let ocaml_ret_var = name () in
-      let c_rvar = name () in
-      let decl_rvar = fun () -> string_of_typ_exn ~name:c_rvar t in
-      let r = ret_info t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar in
-      r,[]
-    | Function(a,b) ->
-      let ocaml_param = name () in
-      let c_var = name () in
-      let c = pinfo a ~user_noalloc ~c_var ~ocaml_param in
-      let r,l = extract b in
-      r,c::l in
-    extract a
+    let rec extract :
+      type a. a Ctypes.fn -> Location.t list -> ret * param list =
+      fun t locs ->
+        with_loc locs @@ fun locs ->
+        match t with
+        | Returns t ->
+          let ocaml_ret_var = name () in
+          let c_rvar = name () in
+          let decl_rvar = fun () -> string_of_typ_exn ~name:c_rvar t in
+          let r = ret_info t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar in
+          r,[]
+        | Function(a,b) ->
+          let ocaml_param = name () in
+          let c_var = name () in
+          let c = pinfo a ~user_noalloc ~c_var ~ocaml_param in
+          let r,l = extract b locs in
+          r,c::l in
+    extract a locs
 
 type info = {
   stub_source: string;
@@ -487,22 +499,24 @@ type info = {
   return_errno: bool;
 }
 
-let rec check_no_ocaml : type a. a Ctypes.fn -> unit =
-  let open Ctypes_static in function
-  | Returns _ -> ()
-  | Function (a, b) ->
-    check_no_ocaml_t a;
-    check_no_ocaml b
-and check_no_ocaml_t : type a. a Ctypes.typ -> unit =
-  let open Ctypes_static in function
+let rec check_no_ocaml : type a. a Ctypes.fn -> Location.t list -> unit =
+  let open Ctypes_static in
+  fun fn locs ->
+    with_loc locs @@ fun locs ->
+    match fn with
+    | Returns _ -> ()
+    | Function (a, b) ->
+      check_no_ocaml_t locs a;
+      check_no_ocaml b locs
+and check_no_ocaml_t : type a. Location.t list -> a Ctypes.typ -> unit =
+  let open Ctypes_static in
+  fun locs -> function
   | OCaml _ ->
-    raise
-      (Unsupported
-         "You can't pass OCaml values to C, if you release the runtime lock")
+    error "You can't pass OCaml values to C, if you release the runtime lock"
   | Struct _ -> ()
   | Union _ -> ()
-  | View { ty ; _ } -> check_no_ocaml_t ty
-  | Pointer ty -> check_no_ocaml_t ty
+  | View { ty ; _ } -> check_no_ocaml_t locs ty
+  | Pointer ty -> check_no_ocaml_t locs ty
   | Funptr _ -> ()
   | Array _ -> ()
   | Bigarray _ -> ()
@@ -510,21 +524,20 @@ and check_no_ocaml_t : type a. a Ctypes.typ -> unit =
   | Void -> ()
   | Abstract _ -> ()
 
-let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
+let gen_common a ~locs ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
     ~return_errno =
   let user_noalloc = noalloc in
-  let ret,params = extract ~user_noalloc a in
+  let ret,params = extract ~user_noalloc ~locs a in
   let params_length = List.length params in
   if params_length > 1 && List.exists ~f:(fun s -> s.is_void) params then
-    report_unpassable
-      "void as parameter in a function with two or more parameters";
+    error
+      "you can't pass void as parameter to a function with two or more parameters";
   if release_runtime_lock then
-    check_no_ocaml a;
+    check_no_ocaml a locs;
   let noalloc =
     noalloc &&
     return_errno = false &&
     release_runtime_lock = false &&
-    params_length < 8 && (* somewhat arbitrary, but... *)
     List.for_all params ~f:(fun x -> x.noalloc_possible) &&
     ret.inj_noalloc_possible &&
     Ocaml_config.version () >= (4,3,0)
@@ -542,6 +555,11 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
                                         It's not the case for a suffix *)
   let native_ret_type = if noalloc then ret.inative_ret_type else "value" in
 
+  Printf.bprintf buf  {|#ifdef __cplusplus
+extern "C" {
+#endif
+|};
+
   (* native prototype *)
   Printf.bprintf buf "%s %s(" native_ret_type cname_main;
   List.iteri params ~f:(fun i p ->
@@ -552,7 +570,6 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
     else
       Buffer.add_string buf "value" );
   Buffer.add_string buf ");\n";
-
 
   (* byte prototype *)
   if gen_byte_version then (
@@ -566,6 +583,12 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
         Buffer.add_string buf "value" );
       Buffer.add_string buf ");\n";
     ));
+
+  Printf.bprintf buf {|#ifdef __cplusplus
+}
+#endif
+
+|};
 
   (* main function header *)
   Printf.bprintf buf "%s %s(" native_ret_type cname_main;
@@ -673,9 +696,11 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
       Printf.bprintf buf "value %s(value *a,int n)\n{\n  return(" cname_byte
     else (
       Printf.bprintf buf "value %s(value a0" cname_byte;
-      List.iteri params ~f:(fun i _ ->
-        if i > 0 then
-          Printf.bprintf buf ", value a%d" i);
+      (match params with
+      | [] -> ()
+      | _:: tl ->
+        List.iteri tl ~f:(fun i _ ->
+          Printf.bprintf buf ", value a%d" (succ i)));
       Buffer.add_string buf ")  {\n  return(";
     );
     let l = List.mapi params ~f:(fun i x ->
@@ -698,18 +723,18 @@ let gen_common a ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
     return_errno;
   }
 
-let gen_fun a ~stubname ~cfunc ~release_runtime_lock ~noalloc ~return_errno  =
-  gen_common a
-    ~stubname ~cfunc_value:(`Fun cfunc)
+let gen_fun a ~locs ~stubname ~cfunc ~release_runtime_lock
+    ~noalloc ~return_errno  =
+  gen_common a ~locs ~stubname ~cfunc_value:(`Fun cfunc)
     ~release_runtime_lock ~noalloc ~return_errno
 
 let gen_value a ~stubname ~value =
-  (* it is safe for noalloc usage, as long as the user doesn't pass a function
+  (* It is safe for noalloc usage, as long as the user doesn't pass a function
      call or similar to it. If he passes a macro, he deserves all errors that
      might occur :) *)
   let noalloc = Std.Util.safe_ascii_only value = value in
-  gen_common a ~stubname ~cfunc_value:(`Value value) ~release_runtime_lock:false
-    ~noalloc ~return_errno:false
+  gen_common a ~locs:[] ~stubname ~return_errno:false
+    ~cfunc_value:(`Value value) ~release_runtime_lock:false ~noalloc
 
 
 let rec is_void : type a. a typ -> bool =
@@ -724,9 +749,7 @@ let rec is_void : type a. a typ -> bool =
   | Struct _ -> false
   | Union  _ -> false
   | Funptr _ -> false
-  | OCaml String -> false
-  | OCaml Bytes -> false
-  | OCaml FloatArray -> false
+  | OCaml _ -> false
 
 module Inline = struct
   open Inline_lexer
@@ -748,7 +771,7 @@ module Inline = struct
       | Variable(name, _poss, _pose) ->
         let name' = match CCHashtbl.Poly.get htl_names name with
         | None -> (* TODO: use _pos for better error messages *)
-          Std.Util.error "parameter %S not defined" name
+          error "parameter %S not defined" name
         | Some x -> x in
         Hashtbl.replace htl_names_used name ();
         name'::acc in
@@ -766,16 +789,16 @@ module Inline = struct
       | View { ty ; _ } -> check ~noalloc ty
       | Pointer ty -> check ~noalloc ty
       | Funptr _ ->
-        raise (Unsupported "function pointers are not supported in inline code")
-      | Array _ -> raise (Unsupported "arrays are not supported in inline code")
-      | Bigarray _ ->
-        raise (Unsupported "bigarrays are not supported in inline code")
+        error "function pointers are not supported in inline code"
+      | Array _ -> error "arrays are not supported in inline code"
+      | Bigarray _ -> error "bigarrays are not supported in inline code"
       | OCaml _ ->
         (* a pointer into the OCaml heap might become invalid, if the
            garbage collector is triggered. Therefore I only support it for the
            noalloc case. *)
         if noalloc = false then
-          raise (Unsupported "passing OCaml values not supported in inline code");
+          error
+            "passing OCaml values to inline code is only supported for noalloc functions"
       | Primitive _ -> ()
       | Void -> ()
       | Abstract _ -> ()
@@ -788,10 +811,11 @@ module Inline = struct
       check_fn b *)
 
   let rec extract :
-    type a. a Ctypes.fn -> noalloc:bool
+    type a. a Ctypes.fn -> noalloc:bool -> 'b
     -> string * (bool * (string -> string)) list =
     let open Ctypes_static in
-    fun t ~noalloc ->
+    fun t ~noalloc locs ->
+      with_loc locs @@ fun locs ->
       match t with
       | Returns a ->
         check ~noalloc a;
@@ -800,13 +824,13 @@ module Inline = struct
         check ~noalloc a;
         let is_void = is_void a in
         let f s = string_of_typ_exn ~name:s a in
-        let r,l = extract ~noalloc b in
+        let r,l = extract ~noalloc b locs in
         r,(is_void,f)::l
 
 end
 
-let build_inline_fun fn ~c_name ~c_body ~noalloc l =
-  let ret_type,param_i = Inline.extract ~noalloc fn in
+let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc l =
+  let ret_type,param_i = Inline.extract ~noalloc fn locs in
   let buf = Buffer.create (256 + String.length c_body + String.length c_name) in
   Printf.bprintf buf "static %s %s(" ret_type c_name;
   List.iteri2 param_i l ~f:(fun i (is_void,f) (_,n) ->
@@ -820,14 +844,14 @@ let build_inline_fun fn ~c_name ~c_body ~noalloc l =
   let ls,unused_vars =
     try Inline.replace_vars l c_body
     with Inline_lexer.Bad_expander ->
-      Std.Util.error "not escaped '$' in inline source code" in
+      error "not escaped '$' in inline source code" in
   let is_void = List.exists ~f:fst param_i in
   if unused_vars && is_void = false then
-    Std.Util.error "not all labelled parameters have been used";
+    error "not all labelled parameters have been used";
   if is_void &&
      CCString.for_all (function | ' ' | '\n' | '\t' -> false | _ -> true) c_body
   then (* avoid muddling `external foo : ...` and `external%c foo : ... ` *)
-    Std.Util.error "function code doesn't look like inline code";
+    error "function code doesn't look like inline code";
 
   List.iter ls ~f:(Buffer.add_string buf);
   Buffer.add_string buf "\n}\n";

@@ -14,20 +14,30 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 open Mparsetree.Ast_cur.Parsetree
+type t
 
-val htl_expr :
-  (Marshal_types.id, expression)
-    Hashtbl.t
-val htl_stri :
-  (Marshal_types.id, structure_item)
-    Hashtbl.t
-val htl_type :
-  (Marshal_types.id, core_type)
-    Hashtbl.t
-val htl_records :
-  (Marshal_types.id,
-   type_declaration * type_declaration * core_type list) Hashtbl.t
-val htl_used : (int, unit) Hashtbl.t
-val foreign_used : bool ref
-val c_source : string option ref
-val clear : unit -> unit
+type make_result = {
+  id : t;
+  topmod_vb : structure_item;
+  topmod_ref : structure_item;
+  main_ref : expression;
+}
+
+val make : string list -> string -> expression -> make_result
+val replace_expr : expression -> expression
+val replace_stri : structure_item -> structure_item
+val get_final_name : t -> string
+
+type ocaml_t
+val make_type_alias:
+  ?tdl_attrs:attribute list ->
+  ?params:(core_type * Mparsetree.Ast_cur.Asttypes.variance) list ->
+  string list ->
+  string ->
+  structure_item * ocaml_t
+
+val create_type_ref_final:
+  ?l:core_type list -> ocaml_t -> string list -> core_type
+val replace_typ: core_type -> core_type
+
+val clear: unit -> unit

@@ -13,21 +13,5 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
-open Mparsetree.Ast_cur.Parsetree
-
-val htl_expr :
-  (Marshal_types.id, expression)
-    Hashtbl.t
-val htl_stri :
-  (Marshal_types.id, structure_item)
-    Hashtbl.t
-val htl_type :
-  (Marshal_types.id, core_type)
-    Hashtbl.t
-val htl_records :
-  (Marshal_types.id,
-   type_declaration * type_declaration * core_type list) Hashtbl.t
-val htl_used : (int, unit) Hashtbl.t
-val foreign_used : bool ref
-val c_source : string option ref
-val clear : unit -> unit
+module Ast_cur = Migrate_parsetree.Ast_406
+let ast_version = Migrate_parsetree.Versions.ocaml_406

@@ -22,6 +22,7 @@ depends: [
   "ocamlfind" # not only a build dependency, it depends on findlib.top
   "omake" {build}
   "ppx_tools_versioned" {>= "5.0.1"}
+  "re" {>= "1.7.2"}
 ]
 
 synopsis: """

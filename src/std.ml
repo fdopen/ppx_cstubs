@@ -26,7 +26,7 @@ let finally ~h f = CCFun.finally ~h ~f
 external identity : 'a -> 'a = "%identity"
 
 module Util = struct
-  open Migrate_parsetree.Ast_405
+  open Mparsetree.Ast_cur
 
   let with_loc loc f =
     let old_loc = !Ast_helper.default_loc in
@@ -45,16 +45,14 @@ module Util = struct
     Location.mkloc s !Ast_helper.default_loc
 
   let mk_lid ?(loc= !Ast_helper.default_loc) s =
-    match CCString.split_on_char '.' s with
-    | [] -> assert false
-    | hd::tl ->
-      let rec iter accu = function
-      | [] -> accu
-      | hd::tl -> iter (Longident.Ldot(accu,hd)) tl in
-      let res = iter (Longident.Lident hd) tl in
-      Location.mkloc res loc
+    Location.mkloc (Longident.parse s) loc
 
   let mk_pat s = Ast_helper.Pat.var (mk_loc s)
+
+  let mk_typc ?attrs ?(l=[]) s =
+    Ast_helper.Typ.constr ?attrs (mk_lid s) l
+
+  let mk_ident n = Ast_helper.Exp.ident (mk_lid n)
 
   let safe_ascii c =
     (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_' ||
@@ -96,12 +94,38 @@ module Util = struct
 
   let safe_mlname =
     let i = ref (-1) in
-    fun ?prefix () ->
+    fun ?(nowarn=false) ?prefix () ->
       let s,p = match prefix with
       | None -> "",""
       | Some s -> safe_ascii_only_ml s,"_" in
       let loc = !Ast_helper.default_loc in
       let line = loc.Location.loc_start.Lexing.pos_lnum in
       incr i;
-      Printf.sprintf "ppxc__%s%sline%d_%d" s p line !i
+      let nowarn = if nowarn then "_" else "" in
+      Printf.sprintf "%sppxc__%s%sline%d_%d" nowarn s p line !i
+
+  let empty_stri () =
+    let vb =
+      Ast_helper.Vb.mk ~attrs:[Attributes.remove_attrib]
+        (mk_pat "()") (Ast_helper.Exp.ident (mk_lid "()")) in
+    Ast_helper.Str.value Asttypes.Nonrecursive [vb]
+
+  let marshal_to_str_expr a = str_expr (Marshal.to_string a [])
+
+  let no_warn_unused_pre406 =
+    let open Ast_helper in
+    let open Parsetree in
+    fun stri ->
+      if Ocaml_config.version () >= (4,6,0) then
+        stri
+      else
+      let loc = stri.pstr_loc in
+      let a = mk_loc "ocaml.warning",PStr [[%stri "-32"][@metaloc loc]] in
+      let a = Str.attribute ~loc a in
+      let mod' = Mod.mk ~loc (Pmod_structure [a;stri]) in
+      let idl = {
+        pincl_mod = mod';
+        pincl_loc = loc;
+        pincl_attributes = []; } in
+      Str.include_ idl
 end

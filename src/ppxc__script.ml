@@ -13,7 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
-open Migrate_parsetree.Ast_405
+open Mparsetree.Ast_cur
 module List = CCListLabels
 type id = Marshal_types.id
 
@@ -37,7 +37,13 @@ module C_content = struct
     | Extract_text of string
     | Replace_text of id
 
-  let default_header = {|#include <ctypes_cstubs_internals.h>|}
+  let default_header = {|#ifdef __cplusplus
+extern "C" {
+#endif
+#include <ctypes_cstubs_internals.h>
+#ifdef __cplusplus
+}
+#endif|}
   let htl_id_text = Hashtbl.create 16
 
   let entries = ref [Header default_header]
@@ -100,12 +106,12 @@ module Const = struct
       Buffer.add_char extract_source '\n';
       Buffer.add_string extract_source c_header )
 
-  let add id loc t str ~info_str =
+  let add ?disable_checks ~no_expr id loc t str ~info_str =
     assert (!obj_code = None);
     let einfo = match Extract_c_ml.prepare t with
     | None ->
       (* TODO: fixme. Special case for strings? *)
-      if Obj.magic t == Obj.magic Ctypes.string then
+      if t == Obj.magic Ctypes.string then
         `String
       else
         U.error "can't extract constants of type %s" (Ctypes.string_of_typ t)
@@ -116,12 +122,12 @@ module Const = struct
     | `Int einf ->
       let open Extract_c_ml in
       let {min;max;signed;_} = einf in
-      Extract_c.prepare_extract_int
-        ~buf:extract_source ~c_header ?min ?max ~expr:str ~signed ()
+      Extract_c.prepare_extract_int ?disable_checks ~buf:extract_source
+        ~c_header ?min ?max ~expr:str ~signed ()
     | `String ->
       Extract_c.prepare_extract_string
         ~buf:extract_source ~c_header ~expr:str () in
-    Hashtbl.add htl_id_entries id (loc,einfo,rinfo,info_str)
+    Hashtbl.add htl_id_entries id (loc,einfo,rinfo,info_str,no_expr)
 
   let update_extract_source header =
     assert (!obj_code = None);
@@ -135,7 +141,7 @@ module Const = struct
     Std.with_return @@ fun r ->
     CCHashtbl.to_list htl_id_entries
     |> List.sort ~cmp:(fun (a,_) (b,_) -> compare a b)
-    |> List.iter ~f:(fun (_id,(loc,_einfo,rinfo,info_str)) ->
+    |> List.iter ~f:(fun (_id,(loc,_einfo,rinfo,info_str,_no_expr)) ->
       U.with_loc loc @@ fun () ->
       Buffer.clear ebuf;
       match Extract_c.compile ~ebuf rinfo.Extract_c.single_prog with
@@ -144,7 +150,6 @@ module Const = struct
           if !Options.verbosity > 0 then
             Buffer.output_buffer stderr ebuf
           else
-          if !Options.verbosity = 0 then
             Buffer.contents ebuf
             |> CCString.split_on_char '\n'
             |> List.take 7
@@ -154,8 +159,8 @@ module Const = struct
       | Ok _ -> ());
     None
 
-  let extract_common id (loc,einfo,rinfo,_) =
-    if Hashtbl.mem G.htl_expr id then ()
+  let extract_common id (loc,einfo,rinfo,_,no_expr) =
+    if Hashtbl.mem htl_id_str_result id then ()
     else
     U.with_loc loc @@ fun () ->
     let s =
@@ -179,16 +184,18 @@ module Const = struct
         Extract_c.(match x with
         | Info_not_found ->
           U.error "constant extraction failed for unknown reasons"
-        | User_overflow | Overflow -> U.error "overflow detected"
-        | Underflow | User_underflow -> U.error "number too small"
+        | User_overflow(s) | Overflow(s) -> U.error "number too large:%s" s
+        | Underflow(s) | User_underflow(s) -> U.error "number too small:%s" s
         | Not_an_integer -> U.error "constant is not an integer") in
-    (match einfo with
-    | `Int einfo ->
-      (match Extract_c_ml.gen einfo s with
-      | None -> U.error "number not representable: %s" s
-      | Some x -> Hashtbl.replace G.htl_expr id x)
-    | `String ->
-      U.str_expr s |> Hashtbl.replace G.htl_expr id);
+    if no_expr = false then (
+      match einfo with
+      | `Int einfo ->
+        (match Extract_c_ml.gen einfo s with
+        | Extract_c_ml.Overflow -> U.error "number too large: %s" s
+        | Extract_c_ml.Underflow -> U.error "number too small: %s" s
+        | Extract_c_ml.Expr x -> Hashtbl.replace G.htl_expr id x)
+      | `String ->
+        U.str_expr s |> Hashtbl.replace G.htl_expr id);
     Hashtbl.replace htl_id_str_result  id s
 
   let extract_all () =
@@ -268,9 +275,7 @@ module Trace = struct
             ~f:(fun (x,id) -> if x == cur then Some id else None) in
         match r with
         | None -> ()
-        | Some id ->
-          if Hashtbl.mem G.htl_used id = false then
-            Hashtbl.replace G.htl_used id ()
+        | Some id -> Hashtbl.replace G.htl_used id ()
       in
       match cur with
       | Struct _ -> h !typs_struct
@@ -294,9 +299,7 @@ module Trace = struct
           ~f:(fun (x,id) -> if x == t then Some id else None) in
       (match r with
       | None -> ()
-      | Some id ->
-        if Hashtbl.mem G.htl_used id = false then
-          Hashtbl.replace G.htl_used id ());
+      | Some id -> Hashtbl.replace G.htl_used id ());
       match cur with
       | Returns a -> trace a
       | Function (a, b) ->
@@ -308,9 +311,8 @@ module Extract = struct
 
   let constant id_loc str t =
     let id,loc = U.from_id_loc_param id_loc in
-    U.with_loc loc @@ fun () ->
     let info_str = "constant " ^ str in
-    Const.add ~info_str id loc t str
+    Const.add ~no_expr:false ~info_str id loc t str
 
   let register_fun_place id_loc_external =
     let id_external,_ = U.from_id_loc_param id_loc_external in
@@ -318,12 +320,24 @@ module Extract = struct
 
   let header (s:string) = C_content.add_header s
 
-  let field id_loc stru field_name =
+  let field id_loc stru field_name field_type =
     let id,loc = U.from_id_loc_param id_loc in
     let ctyp = Gen_c.string_of_typ_exn stru in
-    let to_extract = Printf.sprintf "offsetof(%s,%s)" ctyp field_name in
-    Const.add
-      ~info_str:(Printf.sprintf "offset of %s in %s" ctyp field_name)
+
+    let var1 = U.safe_cname ~prefix:ctyp in
+    let var1_printed = Gen_c.string_of_typ_exn ~name:var1 stru in
+    let var2 = U.safe_cname ~prefix:field_name in
+    let var2_printed = Gen_c.string_of_typ_exn ~name:var2 field_type in
+    let dummy_header = Printf.sprintf "static %s;\n static %s;\n"
+        var1_printed var2_printed in
+    C_content.add_extract_source dummy_header;
+
+    let to_extract =
+      Printf.sprintf
+        "((offsetof(%s,%s))|(PPXC_TYPES_COMPATIBLE(%s.%s,%s) << 29))"
+        ctyp field_name var1 field_name var2 in
+    let info_str = Printf.sprintf "field %s in %s" field_name ctyp in
+    Const.add ~info_str ~no_expr:true ~disable_checks:true
       id loc Ctypes.camlint to_extract
 
   let seal id_loc_size id_loc_align stru =
@@ -336,10 +350,10 @@ module Extract = struct
       Printf.sprintf "struct %s {char c; %s x;};\n" struct_name ctyp in
     C_content.add_extract_source dummy_header;
     let align_str = Printf.sprintf "offsetof(struct %s,x)" struct_name in
-    Const.add ~info_str:("size of " ^ ctyp)
-      id_size loc_size Ctypes.camlint size_str;
-    Const.add ~info_str:("align of " ^ ctyp)
-      id_align loc_align Ctypes.camlint align_str
+    Const.add ~info_str:("size of " ^ ctyp) ~no_expr:false
+      ~disable_checks:true id_size loc_size Ctypes.camlint size_str;
+    Const.add ~info_str:("align of " ^ ctyp) ~no_expr:false
+      ~disable_checks:true id_align loc_align Ctypes.camlint align_str
 
   let enum id_loc ?(typedef=false) name =
     let id,loc = U.from_id_loc_param id_loc in
@@ -348,7 +362,8 @@ module Extract = struct
     | false -> String.concat " " ["enum"; name]
     | true -> name in
     let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ str ^ ")" in
-    Const.add ~info_str id loc Ctypes.camlint str;
+    Const.add ~no_expr:true
+      ~info_str ~disable_checks:true id loc Ctypes.camlint str;
     (* wrong Ctypes.typ, wrong arithmetic type - but it's
        not used here to build externals *)
     Cstubs_internals.build_enum_type
@@ -374,23 +389,26 @@ module Extract = struct
 
   let enum2 (l : 'a list) (p:string) : 'a Ctypes.typ * 'a list Ctypes.typ =
     let open Marshal_types in
-    let {enum_l; enum_name; enum_is_typedef;
-         enum_type_id; enum_loc; enum_unexpected = _ } = Marshal.from_string p 0 in
+    let {enum_l; enum_name; enum_is_typedef; enum_loc;
+         enum_type_id; enum_unexpected = _ } = Marshal.from_string p 0 in
     U.with_loc enum_loc @@ fun () ->
     let info_str = "enum_type " ^ enum_name in
     let str = match enum_is_typedef with
     | false -> String.concat " " ["enum"; enum_name]
     | true -> enum_name in
     let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ str ^ ")" in
-    Const.add ~info_str (get_enum_id enum_type_id) enum_loc Ctypes.camlint str;
+    let eid = get_enum_id enum_type_id in
+    Const.add ~no_expr:true ~disable_checks:true
+      ~info_str eid enum_loc Ctypes.camlint str;
     ListLabels.iter enum_l ~f:(fun c ->
       U.with_loc c.ee_loc @@ fun () ->
       let info_str = "enum constant " ^ c.ee_cname in
-      Const.add ~info_str c.ee_signed_id c.ee_loc Ctypes.int64_t c.ee_cname;
-      Const.add ~info_str c.ee_unsigned_id c.ee_loc Ctypes.uint64_t c.ee_cname);
+      Const.add ~no_expr:true ~info_str
+        c.ee_signed_id c.ee_loc Ctypes.int64_t c.ee_cname;
+      Const.add ~no_expr:true ~info_str
+        c.ee_unsigned_id c.ee_loc Ctypes.uint64_t c.ee_cname);
     (* wrong size, but not used inside extraction script *)
     enum_fake_view l enum_is_typedef enum_name Ctypes.int32_t
-
 end
 
 module Build = struct
@@ -409,75 +427,72 @@ module Build = struct
     fun id_loc str ->
       let id,_loc = U.from_id_loc_param id_loc in
       Const.extract_single id;
-      let res =
-        try
-          Hashtbl.find Const.htl_id_str_result id
-        with
-        | Not_found -> U.error "couldn't extract constant %S" str in
+      let res = match Hashtbl.find Const.htl_id_str_result id with
+      | x -> x
+      | exception Not_found -> U.error "couldn't extract constant %S" str in
       let ef t =
-        U.error "constants of type %s not possible"
-          (Ctypes.string_of_typ t) in
+        U.error "constants of type %s not possible" (Ctypes.string_of_typ t) in
       let int () = int_of_string res in
-      let f : type a. a Ctypes.typ -> a =
-        fun t ->
-          match t with
-          | Void -> ef t
-          | Struct _ -> ef t
-          | Union _ -> ef t
-          | Array _ -> ef t
-          | Bigarray _ -> ef t
-          | Abstract _ -> ef t
-          | Pointer _  -> ef t
-          | Funptr _ -> ef t
-          | OCaml _ -> ef t
-          | View { ty = Pointer (Primitive (Ctypes_primitive_types.Char));
-                   read ; _ } ->
-            let len = String.length res in
-            let ar = Ctypes.CArray.make Ctypes.char (len + 1) in
-            String.iteri (Ctypes.CArray.set ar) res;
-            Ctypes.CArray.set ar len '\x00';
-            read (Ctypes.CArray.start ar)
-          | View _ -> ef t
-          | Primitive p ->
-            let module Cp = Ctypes_primitive_types in
-            match p with
-            | Cp.Schar -> int ()
-            | Cp.Char -> int_of_string res |> Char.chr
-            | Cp.Uchar -> Unsigned.UChar.of_string res
-            | Cp.Bool -> int_of_string res <> 0
-            | Cp.Short -> int ()
-            | Cp.Int -> int ()
-            | Cp.Long -> Signed.Long.of_string res
-            | Cp.Llong -> Signed.LLong.of_string res
-            | Cp.Ushort -> Unsigned.UShort.of_string res
-            | Cp.Sint -> Signed.SInt.of_string res
-            | Cp.Uint -> Unsigned.UInt.of_string res
-            | Cp.Ulong -> Unsigned.ULong.of_string res
-            | Cp.Ullong -> Unsigned.ULLong.of_string res
-            | Cp.Size_t -> Unsigned.Size_t.of_string res
-            | Cp.Int8_t -> int ()
-            | Cp.Int16_t -> int ()
-            | Cp.Int32_t -> Int32.of_string res
-            | Cp.Int64_t -> Int64.of_string res
-            | Cp.Uint8_t -> Unsigned.UInt8.of_string res
-            | Cp.Uint16_t -> Unsigned.UInt16.of_string res
-            | Cp.Uint32_t -> Unsigned.UInt32.of_string res
-            | Cp.Uint64_t -> Unsigned.UInt64.of_string res
-            | Cp.Camlint -> int ()
-            | Cp.Nativeint -> Nativeint.of_string res
-            | Cp.Float -> ef t
-            | Cp.Double -> ef t
-            | Cp.LDouble -> ef t
-            | Cp.Complex32 -> ef t
-            | Cp.Complex64 -> ef t
-            | Cp.Complexld -> ef t
+      let f : type a. a Ctypes.typ -> a = fun t ->
+        match t with
+        | Void -> ef t
+        | Struct _ -> ef t
+        | Union _ -> ef t
+        | Array _ -> ef t
+        | Bigarray _ -> ef t
+        | Abstract _ -> ef t
+        | Pointer _  -> ef t
+        | Funptr _ -> ef t
+        | OCaml _ -> ef t
+        | View { ty = Pointer (Primitive (Ctypes_primitive_types.Char));
+                 read ; _ } ->
+          let len = String.length res in
+          let ar = Ctypes.CArray.make Ctypes.char (len + 1) in
+          String.iteri (Ctypes.CArray.set ar) res;
+          Ctypes.CArray.set ar len '\x00';
+          read (Ctypes.CArray.start ar)
+        | View _ -> ef t
+        | Primitive p ->
+          let module Cp = Ctypes_primitive_types in
+          match p with
+          | Cp.Schar -> int ()
+          | Cp.Char -> int_of_string res |> Char.chr
+          | Cp.Uchar -> Unsigned.UChar.of_string res
+          | Cp.Bool -> int_of_string res <> 0
+          | Cp.Short -> int ()
+          | Cp.Int -> int ()
+          | Cp.Long -> Signed.Long.of_string res
+          | Cp.Llong -> Signed.LLong.of_string res
+          | Cp.Ushort -> Unsigned.UShort.of_string res
+          | Cp.Sint -> Signed.SInt.of_string res
+          | Cp.Uint -> Unsigned.UInt.of_string res
+          | Cp.Ulong -> Unsigned.ULong.of_string res
+          | Cp.Ullong -> Unsigned.ULLong.of_string res
+          | Cp.Size_t -> Unsigned.Size_t.of_string res
+          | Cp.Int8_t -> int ()
+          | Cp.Int16_t -> int ()
+          | Cp.Int32_t -> Int32.of_string res
+          | Cp.Int64_t -> Int64.of_string res
+          | Cp.Uint8_t -> Unsigned.UInt8.of_string res
+          | Cp.Uint16_t -> Unsigned.UInt16.of_string res
+          | Cp.Uint32_t -> Unsigned.UInt32.of_string res
+          | Cp.Uint64_t -> Unsigned.UInt64.of_string res
+          | Cp.Camlint -> int ()
+          | Cp.Nativeint -> Nativeint.of_string res
+          | Cp.Float -> ef t
+          | Cp.Double -> ef t
+          | Cp.LDouble -> ef t
+          | Cp.Complex32 -> ef t
+          | Cp.Complex64 -> ef t
+          | Cp.Complexld -> ef t
       in
       f
 
-  let foreign_value id_loc_external id_loc_stri_expr
+  let foreign_value id_loc_external id_loc_stri_expr mp
       ctypes_t foreign_value name typ_expr =
     let id_external,_loc_external = U.from_id_loc_param id_loc_external in
     let id_stri_expr,_loc_stri_expr = U.from_id_loc_param id_loc_stri_expr in
+    let mod_path : string list = Marshal.from_string mp 0 in
     let typ_expr = U.unmarshal_expr typ_expr in
     Trace.trace ctypes_t;
     let fun' = Ctypes.(void @-> returning (ptr ctypes_t)) in
@@ -485,7 +500,7 @@ module Build = struct
     let stubname = U.safe_cname ~prefix:("value_" ^ foreign_value) in
     let cinfo = Gen_c.gen_value fun' ~stubname ~value:foreign_value in
     C_content.add_function id_external cinfo.Gen_c.stub_source;
-    let res = Gen_ml.foreign_value fun' name ptrexpr cinfo in
+    let res = Gen_ml.foreign_value fun' ~mod_path name ptrexpr cinfo in
     Hashtbl.replace G.htl_stri id_external res.Gen_ml.extern;
     Hashtbl.replace G.htl_stri id_stri_expr res.Gen_ml.intern
 
@@ -494,12 +509,17 @@ module Build = struct
     let id_stri_expr,_loc_stri_expr = U.from_id_loc_param id_loc_stri_expr in
     let open Marshal_types in
     let {el; ret; release_runtime_lock; noalloc; is_inline; remove_labels;
-         return_errno; c_name; ocaml_name; prim_name} =
+         return_errno; c_name; prim_name; uniq_ref_id; mod_path} =
       Marshal.from_string marshal_info 0 in
+    let locs =
+      let module P = Parsetree in
+      List.rev (ret.P.pexp_loc::(List.rev_map
+                                   el ~f:(fun (_,b) -> b.P.pexp_loc))) in
+    let ocaml_name = Uniq_ref.get_final_name uniq_ref_id in
     let c =
       if is_inline = false then
         let stubname = U.safe_cname ~prefix:c_name in
-        Gen_c.gen_fun ctypes_fn ~stubname ~cfunc:c_name
+        Gen_c.gen_fun ctypes_fn ~locs ~stubname ~cfunc:c_name
           ~release_runtime_lock ~noalloc ~return_errno
       else
       let names =
@@ -508,7 +528,7 @@ module Build = struct
           | Ctypes_static.Function(a,_) -> Gen_c.is_void a
           | Ctypes_static.Returns _ ->  false in
           if List.length el = 1 && is_void ctypes_fn then
-            ["dummy"]
+            ["$dummy$"]
           else
             U.error "inline code requires named parameters"
         else
@@ -527,11 +547,11 @@ module Build = struct
       let prim_name = U.safe_ascii_only prim_name in
       let c_name = U.safe_cname ~prefix:("i" ^ prim_name) in
       let body =
-        Gen_c.build_inline_fun ctypes_fn ~c_name ~c_body ~noalloc names in
+        Gen_c.build_inline_fun ~locs ctypes_fn ~c_name ~c_body ~noalloc names in
       C_content.add_function id_stri_expr body;
       let stubname = U.safe_cname ~prefix:("f" ^ prim_name) in
       Gen_c.gen_fun ctypes_fn ~stubname ~cfunc:c_name ~release_runtime_lock
-        ~noalloc ~return_errno in
+        ~locs ~noalloc ~return_errno in
     C_content.add_function id_external c.Gen_c.stub_source;
     let el =
       if is_inline = false then
@@ -549,7 +569,7 @@ module Build = struct
             else
               xy
           | Nolabel | Optional _ -> xy) in
-    let res = Gen_ml.external' ctypes_fn ocaml_name el ret c in
+    let res = Gen_ml.external' ~mod_path ctypes_fn ocaml_name el ret c in
     Hashtbl.replace G.htl_stri id_external res.Gen_ml.extern;
     Hashtbl.replace G.htl_stri id_stri_expr res.Gen_ml.intern
 
@@ -640,9 +660,9 @@ module Build = struct
           Hashtbl.remove Const.htl_id_entries c.ee_signed_id;
           Hashtbl.remove Const.htl_id_entries c.ee_unsigned_id;
           let f typ = match  Extract_c_ml.gen typ i_str with
-          | None ->
+          | Extract_c_ml.Underflow | Extract_c_ml.Overflow ->
             U.error "enum constant %S is not of type %S" c.ee_cname enum_name
-          | Some s -> s in
+          | Extract_c_ml.Expr s -> s in
           let integer = f typ in
           (match additional_check with
           | None -> ()
@@ -677,21 +697,57 @@ module Build = struct
     | Marshal_types.E_normal _ -> ());
     live_res
 
-  let foreign id_loc_external id_loc_stri_expr ~ocaml_name ~typ_expr
+  let foreign id_loc_external id_loc_stri_expr mp ~ocaml_name ~typ_expr
       ?(release_runtime_lock=false) ?(noalloc=false) ?(return_errno=false)
       c_name fn =
     let id_external,_loc_external = U.from_id_loc_param id_loc_external in
     let id_stri_expr,_loc_stri_expr = U.from_id_loc_param id_loc_stri_expr in
+    let mod_path : string list = Marshal.from_string mp 0 in
     let stubname = U.safe_cname ~prefix:c_name in
     Trace.trace_fn fn;
-    let c = Gen_c.gen_fun fn
-        ~stubname ~cfunc:c_name ~release_runtime_lock ~noalloc ~return_errno in
+    let c = Gen_c.gen_fun fn ~locs:[] ~noalloc ~return_errno ~stubname
+        ~cfunc:c_name ~release_runtime_lock in
     C_content.add_function id_external c.Gen_c.stub_source;
     let typ_expr = U.unmarshal_expr typ_expr in
-    let res = Gen_ml.foreign fn ocaml_name c typ_expr in
+    let res = Gen_ml.foreign ~mod_path fn ocaml_name c typ_expr in
     Hashtbl.replace G.htl_stri id_external res.Gen_ml.extern;
     Hashtbl.replace G.htl_stri id_stri_expr res.Gen_ml.intern
 
+  let derive_typ id t mod_path =
+    let mod_path : string list = Marshal.from_string mod_path 0 in
+    let ct = Gen_ml.constraint_of_typ ~mod_path t in
+    Hashtbl.replace G.htl_type id ct;
+    t
+
+  let add_type_ref t s =
+    let s : Created_types.t = Marshal.from_string s 0 in
+    Created_types.add_type t s
+
+  let create_record id params t =
+    let open Marshal_types in
+    let {sr_type_name = type_name; sr_locs = locs; sr_field_names = field_names;
+         sr_mod_path = mod_path} = Marshal.from_string params 0 in
+    let (_,_,params) as res =
+      Gen_ml.create_struct ~mod_path ~type_name ~field_names ~locs t in
+    let state = match params with
+    | [] -> Created_types.Vs_Complete
+    | _::_ -> Created_types.Vs_Parameterized in
+    Created_types.change_struct_view_state t state;
+    Hashtbl.replace G.htl_records id res
+
+  let field id_loc stru field_name _field_type =
+    let id,_ = U.from_id_loc_param id_loc in
+    Const.extract_single id;
+    let r = match Hashtbl.find Const.htl_id_str_result id |> int_of_string with
+    | x -> x
+    | exception (Not_found | Failure _) ->
+      U.error "couldn't extract info for field %s in %s"
+        field_name (Ctypes.string_of_typ stru) in
+    let offset = r land (lnot (1 lsl 29)) in
+    if !Options.mode <> Options.Emulate && r land ( 1 lsl 29 ) = 0 then
+      U.error "field %s in %s has the wrong size or type"
+        field_name (Ctypes.string_of_typ stru);
+    Hashtbl.replace G.htl_expr id (U.int_expr offset)
 end
 
 module Ctypes_make = struct
@@ -770,17 +826,6 @@ module Ctypes_make = struct
     let string_opt = Ctypes.string_opt
     let string = Ctypes.string
 
-    let ppxc__private_make = Ctypes.make
-    let ppxc__private_setf = Ctypes.setf
-    let ppxc__private_getf = Ctypes.getf
-
-    let ppxc__private_ocaml_typ typ =
-      let s : [`priv] Ctypes_static.structure Ctypes.typ = Ctypes.structure typ in
-      let _ : _ Ctypes.field = Ctypes.field s "i" Ctypes.camlint in
-      let () = Ctypes.seal s in
-      Ctypes.view ~format_typ:Evil_hack.format_typ
-        ~read:Std.identity ~write:Std.identity s
-
     let genarray = Ctypes.genarray
 
     let array1 = Ctypes.array1
@@ -820,17 +865,85 @@ module Ctypes_make = struct
       Trace.trace a;
       Ctypes.ptr_opt a
 
-    let ppxc__private_field a s t =
-      (* Trace.trace a; *)
-      Trace.trace t;
-      Ctypes.field a s t
-
     module Intptr = T_env.Intptr
     module Uintptr = T_env.Uintptr
     module Ptrdiff = T_env.Ptrdiff
     let intptr_t = Intptr.t
     let uintptr_t = Uintptr.t
     let ptrdiff_t = Ptrdiff.t
+
+    let coerce_fn a b c =
+      Trace.trace_fn a;
+      Trace.trace_fn b;
+      Ctypes.coerce_fn a b c
+
+    let coerce a b c =
+      Trace.trace a;
+      Trace.trace b;
+      Ctypes.coerce a b c
+
+    let addr = Ctypes.addr
+
+
+    let unavailable s =
+      Std.Util.error "function %s is not available during code generation" s
+
+    let (!@) = Ctypes.(!@)
+    let (+@) = Ctypes.(+@)
+    let (-@) = Ctypes.(-@)
+    let (<-@) = Ctypes.(<-@)
+    let (@.) = Ctypes.(@.)
+    let allocate = Ctypes.allocate
+    let allocate_n = Ctypes.allocate_n
+    let array_of_bigarray = Ctypes.array_of_bigarray
+    let bigarray_of_array = Ctypes.bigarray_of_array
+    let bigarray_of_ptr = Ctypes.bigarray_of_ptr
+    let bigarray_start = Ctypes.bigarray_start
+    let format _ _ _ = unavailable "format"
+    let format_fn = Ctypes.format_fn
+    let format_typ = Ctypes.format_typ
+    let fortran_bigarray_of_ptr = Ctypes.fortran_bigarray_of_ptr
+    let from_voidp = Ctypes.from_voidp
+    let funptr_of_raw_address = Ctypes.funptr_of_raw_address
+    let getf = Ctypes.getf
+    let is_null = Ctypes.is_null
+    let make = Ctypes.make
+    let null = Ctypes.null
+    let ocaml_bytes_start = Ctypes.ocaml_bytes_start
+    let ocaml_string_start = Ctypes.ocaml_string_start
+    let ptr_compare = Ctypes.ptr_compare
+    let ptr_diff = Ctypes.ptr_diff
+    let ptr_of_raw_address = Ctypes.ptr_of_raw_address
+    let raw_address_of_ptr = Ctypes.raw_address_of_ptr
+    let reference_type = Ctypes.reference_type
+    let setf = Ctypes.setf
+    let string_from_ptr = Ctypes.string_from_ptr
+    let string_of _ _ = unavailable "string_of"
+    let string_of_fn = Ctypes.string_of_fn
+    let string_of_typ = Ctypes.string_of_typ
+    let to_voidp = Ctypes.to_voidp
+    let (|->) = Ctypes.(|->)
+
+    module CArray = Ctypes.CArray
+
+    let offsetof _ = unavailable "offsetof"
+    let alignment _ = unavailable "alignment"
+    let sizeof _ = unavailable "sizeof"
+
+
+    let ppxc__private_field a s t =
+      (* Trace.trace a; *)
+      Trace.trace t;
+      Ctypes.field a s t
+
+    let ppxc__private_ocaml_typ typ =
+      let s : [`priv] Ctypes_static.structure Ctypes.typ = Ctypes.structure typ in
+      let _ : _ Ctypes.field = Ctypes.field s "i" Ctypes.camlint in
+      let () = Ctypes.seal s in
+      Ctypes.view ~format_typ:Evil_hack.format_typ
+        ~read:Std.identity ~write:Std.identity s
+
+    let ppxc__unavailable = unavailable
   end
 end
 
@@ -870,22 +983,31 @@ module Run_environment = struct
   module Foreign = struct
     let funptr ?abi:_ ?name:_ ?check_errno:_ ?runtime_lock:_
         ?thread_registration:_ fn =
-      G.foreign_used := true;
+      Trace.trace_fn fn;
       let read _ = assert false
       and write _ = assert false in
-      Trace.trace_fn fn;
       Ctypes_static.(view ~read ~write (static_funptr fn))
 
     let funptr_opt ?abi:_ ?name:_ ?check_errno:_ ?runtime_lock:_
         ?thread_registration:_ fn =
-      G.foreign_used := true;
       Trace.trace_fn fn;
       let read _ = assert false
       and write _ = assert false in
       Ctypes_static.(view ~read ~write (static_funptr fn))
   end
-  let funptr = Foreign.funptr
-  let funptr_opt = Foreign.funptr_opt
+
+  let funptr ?abi ?name ?check_errno ?runtime_lock
+      ?thread_registration fn =
+    G.foreign_used := true;
+    Foreign.funptr ?abi ?name ?check_errno ?runtime_lock
+      ?thread_registration fn
+
+  let funptr_opt ?abi ?name ?check_errno ?runtime_lock
+      ?thread_registration fn =
+    G.foreign_used := true;
+    Foreign.funptr_opt ?abi ?name ?check_errno ?runtime_lock
+      ?thread_registration fn
+
   module Ctypes_static = struct end
   module Ctypes_primitive_types = struct end
   module Ctypes_printers = struct end

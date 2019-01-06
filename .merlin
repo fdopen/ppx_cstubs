@@ -9,7 +9,7 @@ PKG integers
 PKG oUnit
 PKG ocaml-compiler-libs.bytecomp
 PKG ocaml-migrate-parsetree
-PKG ppx_tools_versioned.metaquot_405
-PKG str
+PKG ppx_tools_versioned.metaquot_406
+PKG re.perl
 PKG threads
 PKG num

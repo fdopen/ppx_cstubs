@@ -49,27 +49,9 @@ let prologue = {|
 #define PPXC__UD16(x) ('0' + ((char)(( (x) / UINT64_C(10000000000000000)    ) % UINT64_C(10)))), PPXC__UD15(x)
 #define PPXC__UD17(x) ('0' + ((char)(( (x) / UINT64_C(100000000000000000)   ) % UINT64_C(10)))), PPXC__UD16(x)
 #define PPXC__UD18(x) ('0' + ((char)(( (x) / UINT64_C(1000000000000000000)  ) % UINT64_C(10)))), PPXC__UD17(x)
-#define PPXC__UD19(x) ('0' + ((char)(( ((uint64_t)(x)) / UINT64_C(10000000000000000000)) % UINT64_C(10)))), PPXC__UD18(((uint64_t)(x)))
-
-#define PPXC__D00(x) ('0' + ((char)(( (x) / INT64_C(1)                    ) % INT64_C(10))))
-#define PPXC__D01(x) ('0' + ((char)(( (x) / INT64_C(10)                   ) % INT64_C(10)))), PPXC__D00(x)
-#define PPXC__D02(x) ('0' + ((char)(( (x) / INT64_C(100)                  ) % INT64_C(10)))), PPXC__D01(x)
-#define PPXC__D03(x) ('0' + ((char)(( (x) / INT64_C(1000)                 ) % INT64_C(10)))), PPXC__D02(x)
-#define PPXC__D04(x) ('0' + ((char)(( (x) / INT64_C(10000)                ) % INT64_C(10)))), PPXC__D03(x)
-#define PPXC__D05(x) ('0' + ((char)(( (x) / INT64_C(100000)               ) % INT64_C(10)))), PPXC__D04(x)
-#define PPXC__D06(x) ('0' + ((char)(( (x) / INT64_C(1000000)              ) % INT64_C(10)))), PPXC__D05(x)
-#define PPXC__D07(x) ('0' + ((char)(( (x) / INT64_C(10000000)             ) % INT64_C(10)))), PPXC__D06(x)
-#define PPXC__D08(x) ('0' + ((char)(( (x) / INT64_C(100000000)            ) % INT64_C(10)))), PPXC__D07(x)
-#define PPXC__D09(x) ('0' + ((char)(( (x) / INT64_C(1000000000)           ) % INT64_C(10)))), PPXC__D08(x)
-#define PPXC__D10(x) ('0' + ((char)(( (x) / INT64_C(10000000000)          ) % INT64_C(10)))), PPXC__D09(x)
-#define PPXC__D11(x) ('0' + ((char)(( (x) / INT64_C(100000000000)         ) % INT64_C(10)))), PPXC__D10(x)
-#define PPXC__D12(x) ('0' + ((char)(( (x) / INT64_C(1000000000000)        ) % INT64_C(10)))), PPXC__D11(x)
-#define PPXC__D13(x) ('0' + ((char)(( (x) / INT64_C(10000000000000)       ) % INT64_C(10)))), PPXC__D12(x)
-#define PPXC__D14(x) ('0' + ((char)(( (x) / INT64_C(100000000000000)      ) % INT64_C(10)))), PPXC__D13(x)
-#define PPXC__D15(x) ('0' + ((char)(( (x) / INT64_C(1000000000000000)     ) % INT64_C(10)))), PPXC__D14(x)
-#define PPXC__D16(x) ('0' + ((char)(( (x) / INT64_C(10000000000000000)    ) % INT64_C(10)))), PPXC__D15(x)
-#define PPXC__D17(x) ('0' + ((char)(( (x) / INT64_C(100000000000000000)   ) % INT64_C(10)))), PPXC__D16(x)
-#define PPXC__D18(x) ('0' + ((char)(( ((int64_t)(x)) / INT64_C(1000000000000000000)) % INT64_C(10)))), PPXC__D17(((int64_t)(x)))
+#define PPXC__UD19(x) ('0' + ((char)(( (x) / UINT64_C(10000000000000000000) ) % UINT64_C(10)))), PPXC__UD18(x)
+#define PPXC__NSTR(x) ((x) >= 0 ? '0' : '-'), PPXC__UD19(((x) >= 0 ? ((uint64_t)(x)) : \
+ ( (x) == INT64_MIN ? UINT64_C(9223372036854775808) : ((uint64_t)(-((int64_t)(x)))))))
 
 #if !defined(__cplusplus) && ((defined(__GNUC__) && ( __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 1))) || defined(__clang__))
 #define PPXC_IS_INTEGER(x)                                            \
@@ -78,8 +60,9 @@ let prologue = {|
    __builtin_types_compatible_p (__typeof__ (x), int16_t) ||          \
    __builtin_types_compatible_p (__typeof__ (x), int32_t) ||          \
    __builtin_types_compatible_p (__typeof__ (x), int64_t) ||          \
-   __builtin_types_compatible_p (__typeof__ (x), int) ||              \
    __builtin_types_compatible_p (__typeof__ (x), signed char) ||      \
+   __builtin_types_compatible_p (__typeof__ (x), short) ||            \
+   __builtin_types_compatible_p (__typeof__ (x), int) ||              \
    __builtin_types_compatible_p (__typeof__ (x), signed long) ||      \
    __builtin_types_compatible_p (__typeof__ (x), signed long long) || \
    __builtin_types_compatible_p (__typeof__ (x), uint8_t) ||          \
@@ -87,13 +70,26 @@ let prologue = {|
    __builtin_types_compatible_p (__typeof__ (x), uint32_t) ||         \
    __builtin_types_compatible_p (__typeof__ (x), uint64_t) ||         \
    __builtin_types_compatible_p (__typeof__ (x), unsigned char) ||    \
+   __builtin_types_compatible_p (__typeof__ (x), unsigned short) ||   \
    __builtin_types_compatible_p (__typeof__ (x), unsigned int) ||     \
    __builtin_types_compatible_p (__typeof__ (x), unsigned long) ||    \
    __builtin_types_compatible_p (__typeof__ (x), unsigned long long) || \
    __builtin_types_compatible_p (__typeof__ (x), size_t))
 
+#define PPXC_IS_FLOAT(x)                                              \
+  (__builtin_types_compatible_p (__typeof__ (x), float) ||            \
+   __builtin_types_compatible_p (__typeof__ (x), double) ||           \
+   __builtin_types_compatible_p (__typeof__ (x), long double))
+
+#define PPXC_IS_COMPLEX(x)                                            \
+  (__builtin_types_compatible_p (__typeof__ (x), float _Complex) ||   \
+   __builtin_types_compatible_p (__typeof__ (x), double _Complex) ||  \
+   __builtin_types_compatible_p (__typeof__ (x), long double _Complex))
+
 #else
 #define PPXC_IS_INTEGER(x) (1)
+#define PPXC_IS_FLOAT(x) (1)
+#define PPXC_IS_COMPLEX(x) (1)
 #endif
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -115,7 +111,13 @@ let prologue = {|
 
 #endif
 
-
+/* __builtin_types_compatible_p is too picky with regard to const qualified
+   pointers.  */
+#define PPXC_TYPES_COMPATIBLE(a,b)                \
+  ((sizeof(a) == sizeof(b)) &&                    \
+   (PPXC_IS_INTEGER(a) == PPXC_IS_INTEGER(b)) &&  \
+   (PPXC_IS_FLOAT(a) == PPXC_IS_FLOAT(b)) &&      \
+   (PPXC_IS_COMPLEX(a) == PPXC_IS_COMPLEX(b)))
 |}
 
 module List = CCListLabels
@@ -128,25 +130,17 @@ let cnt =
     res
 
 let int_to_char_array i =
-  let s = Printf.sprintf "%x" i in
+  let s = Printf.sprintf "%d" i in
   let b = Buffer.create ((String.length s) * 4) in
-  String.iter (fun c ->
-    Printf.bprintf b "'%c'," c) s;
+  String.iter (fun c -> Printf.bprintf b "'%c'," c) s;
   Buffer.contents b
 
 type id = int
 
-type int_assert_check = {
-  id_min: id;
-  id_max: id;
-  id_is_int: id;
-  id_user_min: id option;
-  id_user_max: id option;
-}
-
 type intern =
   | String
-  | Integer of int_assert_check
+  | Integer of id
+  | Unchecked_integer
 
 type extract_info = {
   id: id;
@@ -156,7 +150,8 @@ type extract_info = {
 
 let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
-let prepare_extract_int ?min ?max ~buf ~c_header ~expr ~signed () =
+let prepare_extract_int
+    ?(disable_checks=false) ?min ?max ~buf ~c_header ~expr ~signed () =
   let len = String.length prologue + String.length c_header + 3072 in
   let buf_single = Buffer.create len in
   Buffer.add_string buf_single prologue;
@@ -165,47 +160,39 @@ let prepare_extract_int ?min ?max ~buf ~c_header ~expr ~signed () =
     let id = cnt () in
     let ar = int_to_char_array id in
     let s = Printf.sprintf {|
-      const char ppx_c_extract_char_array_%x[] = {
-      'P','P','X','C','_','C','O','N','S','T','_','N','R','_', %s '#',
-      %s,
-      '#', %s '_','R','N','_','T','S','N','O','C','_','C','X','P','P', '\0' };
+      const char ppx_c_extract_char_array_%d[] = {
+      'P','P','X','C','_','C','O','N','S','T','_','N','R','_', %s '|',
+      PPXC__NSTR(%s),
+      '|', %s '_','R','N','_','T','S','N','O','C','_','C','X','P','P', '\0' };
      |} id ar info ar in
     id,s in
-  let macro,def_int_min,def_int_max = match signed with
-  | false -> "PPXC__UD19","0","UINT64_MAX"
-  | true -> "PPXC__D18","INT64_MIN","INT64_MAX" in
-  let id,ex_str = gen @@ Printf.sprintf "%s((%s))" macro expr in
-  let id_is_int,ex_is_int =
-    gen @@ Printf.sprintf "PPXC__D18( PPXC_IS_INTEGER(%s) )" expr in
-  let id_min,ex_min =
-    gen @@ Printf.sprintf "PPXC__D18( (%s) >= 0 || (%s) >= %s)"
-      expr expr def_int_min in
-  let id_max,ex_max =
-    gen @@ Printf.sprintf "PPXC__D18( (%s) <= 0 || (%s) <= %s)"
-      expr expr def_int_max in
+  let def_int_min,def_int_max = match signed with
+  | false -> "0","UINT64_MAX"
+  | true -> "INT64_MIN","INT64_MAX" in
+  let id,ex_str = gen expr in
+  Buffer.add_string buf ex_str;
+  Buffer.add_string buf_single ex_str;
+  if disable_checks = true then
+    {id ; single_prog = Buffer.contents buf_single; intern = Unchecked_integer}
+  else
+  let s_int =
+    Printf.sprintf "( PPXC_IS_INTEGER(%s) )" expr in
+  let s_min =
+    Printf.sprintf "( (%s) >= 0 || (%s) >= %s )" expr expr def_int_min in
+  let s_max =
+    Printf.sprintf "( (%s) <= 0 || (%s) <= %s )" expr expr def_int_max in
   let f x format = match x with
-  | None -> None, ""
-  | Some x ->
-    let a,b = gen @@ Printf.sprintf format expr expr x in
-    Some a,b in
-  let id_user_min,ex_user_min = f min "PPXC__D18( (%s) >= 0 || (%s) >= %s )" in
-  let id_user_max,ex_user_max = f max "PPXC__D18( (%s) <= 0 || (%s) <= %s )" in
-  List.iter [buf_single; buf] ~f:(fun buf ->
-    Buffer.add_string buf ex_str;
-    Buffer.add_string buf ex_min;
-    Buffer.add_string buf ex_max;
-    Buffer.add_string buf ex_is_int;
-    Buffer.add_string buf ex_user_min;
-    Buffer.add_string buf ex_user_max);
-  { id ;
-    single_prog = Buffer.contents buf_single;
-    intern = Integer {
-      id_min;
-      id_max;
-      id_is_int;
-      id_user_min;
-      id_user_max; }
-  }
+  | None -> "1"
+  | Some x -> Printf.sprintf format expr expr x in
+  let s_user_min = f min "( (%s) >= 0 || (%s) >= %s )" in
+  let s_user_max = f max "( (%s) <= 0 || (%s) <= %s )" in
+  let id_x,str  =
+    gen @@ Printf.sprintf
+      "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
+      s_int s_min s_max s_user_min s_user_max in
+  Buffer.add_string buf str;
+  Buffer.add_string buf_single str;
+  {id ; single_prog = Buffer.contents buf_single; intern = Integer id_x}
 
 let prepare_extract_string ~buf ~c_header ~expr () =
   let buf_single = Buffer.create 4096 in
@@ -214,13 +201,22 @@ let prepare_extract_string ~buf ~c_header ~expr () =
   let cnt = cnt () in
   List.iter [buf_single; buf] ~f:(fun buf ->
     Printf.bprintf buf {|
-const char *ppx_c_extract_char_string%x = "PPXC_CONST_NR_%x#" %s "#%x_RN_TSNOC_CXPP";
+const char *ppx_c_extract_char_string%d = "PPXC_CONST_NR_%d|" %s "|%d_RN_TSNOC_CXPP";
      |} cnt cnt expr cnt);
   { id = cnt;
     single_prog = Buffer.contents buf_single;
     intern = String }
 
-type obj = string
+let threads () = (* just to make ocamlfind silent, not necessary at all *)
+  match Findlib.package_directory "threads" with
+  | exception (Fl_package_base.No_such_package _ ) -> None
+  | dir ->
+    if List.exists !Config.load_path ~f:((=) dir) then
+      Some "-thread"
+    else
+      None
+
+type obj = (int,string) Hashtbl.t
 
 let compile ?ebuf c_prog =
   let ocaml_flags = !Options.ocaml_flags in
@@ -246,6 +242,9 @@ let compile ?ebuf c_prog =
   let c_flags = !Options.c_flags @ c_flags in
   let args = List.map c_flags ~f:(fun c -> "-ccopt"::c::[]) |> List.flatten in
   let args = ocaml_flags @ args in
+  let args = match threads () with
+  | None -> args
+  | Some x -> x::args in
   let args = "c"::"-c"::cfln::args in
   let args = match !Options.toolchain with
   | None -> args
@@ -276,49 +275,81 @@ let compile ?ebuf c_prog =
       Ok s
   | ec -> Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
 
+let rex =
+  Re.Perl.re ~opts:[`Ungreedy; `Dotall]
+    "PPXC_CONST_NR_([0-9]+)\\|(.*)\\|([0-9]+)_RN_TSNOC_CXPP\000"
+  |> Re.compile
+
+let compile ?ebuf c_prog =
+  match compile ?ebuf c_prog with
+  | (Error _) as x -> x
+  | Ok s ->
+    let rec iter i s len htl =
+      if i >= len then htl else
+      match Re.exec_opt ~pos:i rex s with
+      | None -> htl
+      | Some g ->
+        let end' =
+          try
+            let id1 = Re.Group.get g 1 in
+            let id2 = Re.Group.get g 3 in
+            if id1 = id2 then
+              let str = Re.Group.get g 2 in
+              Hashtbl.add htl (int_of_string id1) str;
+              Re.Group.stop g 0
+            else
+              succ i
+          with
+          | Not_found | Failure _ -> succ i in
+        iter end' s len htl in
+    let h = iter 0 s (String.length s) (Hashtbl.create 64) in
+    Ok h
+
 type extract_error =
   | Info_not_found
-  | Overflow
-  | Underflow
-  | User_overflow
-  | User_underflow
+  | Overflow of string
+  | Underflow of string
+  | User_overflow of string
+  | User_underflow of string
   | Not_an_integer
 
-let negative_convert s =
-  if false = CCString.exists (fun c -> c >= '\'' && c <= '/') s then s
-  else
-  let s = CCString.map (fun c ->
-    if c >= '\'' && c <= '/' then Char.chr (96 - Char.code c) else c) s in
-  "-" ^ s
+let normalise_int str =
+  let len = String.length str in
+  if len < 1 then str else
+  let b = Buffer.create len in
+  let start = match str.[0] with
+  | '-' as c -> Buffer.add_char b c; 1
+  | _ -> 0 in
+  let rec iter i =
+    if i >= len then
+      Buffer.add_char b '0'
+    else match str.[i] with
+    | '0' -> iter (succ i)
+    | _ -> Buffer.add_substring b str i (len - i) in
+  iter start;
+  Buffer.contents b
 
-let extract info (obj:obj) =
+let extract info htl =
   with_return @@ fun r ->
   let extract_single id =
-    let s = Printf.sprintf "%x" id in
-    let prefix = "PPXC_CONST_NR_" ^ s ^ "#" in
-    let suffix = "#" ^ s ^ "_RN_TSNOC_CXPP" in
-    let start = CCString.find ~sub:prefix obj in
-    if start < 0 then
-      r.return (Error Info_not_found);
-    let start = start + String.length prefix in
-    let end' = CCString.find ~start ~sub:suffix obj in
-    if end' < 0 then
-      r.return (Error Info_not_found);
-    String.sub obj start (end' - start) in
+    match Hashtbl.find htl id with
+    | exception Not_found -> r.return (Error Info_not_found)
+    | s -> s in
   let res = extract_single info.id in
   match info.intern with
   | String -> Ok res
+  | Unchecked_integer -> Ok (normalise_int res)
   | Integer x ->
-    let res = negative_convert res in
-    let verify id er = match int_of_string @@ extract_single id with
-    | exception (Failure _) -> r.return (Error er)
-    | n -> if n <> 1 then r.return (Error er) in
-    verify x.id_min Underflow;
-    verify x.id_max Overflow;
-    verify x.id_is_int Not_an_integer;
-    let verify' er = function
-    | None -> ()
-    | Some x -> verify x er in
-    verify' User_underflow x.id_user_min;
-    verify' User_overflow x.id_user_max;
+    let res = normalise_int res in
+    let int' = match int_of_string @@ extract_single x with
+    | exception (Failure _) -> r.return (Error Info_not_found)
+    | x -> x in
+    let verify i er =
+      if int' land (1 lsl i) = 0 then
+        r.return (Error er) in
+    verify 0 Not_an_integer;
+    verify 1 (Underflow res);
+    verify 2 (Overflow res);
+    verify 3 (User_underflow res);
+    verify 4 (User_overflow res);
     Ok res

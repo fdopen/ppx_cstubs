@@ -32,4 +32,9 @@ val build_enum:
 
 val build_enum_bitmask:
   string -> 'a Ctypes.typ -> typedef:bool -> ('b * 'a) list -> 'b list Ctypes.typ
+
+val string_write : string -> char Ctypes_static.ptr
+val string_read : nativeint -> string
+val string_opt_read : nativeint -> string option
+val string_opt_write : string option -> char Ctypes_static.ptr
 (**/**)

@@ -1,3 +1,18 @@
+(* This file is part of ppx_cstubs (https://github.com/fdopen/ppx_cstubs)
+ * Copyright (c) 2018 fdopen
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
+
 type pipe_state =
 | Open
 | Closed
@@ -86,6 +101,8 @@ let close_pipe_ne a =
 
 let str_buffer_len = 8192
 
+let finally ~h f = CCFun.finally ~h ~f
+
 let run ?(env=Unix.environment ())
     ?(stdin=`Null) ?(stderr=`Stderr) ?(stdout=`Stdout) prog args : int =
   let tmp_str = Bytes.create str_buffer_len
@@ -96,7 +113,7 @@ let run ?(env=Unix.environment ())
   and p_stdin_read = new_pipe ()
   and p_stdin_write = new_pipe ()
   and args = Array.of_list (prog::args) in
-  Std.finally ~h:(fun () ->
+  finally ~h:(fun () ->
     close_pipe_ne p_stdin_read;
     close_pipe_ne p_stdin_write;
     close_pipe_ne p_stdout_read;

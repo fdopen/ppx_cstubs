@@ -1,3 +1,18 @@
+(* This file is part of ppx_cstubs (https://github.com/fdopen/ppx_cstubs)
+ * Copyright (c) 2018 fdopen
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
+
 module Run_environment : sig
 
   module Libffi_abi : sig
@@ -101,10 +116,34 @@ module Ctypes_make : sig
   module Info64 : Target_env
 
   module Ctypes : functor (T : Target_env) -> sig
+
+    type ('a, 'b) pointer = ('a, 'b) Ctypes_static.pointer
+    type 'a ptr = ('a, [ `C ]) pointer
+    type 'a ocaml = 'a Ctypes_static.ocaml
+    type 'a carray = 'a Ctypes_static.carray
+    type 'a bigarray_class = 'a Ctypes_static.bigarray_class
+    val genarray :
+      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Genarray.t;
+        carray : 'a carray; dims : int array; element : 'a; layout : 'l >
+        bigarray_class
+    val array1 :
+      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array1.t;
+        carray : 'a carray; dims : int; element : 'a; layout : 'l >
+        bigarray_class
+    val array2 :
+      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array2.t;
+        carray : 'a carray carray; dims : int * int; element : 'a; layout : 'l >
+        bigarray_class
+    val array3 :
+      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array3.t;
+        carray : 'a carray carray carray; dims : int * int * int; element : 'a;
+        layout : 'l >
+        bigarray_class
     type ('a, 'kind) structured = ('a, 'kind) Ctypes_static.structured
     type 'a structure = ('a, [ `Struct ]) structured
     type 'a union = ('a, [ `Union ]) structured
     type ('a, 't) field = ('a, 't) Ctypes_static.field
+    type 'a abstract = 'a Ctypes_static.abstract
     type 'a typ = 'a Ctypes_static.typ
 
     val void : unit typ
@@ -119,6 +158,10 @@ module Ctypes_make : sig
     val int16_t : int typ
     val int32_t : int32 typ
     val int64_t : int64 typ
+    module Intptr : Signed.S
+    val intptr_t : Intptr.t typ
+    module Ptrdiff : Signed.S
+    val ptrdiff_t : Ptrdiff.t typ
     val camlint : int typ
     val uchar : Unsigned.uchar typ
     val bool : bool typ
@@ -132,16 +175,21 @@ module Ctypes_make : sig
     val uint : Unsigned.uint typ
     val ulong : Unsigned.ulong typ
     val ullong : Unsigned.ullong typ
+    module Uintptr : Unsigned.S
+    val uintptr_t : Uintptr.t typ
     val float : float typ
     val double : float typ
     val ldouble : LDouble.t typ
     val complex32 : Complex.t typ
     val complex64 : Complex.t typ
     val complexld : ComplexL.t typ
+    val ptr : 'a typ -> 'a Ctypes_static.ptr typ
+    val ptr_opt : 'a typ -> 'a Ctypes_static.ptr option typ
     val string : string typ
     val string_opt : string option typ
     val ocaml_string : string Ctypes_static.ocaml typ
     val ocaml_bytes : Bytes.t Ctypes_static.ocaml typ
+    val array : int -> 'a typ -> 'a Ctypes_static.carray typ
     val bigarray :
       < ba_repr : 'b; bigarray : 'bigarray; carray : 'c; dims : 'dims;
         element : 'a; layout : Bigarray.c_layout >
@@ -152,66 +200,108 @@ module Ctypes_make : sig
         element : 'a; layout : Bigarray.fortran_layout >
         Ctypes_static.bigarray_class ->
       'dims -> ('a, 'b) Bigarray.kind -> 'bigarray typ
-    val genarray :
-      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Genarray.t;
-        carray : 'a Ctypes_static.carray; dims : int array;
-        element : 'a; layout : 'l >
-        Ctypes_static.bigarray_class
-    val array1 :
-      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array1.t;
-        carray : 'a Ctypes_static.carray; dims : int; element : 'a;
-        layout : 'l >
-        Ctypes_static.bigarray_class
-    val array2 :
-      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array2.t;
-        carray : 'a Ctypes_static.carray Ctypes_static.carray;
-        dims : int * int; element : 'a; layout : 'l >
-        Ctypes_static.bigarray_class
-    val array3 :
-      < ba_repr : 'b; bigarray : ('a, 'b, 'l) Bigarray.Array3.t;
-        carray : 'a Ctypes_static.carray Ctypes_static.carray
-            Ctypes_static.carray;
-        dims : int * int * int; element : 'a; layout : 'l >
-        Ctypes_static.bigarray_class
     val typ_of_bigarray_kind : ('a, 'b) Bigarray.kind -> 'a typ
     val structure : string -> 's Ctypes_static.structure typ
     val union : string -> 's Ctypes_static.union typ
+(* missing:
+    val field :
+      ('s, [< `Struct | `Union ] as 'b) Ctypes_static.structured typ ->
+      string -> 'a typ -> ('a, ('s, 'b) Ctypes_static.structured) field
+    val seal : ('a, [< `Struct | `Union ]) Ctypes_static.structured typ -> unit
+*)
+    val view :
+      ?format_typ:((Format.formatter -> unit) -> Format.formatter -> unit) ->
+      ?format:(Format.formatter -> 'b -> unit) ->
+      read:('a -> 'b) -> write:('b -> 'a) -> 'a typ -> 'b typ
+    val typedef : 'a typ -> string -> 'a typ
+(*  missing:
+    val abstract :
+      name:string -> size:int -> alignment:int -> 'a Ctypes_static.abstract typ
+      val lift_typ : 'a Ctypes_static.typ -> 'a typ *)
     type 'a fn = 'a Ctypes_static.fn
-    type 'a static_funptr = 'a Ctypes_static.static_funptr
-    module Uintptr : Unsigned.S
-    val uintptr_t : Uintptr.t typ
-    module Ptrdiff : Signed.S
-    val ptrdiff_t : Ptrdiff.t typ
-    module Intptr : Signed.S
-    val intptr_t : Intptr.t typ
-    val static_funptr : 'a fn -> 'a Ctypes_static.static_funptr typ
     val ( @-> ) : 'a typ -> 'b fn -> ('a -> 'b) fn
     val returning : 'a typ -> 'a fn
-    val typedef : 'a typ -> string -> 'a typ
-    val view :
-      ?format_typ:((Format.formatter -> unit) ->
-                   Format.formatter -> unit) ->
-      ?format:(Format.formatter -> 'b -> unit) ->
-      read:('a -> 'b) ->
-      write:('b -> 'a) -> 'a typ -> 'b typ
-    val array : int -> 'a typ -> 'a Ctypes_static.carray typ
-    val ptr : 'a typ -> 'a Ctypes_static.ptr typ
-    val ptr_opt : 'a typ -> 'a Ctypes_static.ptr option typ
+    type 'a static_funptr = 'a Ctypes_static.static_funptr
+    val static_funptr : 'a fn -> 'a Ctypes_static.static_funptr typ
+    val sizeof : 'a typ -> int (* runtime fail *)
+    val alignment : 'a typ -> int (* runtime  fail *)
+    val format_typ : ?name:string -> Format.formatter -> 'a typ -> unit
+    val format_fn : ?name:string -> Format.formatter -> 'a fn -> unit
+    val string_of_typ : ?name:string -> 'a typ -> string
+    val string_of_fn : ?name:string -> 'a fn -> string
+    val format : 'a typ -> Format.formatter -> 'a -> unit  (* runtime fail *)
+    val string_of : 'a typ -> 'a -> string (* runtime fail *)
+    val null : unit ptr
+    val ( !@ ) : 'a ptr -> 'a
+    val ( <-@ ) : 'a ptr -> 'a -> unit
+    val ( +@ ) : ('a, 'b) pointer -> int -> ('a, 'b) pointer
+    val ( -@ ) : ('a, 'b) pointer -> int -> ('a, 'b) pointer
+    val ptr_diff : ('a, 'b) pointer -> ('a, 'b) pointer -> int
+    val from_voidp : 'a typ -> unit ptr -> 'a ptr
+    val to_voidp : 'a ptr -> unit ptr
+    val allocate : ?finalise:('a ptr -> unit) -> 'a typ -> 'a -> 'a ptr
+    val allocate_n : ?finalise:('a ptr -> unit) -> 'a typ -> count:int -> 'a ptr
+    val ptr_compare : 'a ptr -> 'a ptr -> int
+    val is_null : 'a ptr -> bool
+    val reference_type : 'a ptr -> 'a typ
+    val ptr_of_raw_address : nativeint -> unit ptr
+    val funptr_of_raw_address :
+      nativeint -> (unit -> unit) Ctypes_static.static_funptr
+    val raw_address_of_ptr : unit ptr -> nativeint
+    val string_from_ptr : char ptr -> length:int -> string
+    val ocaml_string_start : string -> string ocaml
+    val ocaml_bytes_start : Bytes.t -> Bytes.t ocaml
 
-    (* private. Don't use *)
+    module CArray :
+    sig
+      include module type of Ctypes.CArray
+    end
+
+    val bigarray_start :
+      < ba_repr : 'c; bigarray : 'b; carray : 'd; dims : 'e; element : 'a;
+        layout : 'l >
+        bigarray_class -> 'b -> 'a ptr
+    val bigarray_of_ptr :
+      < ba_repr : 'f; bigarray : 'b; carray : 'c; dims : 'i; element : 'a;
+        layout : Bigarray.c_layout >
+        bigarray_class -> 'i -> ('a, 'f) Bigarray.kind -> 'a ptr -> 'b
+    val fortran_bigarray_of_ptr :
+      < ba_repr : 'f; bigarray : 'b; carray : 'c; dims : 'i; element : 'a;
+        layout : Bigarray.fortran_layout >
+        bigarray_class -> 'i -> ('a, 'f) Bigarray.kind -> 'a ptr -> 'b
+    val array_of_bigarray :
+      < ba_repr : 'a; bigarray : 'b; carray : 'c; dims : 'd; element : 'e;
+        layout : Bigarray.c_layout >
+        bigarray_class -> 'b -> 'c
+    val bigarray_of_array :
+      < ba_repr : 'f; bigarray : 'b; carray : 'c carray; dims : 'i; element : 'a;
+        layout : Bigarray.c_layout >
+        bigarray_class -> ('a, 'f) Bigarray.kind -> 'c carray -> 'b
+    val make :
+      ?finalise:(('a, 'b) structured -> unit) ->
+      ('a, 'b) structured typ -> ('a, 'b) structured
+    val setf :
+      ('b, 'c) structured -> ('a, ('b, 'c) structured) field -> 'a -> unit
+    val getf : ('b, 'c) structured -> ('a, ('b, 'c) structured) field -> 'a
+    val ( @. ) : ('b, 'c) structured -> ('a, ('b, 'c) structured) field -> 'a ptr
+    val ( |-> ) :
+      ('b, 'c) structured ptr -> ('a, ('b, 'c) structured) field -> 'a ptr
+    val offsetof : ('a, 'b structure) field -> int (* runtime fail *)
+    val field_type : ('a, 'b) field -> 'a typ
+    val field_name : ('a, 'b) field -> string
+    val addr : ('a, 'b) structured -> ('a, 'b) structured ptr
+    val coerce : 'a typ -> 'b typ -> 'a -> 'b
+    val coerce_fn : 'a fn -> 'b fn -> 'a -> 'b
+
+    (* private. Don't use. Only available during code generation *)
     val ppxc__private_field :
       ('s, [< `Struct | `Union ] as 'b) Ctypes_static.structured typ ->
       string -> 'a typ -> ('a, ('s, 'b) Ctypes_static.structured) field
     val ppxc__private_seal :
       ('a, [< `Struct | `Union ]) Ctypes_static.structured typ -> unit
-    val ppxc__private_make :
-      ?finalise:('s -> unit) -> ((_, _) structured as 's) typ -> 's
-    val ppxc__private_setf :
-      ((_, _) structured as 's) -> ('a, 's) field -> 'a -> unit
-    val ppxc__private_getf :
-      ((_, _) structured as 's) -> ('a, 's) field -> 'a
     val ppxc__private_ocaml_typ:
       string -> [ `priv ] Ctypes_static.structure Ctypes.typ
+    val ppxc__unavailable : string -> 'a
   end
 end
 
@@ -220,7 +310,9 @@ module Extract : sig
   val constant : string -> string -> 'a Ctypes.typ -> unit
   val register_fun_place : string -> unit
   val header : string -> unit
-  val field : string -> 'a Ctypes.typ -> string -> unit
+  val field :
+    string -> _ Ctypes_static.structured Ctypes.typ ->
+    string -> 'a Ctypes.typ -> unit
   val seal : string -> string -> 'a Ctypes.typ -> unit
   val enum :
     string -> ?typedef:bool -> string -> [> `A ] Ctypes.typ
@@ -232,8 +324,8 @@ module Build : sig
   val reg_trace_fn : int -> 'a Ctypes.fn -> 'a Ctypes.fn
   val reg_trace : int -> 'a Ctypes.typ -> 'a Ctypes.typ
   val constant : string -> string -> 'a Ctypes.typ -> 'a
-  val foreign_value :
-    string -> string -> 'a Ctypes.typ -> string -> string -> string -> unit
+  val foreign_value : string -> string -> string -> 'a Ctypes.typ ->
+    string -> string -> string -> unit
 
   val external' : string -> string ->
     'a Ctypes.fn ->
@@ -252,10 +344,21 @@ module Build : sig
   val foreign :
     string ->
     string ->
+    string ->
     ocaml_name:string ->
     typ_expr:string ->
     ?release_runtime_lock:bool ->
     ?noalloc:bool -> ?return_errno:bool -> string -> 'a Ctypes.fn -> unit
+
+  val derive_typ : int -> 'a Ctypes.typ -> string -> 'a Ctypes.typ
+
+  val add_type_ref : 'a Ctypes.typ -> string -> unit
+
+  val create_record : int -> string -> 'a Ctypes.typ -> unit
+
+  val field :
+    string -> _ Ctypes_static.structured Ctypes.typ ->
+    string -> 'a Ctypes.typ -> unit
 end
 
 module Main : sig

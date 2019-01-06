@@ -111,9 +111,7 @@ let uint32_max = Big_int.big_int_of_int64 4294967295L
 let uint64_max = Big_int.big_int_of_string "18446744073709551615"
 
 module X = struct
-  open Migrate_parsetree
-  open Ast_405
-  open Ast_helper
+  open Mparsetree.Ast_cur.Ast_helper
   let string x = Exp.constant (Const.string x)
   let char x = Exp.constant (Const.char x)
   let int x = Exp.constant (Const.int x)
@@ -122,7 +120,14 @@ module X = struct
   let nativeint x = Exp.constant (Const.nativeint x)
 end
 
-exception Not_represantable
+type result =
+| Expr of Mparsetree.Ast_cur.Parsetree.expression
+| Underflow
+| Overflow
+
+exception Eunderflow
+exception Eoverflow
+
 let gen t str =
 
   let camlint_max =
@@ -156,9 +161,15 @@ let gen t str =
   let xint r = X.int (Big_int.int_of_big_int r) in
   let xint64 r = X.int64 (Big_int.int64_of_big_int r) in
   let xstr r = Big_int.string_of_big_int r |> X.string  in
+
+  let check_limits r min max =
+    if r < min then
+      raise_notrace Eunderflow;
+    if r > max then
+      raise_notrace Eoverflow; in
+
   let normal_int r min max =
-    if r < min && r > max then
-      raise_notrace Not_represantable;
+    check_limits r min max;
     xint r in
 
   let rec as_sum ~add ~of_int ~of_int64 r =
@@ -184,13 +195,11 @@ let gen t str =
   | Extr_camlint -> normal_int r camlint_min camlint_max
 
   | Extr_bool ->
+    check_limits r Big_int.zero_big_int Big_int.unit_big_int;
     if r = Big_int.zero_big_int then
       [%expr false]
-    else if r = Big_int.unit_big_int then
-      [%expr true]
     else
-      raise_notrace Not_represantable
-
+      [%expr true]
   | Extr_sint ->
     if r >= camlint_min && r <= camlint_max then
       [%expr Signed.SInt.of_int [%e xint r]]
@@ -214,21 +223,23 @@ let gen t str =
       [%expr Signed.LLong.of_string [%e xstr r]]
 
   | Extr_int32_t ->
-    if r < int32_min || r > int32_max then
-      raise_notrace Not_represantable;
+    check_limits r int32_min int32_max;
     Big_int.int32_of_big_int r |> X.int32
   | Extr_nativeint ->
-    if r < intnative_min || r > intnative_max then
-      raise_notrace Not_represantable;
+    check_limits r intnative_min intnative_max;
     Big_int.nativeint_of_big_int r |> X.nativeint
   | Extr_int64_t -> xint64 r
 
   | Extr_uchar ->
-    if r < Big_int.zero_big_int || r > uint8_max then
-      raise_notrace Not_represantable;
+    check_limits r Big_int.zero_big_int uint8_max;
     [%expr Unsigned.UChar.of_int [%e xint r]]
   | Extr_ushort ->
-    [%expr Unsigned.UShort.of_int [%e xint r]]
+    if r <= camlint_max then
+      [%expr Unsigned.UShort.of_int [%e xint r]]
+    else if r <= int64_max then
+      [%expr Unsigned.UShort.of_int64 [%e xint64 r]]
+    else
+      [%expr Unsigned.UShort.of_string [%e xstr r]]
   | Extr_uint ->
     if r <= camlint_max then
       [%expr Unsigned.UInt.of_int [%e xint r]]
@@ -253,23 +264,19 @@ let gen t str =
       ~of_int64:[%expr Unsigned.Size_t.of_int64]
 
   | Extr_uint8_t ->
-    if r < Big_int.zero_big_int || r > uint8_max then
-      raise_notrace Not_represantable;
+    check_limits r Big_int.zero_big_int uint8_max;
     [%expr Unsigned.UInt8.of_int [%e xint r]]
   | Extr_uint16_t ->
-    if r < Big_int.zero_big_int || r > uint16_max then
-      raise_notrace Not_represantable;
+    check_limits r Big_int.zero_big_int uint16_max;
     [%expr Unsigned.UInt16.of_int [%e xint r]]
   | Extr_uint32_t ->
-    if r < Big_int.zero_big_int || r > uint32_max then
-      raise_notrace Not_represantable;
+    check_limits r Big_int.zero_big_int uint32_max;
     if r <= camlint_max then
       [%expr Unsigned.UInt32.of_int [%e xint r]]
     else
       [%expr Unsigned.UInt32.of_int64 [%e xint64 r]]
   | Extr_uint64_t ->
-    if r < Big_int.zero_big_int || r > uint64_max then
-      raise_notrace Not_represantable;
+    check_limits r Big_int.zero_big_int uint64_max;
     as_sum r
       ~add:[%expr Unsigned.UInt64.add]
       ~of_int:[%expr Unsigned.UInt64.of_int]
@@ -277,6 +284,7 @@ let gen t str =
 
 let gen t str =
   try
-    Some (gen t str)
+    Expr (gen t str)
   with
-  | Not_represantable -> None
+  | Eunderflow -> Underflow
+  | Eoverflow -> Overflow

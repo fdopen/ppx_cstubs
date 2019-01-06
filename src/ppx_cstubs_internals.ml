@@ -18,8 +18,10 @@ let rec seal : type a. a Ctypes_static.typ -> size:int -> align:int -> unit =
   fun t ~size ~align ->
     match t with
     | Struct ({ spec = Incomplete _ ; _ } as s) ->
-      s.spec <- Complete { size ; align }
+      s.fields <- List.rev s.fields;
+      s.spec <- Complete { size ; align };
     | Union ({ uspec = None ; _ } as u ) ->
+      u.ufields <- List.rev u.ufields;
       u.uspec <- Some { size; align }
     | Struct { tag; _ } ->
       raise (ModifyingSealedType tag)
@@ -136,6 +138,39 @@ let build_enum_bitmask :
   and format_typ k fmt = Format.fprintf fmt "%s%s%t" typedef name k in
   Ctypes_static.view ~format_typ ~read ~write typ
 
-
 external to_voidp : nativeint -> Cstubs_internals.voidp = "%identity"
 let invalid_code () = failwith "ppx_cstub generated invalid code"
+
+(* just to reduce the lines of biolerplate code *)
+let string_write : (string -> char Ctypes_static.ptr) =
+  match (Ctypes.string : string Ctypes.typ ) with
+  | Ctypes_static.View
+      {
+        Ctypes_static.write = f;
+        Ctypes_static.ty = Ctypes_static.Pointer
+            (Ctypes_static.Primitive (Ctypes_primitive_types.Char));
+        _} -> f
+  | _ -> assert false
+
+let string_read : nativeint -> string =
+  match (Ctypes.string : string Ctypes.typ ) with
+  | Ctypes_static.View
+      {
+        Ctypes_static.read = f;
+        Ctypes_static.ty = Ctypes_static.Pointer
+            (Ctypes_static.Primitive (Ctypes_primitive_types.Char));
+        _} -> fun x -> f (Cstubs_internals.make_ptr Ctypes.char (to_voidp x))
+  | _ -> assert false
+
+let string_opt_read x =
+  if x = 0n then None else Some (string_read x)
+
+let string_opt_write : (string option -> char Ctypes_static.ptr) =
+  match (Ctypes.string_opt : string option Ctypes.typ) with
+  | Ctypes_static.View
+      {
+        Ctypes_static.write = f;
+        Ctypes_static.ty = Ctypes_static.Pointer
+            (Ctypes_static.Primitive (Ctypes_primitive_types.Char));
+        _} -> f
+  | _ -> assert false

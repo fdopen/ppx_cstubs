@@ -23,7 +23,8 @@ let () =
       "ptr";
       "ptr_opt";
       "returning";
-      "seal"
+      "seal";
+      "static_funptr";
     ]
 (* cmitomli ctypes.cmi | awk '/val [^\(]/ {print $2}' | ...*)
 
@@ -38,6 +39,25 @@ let () =
       "Ctypes";
       "Ctypes_static";
       "LDouble";
+      "Ppx_cstubs_internals";
       "Signed";
       "Unsigned";
+    ]
+
+
+let htl_types = Hashtbl.create 16
+let () =
+  List.iter (fun k -> Hashtbl.replace htl_types k ())
+    [
+      "bool";
+      "char";
+      "float";
+      "int";
+      "int32";
+      "int64";
+      "list";
+      "nativeint";
+      "option";
+      "string";
+      "unit";
     ]

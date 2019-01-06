@@ -13,23 +13,26 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
+open Mparsetree.Ast_cur
+
 type fun_params = {
-  el : (Ast_405.Asttypes.arg_label * Migrate_parsetree.Ast_405.Parsetree.expression) list;
-  ret : Migrate_parsetree.Ast_405.Parsetree.expression;
+  el : (Asttypes.arg_label * Parsetree.expression) list;
+  ret : Parsetree.expression;
   release_runtime_lock: bool;
   noalloc: bool;
   is_inline: bool;
+  mod_path: string list;
   return_errno: bool;
   remove_labels: bool;
   c_name: string; (* external xyz : .... = "c_name" *)
   prim_name:string; (* external prim_name : ..... *)
-  ocaml_name: string; (* unique name in generated module *)
+  uniq_ref_id: Uniq_ref.t;
 }
 
 type id = int
-type loc = Migrate_parsetree.Ast_405.Ast_helper.loc
+type loc = Ast_helper.loc
 type id_loc_param = id * loc
-type expr = Migrate_parsetree.Ast_405.Parsetree.expression
+type expr = Parsetree.expression
 
 type enum_type =
 | E_normal of id
@@ -39,7 +42,7 @@ type enum_type =
 type enum_entry = {
   ee_signed_id: int;
   ee_unsigned_id: int;
-  ee_loc: Ast_405.Location.t;
+  ee_loc: Location.t;
   ee_expr: expr;
   ee_cname: string;
 }
@@ -51,4 +54,11 @@ type enum = {
   enum_type_id: enum_type;
   enum_loc: loc;
   enum_unexpected: expr;
+}
+
+type struct_record_params = {
+  sr_mod_path: string list;
+  sr_type_name: string;
+  sr_field_names: string list;
+  sr_locs: loc list;
 }

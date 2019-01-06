@@ -13,54 +13,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
-let ml_output = ref ""
-let c_output = ref ""
-let pretty_print = ref false
-let cflags = ref []
-let oflags = ref (List.rev Options.ocaml_flags_default)
-let include_dirs = ref []
-let keep_tmp = ref false
-let disable_shadow = ref false
-let toolchain = ref None
-let findlib_pkgs = ref []
-let cma_files = ref []
-let verbose = ref 0
-let absname = ref false
-
-let spec = Arg.align
-    [ "-o-ml", Arg.Set_string ml_output,
-      "<file>    write generated OCaml file to <file>";
-      "-o-c", Arg.Set_string c_output,
-      "<file>    write generated C file to <file>. 'none' to disable c output";
-      "-cflag", Arg.String (fun s -> cflags := s :: !cflags),
-      "<opt>     Pass option <opt> to the C compiler";
-      "-I", Arg.String (fun s ->
-          include_dirs := s :: !include_dirs;
-          oflags := s :: "-I" :: !oflags),
-      "<dir>     Add <dir> to the list of include directories";
-      "-oflag", Arg.String (fun s -> oflags := s :: !oflags),
-      "<opt>     Pass option <opt> to ocamlfind";
-      "-pkg", Arg.String (fun s -> findlib_pkgs := s :: !findlib_pkgs),
-      "<opt>     import types from findlib package <opt>";
-      "-toolchain", Arg.String (fun s -> toolchain := Some s),
-      "<opt>     use ocamlfind toolchain <opt>";
-      "-keep-tmp", Arg.Set keep_tmp,
-      "     Don't delete temporary files";
-      "-disable-shadowing", Arg.Set disable_shadow,
-      "     Don't shadow the Ctypes module to hide unsafe functions";
-      "-pretty", Arg.Set pretty_print,
-      "     Print a human readable ml file instead of the binary ast";
-      "-verbose", Arg.Set_int verbose,
-      "<level>   Set the level of verbosity. By default, it is set to 0, what means no debug messages at all on stderr";
-      "-absname", Arg.Set absname,
-      "     Show absolute filenames in error messages";
-    ]
-
 let executable = Filename.basename Sys.executable_name
-let usage =
-  Printf.sprintf
-    "%s [<file>] -o-ml my_module.ml -o-c my_modul_stubs.c"
-    executable
 
 let error_exit s =
   Printf.eprintf
@@ -68,28 +21,77 @@ let error_exit s =
     executable  s executable;
   exit 1
 
-let run_main () =
+let common_main () =
   set_binary_mode_out stdout true;
   set_binary_mode_out stderr true;
   set_binary_mode_in stdin true;
   Ppx_cstubs.init ();
   Migrate_parsetree.Driver.run_main ()
 
-let add_cma_file a =
-  if Sys.file_exists a then
-    cma_files := a :: !cma_files
-  else
-  let c = ListLabels.exists !include_dirs ~f:(fun d ->
-    let a = Filename.concat d a in
-    if Sys.file_exists a then (
-      cma_files := a :: !cma_files;
-      true)
-    else false) in
-  if c = false then
-    Printf.sprintf "%S doesn't exist\n" a
-    |> error_exit
+let cpp_main () =
+  let usage =
+    Printf.sprintf
+      "%s [<file>] -o-ml my_module.ml -o-c my_module_stubs.c"
+      executable in
 
-let main () =
+  let ml_output = ref "" in
+  let c_output = ref "" in
+  let pretty_print = ref false in
+  let cflags = ref [] in
+  let cflags_rest = ref [] in
+  let oflags = ref (List.rev Options.ocaml_flags_default) in
+  let include_dirs = ref [] in
+  let keep_tmp = ref false in
+  let toolchain = ref None in
+  let findlib_pkgs = ref [] in
+  let cma_files = ref [] in
+  let verbose = ref 0 in
+  let absname = ref false in
+  let nopervasives = ref false in
+
+  let spec = Arg.align
+      [ "-o-ml", Arg.Set_string ml_output,
+        "<file>    write generated OCaml file to <file>";
+        "-o-c", Arg.Set_string c_output,
+        "<file>    write generated C file to <file>. 'none' to disable c output";
+        "-cflag", Arg.String (fun s -> cflags := s :: !cflags),
+        "<opt>     Pass option <opt> to the C compiler";
+        "-I", Arg.String (fun s ->
+          include_dirs := s :: !include_dirs;
+          oflags := s :: "-I" :: !oflags),
+        "<dir>     Add <dir> to the list of include directories";
+        "-pkg", Arg.String (fun s -> findlib_pkgs := s :: !findlib_pkgs),
+        "<opt>     import types from findlib package <opt>";
+        "-toolchain", Arg.String (fun s -> toolchain := Some s),
+        "<opt>     use ocamlfind toolchain <opt>";
+        "-keep-tmp", Arg.Set keep_tmp,
+        "     Don't delete temporary files";
+        "-pretty", Arg.Set pretty_print,
+        "     Print a human readable ml file instead of the binary ast";
+        "-verbose", Arg.Set_int verbose,
+        "<level>   Set the level of verbosity. By default, it is set to 0, what means no debug messages at all on stderr";
+        "-absname", Arg.Set absname,
+        "     Show absolute filenames in error messages";
+        "-nopervasives", Arg.Set nopervasives,
+        "     (undocumented)";
+        "--", Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest),
+        "     Pass all following parameters verbatim to the c compiler";
+      ] in
+
+  let add_cma_file a =
+    if Sys.file_exists a then
+      cma_files := a :: !cma_files
+    else
+    let c = ListLabels.exists !include_dirs ~f:(fun d ->
+      let a = Filename.concat d a in
+      if Sys.file_exists a then (
+        cma_files := a :: !cma_files;
+        true)
+      else false) in
+    if c = false then
+      Printf.sprintf "%S doesn't exist\n" a
+      |> error_exit in
+
   let source = ref None in
   Arg.parse spec (fun a ->
     if a = "" then
@@ -131,12 +133,12 @@ let main () =
     Options.c_output_file := Some c_output;
   );
   Options.ocaml_flags := List.rev !oflags;
-  Options.c_flags := List.rev !cflags;
+  Options.c_flags := List.rev !cflags @ List.rev !cflags_rest;
   Options.keep_tmp := !keep_tmp;
+  Options.nopervasives := !nopervasives;
   Options.mode := Options.Regular;
   Options.ml_input_file := Some source;
   Options.ml_output_file := Some ml_output;
-  Options.disable_shadow := !disable_shadow;
   Options.toolchain := !toolchain;
   Options.cma_files := List.rev !cma_files;
   Options.findlib_pkgs := List.rev !findlib_pkgs;
@@ -160,16 +162,16 @@ let main () =
   if new_argv_length <> orig_argv_length then
     Obj.truncate (Obj.repr Sys.argv) new_argv_length;
   Arg.current := 0;
-  run_main ()
+  common_main ()
 
-let dummy () =
+let merlin_main () =
   Options.mode := Options.Emulate;
-  run_main ()
+  common_main ()
 
 let () =
-  if Sys.argv.(1) <> "--as-ppx" then main () else
-  let fln = Filename.basename Sys.executable_name |> CCString.lowercase_ascii in
+  if Sys.argv.(1) <> "--as-ppx" then cpp_main () else
+  let fln = CCString.lowercase_ascii executable in
   if CCString.mem ~sub:"merlin" fln then
-    dummy ()
+    merlin_main ()
   else
-    main ()
+    cpp_main ()
