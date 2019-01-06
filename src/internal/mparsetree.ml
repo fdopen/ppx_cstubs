@@ -14,4 +14,5 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 module Ast_cur = Migrate_parsetree.Ast_406
+
 let ast_version = Migrate_parsetree.Versions.ocaml_406

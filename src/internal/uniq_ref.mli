@@ -14,30 +14,35 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 open Mparsetree.Ast_cur.Parsetree
+
 type t
 
-type make_result = {
-  id : t;
-  topmod_vb : structure_item;
-  topmod_ref : structure_item;
-  main_ref : expression;
-}
+type make_result =
+  { id : t
+  ; topmod_vb : structure_item
+  ; topmod_ref : structure_item
+  ; main_ref : expression }
 
 val make : string list -> string -> expression -> make_result
+
 val replace_expr : expression -> expression
+
 val replace_stri : structure_item -> structure_item
+
 val get_final_name : t -> string
 
 type ocaml_t
-val make_type_alias:
-  ?tdl_attrs:attribute list ->
-  ?params:(core_type * Mparsetree.Ast_cur.Asttypes.variance) list ->
-  string list ->
-  string ->
-  structure_item * ocaml_t
 
-val create_type_ref_final:
+val make_type_alias :
+     ?tdl_attrs:attribute list
+  -> ?params:(core_type * Mparsetree.Ast_cur.Asttypes.variance) list
+  -> string list
+  -> string
+  -> structure_item * ocaml_t
+
+val create_type_ref_final :
   ?l:core_type list -> ocaml_t -> string list -> core_type
-val replace_typ: core_type -> core_type
 
-val clear: unit -> unit
+val replace_typ : core_type -> core_type
+
+val clear : unit -> unit

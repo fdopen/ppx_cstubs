@@ -16,14 +16,19 @@
 open Mparsetree.Ast_cur
 
 val replace_expr_string : string
+
 val replace_expr_attrib : string Location.loc * Parsetree.payload
 
 val tdl_string : string
+
 val tdl_attrib : string Location.loc * Parsetree.payload
 
 val remove_string : string
+
 val remove_attrib : string Location.loc * Parsetree.payload
 
 val replace_attr_string : string
+
 val replace_typ_string : string
-val replace_struct_string: string
+
+val replace_struct_string : string

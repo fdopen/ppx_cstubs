@@ -15,17 +15,17 @@
 
 type extr_info
 
-type info = {
-  signed : bool;
-  min : string option;
-  max : string option;
-  info : extr_info;
-}
+type info =
+  { signed : bool
+  ; min : string option
+  ; max : string option
+  ; info : extr_info }
 
 type result =
-| Expr of Mparsetree.Ast_cur.Parsetree.expression
-| Underflow
-| Overflow
+  | Expr of Mparsetree.Ast_cur.Parsetree.expression
+  | Underflow
+  | Overflow
 
 val prepare : 'a Ctypes_static.typ -> info option
+
 val gen : info -> string -> result

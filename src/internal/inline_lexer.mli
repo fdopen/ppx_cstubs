@@ -13,9 +13,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
-exception Bad_expander
 type t =
   | Literal of string
   | Variable of (string * Lexing.position * Lexing.position)
   | Textend
+
 val token : Lexing.lexbuf -> t
+
+exception Bad_expander

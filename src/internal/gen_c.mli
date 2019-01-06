@@ -13,35 +13,34 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
-type info = {
-  stub_source: string;
-  stub_name: string;
-  stub_name_byte: string option;
-  noalloc: bool;
-  return_errno: bool;
-}
+type info =
+  { stub_source : string
+  ; stub_name : string
+  ; stub_name_byte : string option
+  ; noalloc : bool
+  ; return_errno : bool }
 
-val gen_fun:
-  'a Ctypes.fn ->
-  locs: Location.t list ->
-  stubname:string ->
-  cfunc:string ->
-  release_runtime_lock:bool ->
-  noalloc:bool ->
-  return_errno:bool ->
-  info
+val gen_fun :
+     'a Ctypes.fn
+  -> locs:Location.t list
+  -> stubname:string
+  -> cfunc:string
+  -> release_runtime_lock:bool
+  -> noalloc:bool
+  -> return_errno:bool
+  -> info
 
-val gen_value: 'a Ctypes.fn -> stubname:string -> value:string -> info
+val gen_value : 'a Ctypes.fn -> stubname:string -> value:string -> info
 
 val string_of_typ_exn : ?name:string -> 'a Ctypes.typ -> string
 
 val build_inline_fun :
-  'a Ctypes.fn ->
-  c_name:string ->
-  c_body:string ->
-  locs: Location.t list ->
-  noalloc:bool ->
-  (string * string) list
+     'a Ctypes.fn
+  -> c_name:string
+  -> c_body:string
+  -> locs:Location.t list
+  -> noalloc:bool
+  -> (string * string) list
   -> string
 
 (* fixme: MOVE*)

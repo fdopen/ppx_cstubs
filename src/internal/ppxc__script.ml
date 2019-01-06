@@ -14,5 +14,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 let real_init () = Main.init ()
+
 include Ppxc__script_real
+
 let _init = real_init

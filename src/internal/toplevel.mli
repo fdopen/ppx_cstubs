@@ -14,5 +14,5 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 val init : unit -> unit
-val eval_expression :
-  Mparsetree.Ast_cur.Parsetree.expression -> Obj.t
+
+val eval_expression : Mparsetree.Ast_cur.Parsetree.expression -> Obj.t

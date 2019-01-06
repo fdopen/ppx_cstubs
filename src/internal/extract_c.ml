@@ -16,7 +16,8 @@
 open Std
 open Std.Result
 
-let prologue = {|
+let prologue =
+  {|
 #include <stddef.h>
 #include <limits.h>
 #include <stdint.h>
@@ -127,13 +128,13 @@ let cnt =
   let i = ref 0 in
   fun () ->
     let res = !i in
-    incr i;
+    incr i ;
     res
 
 let int_to_char_array i =
   let s = Printf.sprintf "%d" i in
-  let b = Buffer.create ((String.length s) * 4) in
-  String.iter (fun c -> Printf.bprintf b "'%c'," c) s;
+  let b = Buffer.create (String.length s * 4) in
+  String.iter (fun c -> Printf.bprintf b "'%c'," c) s ;
   Buffer.contents b
 
 type id = int
@@ -143,137 +144,147 @@ type intern =
   | Integer of id
   | Unchecked_integer
 
-type extract_info = {
-  id: id;
-  single_prog: string;
-  intern: intern;
-}
+type extract_info =
+  { id : id
+  ; single_prog : string
+  ; intern : intern }
 
 let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
-let prepare_extract_int
-    ?(disable_checks=false) ?min ?max ~buf ~c_header ~expr ~signed () =
+let prepare_extract_int ?(disable_checks = false) ?min ?max ~buf ~c_header
+    ~expr ~signed () =
   let len = String.length prologue + String.length c_header + 3072 in
   let buf_single = Buffer.create len in
-  Buffer.add_string buf_single prologue;
-  Buffer.add_string buf_single c_header;
+  Buffer.add_string buf_single prologue ;
+  Buffer.add_string buf_single c_header ;
   let gen info =
     let id = cnt () in
     let ar = int_to_char_array id in
-    let s = Printf.sprintf {|
+    let s =
+      Printf.sprintf
+        {|
       const char ppx_c_extract_char_array_%d[] = {
       'P','P','X','C','_','C','O','N','S','T','_','N','R','_', %s '|',
       PPXC__NSTR(%s),
       '|', %s '_','R','N','_','T','S','N','O','C','_','C','X','P','P', '\0' };
-     |} id ar info ar in
-    id,s in
-  let def_int_min,def_int_max = match signed with
-  | false -> "0","UINT64_MAX"
-  | true -> "INT64_MIN","INT64_MAX" in
-  let id,ex_str = gen expr in
-  Buffer.add_string buf ex_str;
-  Buffer.add_string buf_single ex_str;
+     |}
+        id ar info ar
+    in
+    (id, s)
+  in
+  let def_int_min, def_int_max =
+    match signed with
+    | false -> ("0", "UINT64_MAX")
+    | true -> ("INT64_MIN", "INT64_MAX")
+  in
+  let id, ex_str = gen expr in
+  Buffer.add_string buf ex_str ;
+  Buffer.add_string buf_single ex_str ;
   if disable_checks = true then
-    {id ; single_prog = Buffer.contents buf_single; intern = Unchecked_integer}
+    {id; single_prog = Buffer.contents buf_single; intern = Unchecked_integer}
   else
-  let s_int =
-    Printf.sprintf "( PPXC_IS_INTEGER(%s) )" expr in
-  let s_min =
-    Printf.sprintf "( (%s) >= 0 || (%s) >= %s )" expr expr def_int_min in
-  let s_max =
-    Printf.sprintf "( (%s) <= 0 || (%s) <= %s )" expr expr def_int_max in
-  let f x format = match x with
-  | None -> "1"
-  | Some x -> Printf.sprintf format expr expr x in
-  let s_user_min = f min "( (%s) >= 0 || (%s) >= %s )" in
-  let s_user_max = f max "( (%s) <= 0 || (%s) <= %s )" in
-  let id_x,str  =
-    gen @@ Printf.sprintf
-      "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
-      s_int s_min s_max s_user_min s_user_max in
-  Buffer.add_string buf str;
-  Buffer.add_string buf_single str;
-  {id ; single_prog = Buffer.contents buf_single; intern = Integer id_x}
+    let s_int = Printf.sprintf "( PPXC_IS_INTEGER(%s) )" expr in
+    let s_min =
+      Printf.sprintf "( (%s) >= 0 || (%s) >= %s )" expr expr def_int_min
+    in
+    let s_max =
+      Printf.sprintf "( (%s) <= 0 || (%s) <= %s )" expr expr def_int_max
+    in
+    let f x format =
+      match x with None -> "1" | Some x -> Printf.sprintf format expr expr x
+    in
+    let s_user_min = f min "( (%s) >= 0 || (%s) >= %s )" in
+    let s_user_max = f max "( (%s) <= 0 || (%s) <= %s )" in
+    let id_x, str =
+      gen
+      @@ Printf.sprintf
+           "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | \
+            (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | \
+            (((unsigned)(%s)) << 4u) )"
+           s_int s_min s_max s_user_min s_user_max
+    in
+    Buffer.add_string buf str ;
+    Buffer.add_string buf_single str ;
+    {id; single_prog = Buffer.contents buf_single; intern = Integer id_x}
 
 let prepare_extract_string ~buf ~c_header ~expr () =
   let buf_single = Buffer.create 4096 in
-  Buffer.add_string buf_single prologue;
-  Buffer.add_string buf_single c_header;
+  Buffer.add_string buf_single prologue ;
+  Buffer.add_string buf_single c_header ;
   let cnt = cnt () in
   List.iter [buf_single; buf] ~f:(fun buf ->
-    Printf.bprintf buf {|
+      Printf.bprintf buf
+        {|
 const char *ppx_c_extract_char_string%d = "PPXC_CONST_NR_%d|" %s "|%d_RN_TSNOC_CXPP";
-     |} cnt cnt expr cnt);
-  { id = cnt;
-    single_prog = Buffer.contents buf_single;
-    intern = String }
+     |}
+        cnt cnt expr cnt ) ;
+  {id = cnt; single_prog = Buffer.contents buf_single; intern = String}
 
-let threads () = (* just to make ocamlfind silent, not necessary at all *)
+let threads () =
+  (* just to make ocamlfind silent, not necessary at all *)
   match Findlib.package_directory "threads" with
-  | exception (Fl_package_base.No_such_package _ ) -> None
+  | exception Fl_package_base.No_such_package _ -> None
   | dir ->
-    if List.exists !Config.load_path ~f:((=) dir) then
-      Some "-thread"
-    else
-      None
+    if List.exists !Config.load_path ~f:(( = ) dir) then Some "-thread"
+    else None
 
-type obj = (int,string) Hashtbl.t
+type obj = (int, string) Hashtbl.t
 
 let compile ?ebuf c_prog =
   let ocaml_flags = !Options.ocaml_flags in
   let cfln = Filename.temp_file "ppxc_extract" ".c" in
-  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln) @@ fun () ->
-  CCIO.with_out
-    ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] cfln (fun ch ->
-      output_string ch c_prog);
-  let obj = Filename.chop_suffix cfln ".c" ^ (Ocaml_config.ext_obj ()) in
+  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln)
+  @@ fun () ->
+  CCIO.with_out ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] cfln
+    (fun ch -> output_string ch c_prog ) ;
+  let obj = Filename.chop_suffix cfln ".c" ^ Ocaml_config.ext_obj () in
   let c_flags =
     (* that's a suboptimal solution. `ocamlc -c foo.c -o foo.o` doesn't work:
-        "Options -c and -o are incompatible when compiling C files"
-       But I might have no write access in the current directory and I'm
-       unsure how '-I' flags and similar options are affected, if I change the
-       current working directory ... *)
+       "Options -c and -o are incompatible when compiling C files" But I might
+       have no write access in the current directory and I'm unsure how '-I'
+       flags and similar options are affected, if I change the current working
+       directory ... *)
     match Ocaml_config.system () |> CCString.lowercase_ascii with
     | "win32" | "win64" -> ["-Fo:" ^ obj]
-    | _ -> ["-o";obj] in
-  let dir = match !Options.ml_input_file with
-  | None -> failwith "ml_input_file not set"
-  | Some s -> Filename.dirname s in
-  let c_flags = "-I"::dir::c_flags in
+    | _ -> ["-o"; obj]
+  in
+  let dir =
+    match !Options.ml_input_file with
+    | None -> failwith "ml_input_file not set"
+    | Some s -> Filename.dirname s
+  in
+  let c_flags = "-I" :: dir :: c_flags in
   let c_flags = !Options.c_flags @ c_flags in
-  let args = List.map c_flags ~f:(fun c -> "-ccopt"::c::[]) |> List.flatten in
+  let args = List.map c_flags ~f:(fun c -> ["-ccopt"; c]) |> List.flatten in
   let args = ocaml_flags @ args in
-  let args = match threads () with
-  | None -> args
-  | Some x -> x::args in
-  let args = "c"::"-c"::cfln::args in
-  let args = match !Options.toolchain with
-  | None -> args
-  | Some s -> "-toolchain"::s::args in
+  let args = match threads () with None -> args | Some x -> x :: args in
+  let args = "c" :: "-c" :: cfln :: args in
+  let args =
+    match !Options.toolchain with
+    | None -> args
+    | Some s -> "-toolchain" :: s :: args
+  in
   let stdout = if !Options.verbosity > 0 then `Stdout else `Null in
   let stderr =
     if !Options.verbosity > 1 then `Stderr
-    else match ebuf with
-    | None -> `Null
-    | Some ebuf -> `Buffer ebuf in
+    else match ebuf with None -> `Null | Some ebuf -> `Buffer ebuf
+  in
   let prog = Options.ocamlfind in
-  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file obj) @@ fun () ->
-  if !Options.verbosity > 0 then
-    Run.cmd_to_string prog args |> prerr_endline;
+  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file obj)
+  @@ fun () ->
+  if !Options.verbosity > 0 then Run.cmd_to_string prog args |> prerr_endline ;
   match Run.run prog args ~stdout ~stderr with
-  | exception (Unix.Unix_error(e,s,_)) ->
+  | exception Unix.Unix_error (e, s, _) ->
     let cmd = Run.cmd_to_string prog args in
-    Error (Printf.sprintf
-             "Process creation \"%s\" failed with %s (%S)"
-             cmd (Unix.error_message e) s)
+    Error
+      (Printf.sprintf "Process creation \"%s\" failed with %s (%S)" cmd
+         (Unix.error_message e) s)
   | 0 ->
-    CCIO.with_in
-      ?mode:None ~flags:[Open_binary] obj @@ fun ch ->
+    CCIO.with_in ?mode:None ~flags:[Open_binary] obj
+    @@ fun ch ->
     let s = CCIO.read_all ch in
-    if s = "" then
-      Error "`ocamlfind ocamlc -c` created an empty obj file"
-    else
-      Ok s
+    if s = "" then Error "`ocamlfind ocamlc -c` created an empty obj file"
+    else Ok s
   | ec -> Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
 
 let rex =
@@ -283,26 +294,28 @@ let rex =
 
 let compile ?ebuf c_prog =
   match compile ?ebuf c_prog with
-  | (Error _) as x -> x
+  | Error _ as x -> x
   | Ok s ->
     let rec iter i s len htl =
-      if i >= len then htl else
-      match Re.exec_opt ~pos:i rex s with
-      | None -> htl
-      | Some g ->
-        let end' =
-          try
-            let id1 = Re.Group.get g 1 in
-            let id2 = Re.Group.get g 3 in
-            if id1 = id2 then
-              let str = Re.Group.get g 2 in
-              Hashtbl.add htl (int_of_string id1) str;
-              Re.Group.stop g 0
-            else
-              succ i
-          with
-          | Not_found | Failure _ -> succ i in
-        iter end' s len htl in
+      if i >= len then htl
+      else
+        match Re.exec_opt ~pos:i rex s with
+        | None -> htl
+        | Some g ->
+          let end' =
+            try
+              let id1 = Re.Group.get g 1 in
+              let id2 = Re.Group.get g 3 in
+              if id1 = id2 then (
+                let str = Re.Group.get g 2 in
+                Hashtbl.add htl (int_of_string id1) str ;
+                Re.Group.stop g 0 )
+              else succ i
+            with
+            | Not_found | Failure _ -> succ i
+          in
+          iter end' s len htl
+    in
     let h = iter 0 s (String.length s) (Hashtbl.create 64) in
     Ok h
 
@@ -316,41 +329,49 @@ type extract_error =
 
 let normalise_int str =
   let len = String.length str in
-  if len < 1 then str else
-  let b = Buffer.create len in
-  let start = match str.[0] with
-  | '-' as c -> Buffer.add_char b c; 1
-  | _ -> 0 in
-  let rec iter i =
-    if i >= len then
-      Buffer.add_char b '0'
-    else match str.[i] with
-    | '0' -> iter (succ i)
-    | _ -> Buffer.add_substring b str i (len - i) in
-  iter start;
-  Buffer.contents b
+  if len < 1 then str
+  else
+    let b = Buffer.create len in
+    let start =
+      match str.[0] with
+      | '-' as c ->
+        Buffer.add_char b c ;
+        1
+      | _ -> 0
+    in
+    let rec iter i =
+      if i >= len then Buffer.add_char b '0'
+      else
+        match str.[i] with
+        | '0' -> iter (succ i)
+        | _ -> Buffer.add_substring b str i (len - i)
+    in
+    iter start ;
+    Buffer.contents b
 
 let extract info htl =
-  with_return @@ fun r ->
+  with_return
+  @@ fun r ->
   let extract_single id =
     match Hashtbl.find htl id with
     | exception Not_found -> r.return (Error Info_not_found)
-    | s -> s in
+    | s -> s
+  in
   let res = extract_single info.id in
   match info.intern with
   | String -> Ok res
   | Unchecked_integer -> Ok (normalise_int res)
   | Integer x ->
     let res = normalise_int res in
-    let int' = match int_of_string @@ extract_single x with
-    | exception (Failure _) -> r.return (Error Info_not_found)
-    | x -> x in
-    let verify i er =
-      if int' land (1 lsl i) = 0 then
-        r.return (Error er) in
-    verify 0 Not_an_integer;
-    verify 1 (Underflow res);
-    verify 2 (Overflow res);
-    verify 3 (User_underflow res);
-    verify 4 (User_overflow res);
+    let int' =
+      match int_of_string @@ extract_single x with
+      | exception Failure _ -> r.return (Error Info_not_found)
+      | x -> x
+    in
+    let verify i er = if int' land (1 lsl i) = 0 then r.return (Error er) in
+    verify 0 Not_an_integer ;
+    verify 1 (Underflow res) ;
+    verify 2 (Overflow res) ;
+    verify 3 (User_underflow res) ;
+    verify 4 (User_overflow res) ;
     Ok res
