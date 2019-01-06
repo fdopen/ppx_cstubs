@@ -6,9 +6,8 @@ homepage: "https://github.com/fdopen/ppx_cstubs"
 dev-repo: "git+https://github.com/fdopen/ppx_cstubs.git"
 bug-reports: "https://github.com/fdopen/ppx_cstubs/issues"
 
-build: ["omake" "-j%{jobs}%" "lib" "PREFIX=%{prefix}%"]
-install: [
-  ["omake" "install" "PREFIX=%{prefix}%"]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
   "ctypes" {>= "0.13.0" & <= "0.15.0"}
@@ -20,7 +19,7 @@ depends: [
   "ocaml" {>= "4.02.3" & < "4.08.0"}
   "ocaml-migrate-parsetree"
   "ocamlfind" # not only a build dependency, it depends on findlib.top
-  "omake" {build}
+  "dune" {build & >= "1.2"}
   "ppx_tools_versioned" {>= "5.0.1"}
   "re" {>= "1.7.2"}
 ]

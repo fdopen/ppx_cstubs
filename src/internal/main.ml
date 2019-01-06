@@ -168,10 +168,8 @@ let merlin_main () =
   Options.mode := Options.Emulate;
   common_main ()
 
-let () =
-  if Sys.argv.(1) <> "--as-ppx" then cpp_main () else
-  let fln = CCString.lowercase_ascii executable in
-  if CCString.mem ~sub:"merlin" fln then
+let init () =
+  if CCArray.exists ((=) "--as-ppx") Sys.argv then
     merlin_main ()
   else
     cpp_main ()

@@ -46,3 +46,7 @@ module Util :
     val no_warn_unused_pre406:
       Parsetree.structure_item -> Parsetree.structure_item
   end
+
+module Result : sig
+  type ('a, 'b) result = ('a, 'b) Result.result = Ok of 'a | Error of 'b
+end

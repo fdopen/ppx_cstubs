@@ -15,7 +15,7 @@
 
 let toplevel_env = ref Env.empty
 
-let findlib_protect f a =
+let flib_protect f a =
   try
     f a
   with
@@ -31,44 +31,15 @@ let init = lazy (
     Clflags.nopervasives := true;
   toplevel_env := Compmisc.initial_env ();
   Topfind.log := ignore;
-  Topdirs.dir_directory @@ Findlib.package_directory "integers";
-  Topdirs.dir_directory @@ Findlib.package_directory "ctypes";
-  let (//) = Filename.concat in
-  let add_cmi_dir_findlib =
-    (* Interface folder differs, if it is not yet installed (tests,...) *)
-    let b = Filename.basename Sys.executable_name in
-    if b <> "ppx_cstubs.run" then true else
-    let dir = Filename.dirname Sys.executable_name in
-    let fln1 = dir // "OMakefile" in
-    let fln2 = dir // "toplevel.ml" in
-    not (Sys.file_exists fln1 &&
-       Sys.file_exists fln2) in
-  if add_cmi_dir_findlib then
-    let dir = Findlib.package_directory "ppx_cstubs" // "internal" in
-    Topdirs.dir_directory dir
-  else
-    Topdirs.dir_directory (Filename.dirname Sys.executable_name);
-
+  Topdirs.dir_directory @@ flib_protect Findlib.package_directory "integers";
+  Topdirs.dir_directory @@ flib_protect Findlib.package_directory "ctypes";
+  let dir = flib_protect Findlib.package_directory "ppx_cstubs" in
+  let dir = Filename.concat dir "internal" in
+  let () = Topdirs.dir_directory dir in
   if !Options.findlib_pkgs <> [] then (
-    let l = [
-      "compiler-libs.bytecomp";
-      "compiler-libs.toplevel";
-      "containers";
-      "ctypes";
-      "findlib.top";
-      "integers";
-      "num";
-      "ocaml-migrate-parsetree";
-      "ppx_tools_versioned";
-      "re.perl";
-    ] in
-    let l =
-      if Ocaml_config.runtime_version >= (4,3,0) then l
-      else "result"::l in
-    let l = if add_cmi_dir_findlib then "ppx_cstubs"::l else l in
     Topfind.predicates := ["byte"];
-    findlib_protect Topfind.don't_load_deeply l;
-    findlib_protect Topfind.load_deeply !Options.findlib_pkgs
+    flib_protect Topfind.don't_load_deeply ["ppx_cstubs.internal"];
+    flib_protect Topfind.load_deeply !Options.findlib_pkgs
   );
 
   ListLabels.iter !Options.cma_files ~f:(fun s ->

@@ -129,3 +129,9 @@ module Util = struct
         pincl_attributes = []; } in
       Str.include_ idl
 end
+
+module Result = struct
+  type ('a,'b) result = ('a,'b) CCResult.t =
+    | Ok of 'a
+    | Error of 'b
+end

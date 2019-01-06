@@ -39,7 +39,7 @@ val prepare_extract_string :
 
 type obj
 
-val compile : ?ebuf:Buffer.t -> string -> (obj, string) result
+val compile : ?ebuf:Buffer.t -> string -> (obj, string) CCResult.t
 
 type extract_error =
   | Info_not_found
@@ -49,4 +49,4 @@ type extract_error =
   | User_underflow of string
   | Not_an_integer
 
-val extract : extract_info -> obj -> (string, extract_error) result
+val extract : extract_info -> obj -> (string, extract_error) CCResult.t

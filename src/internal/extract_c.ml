@@ -14,6 +14,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
 
 open Std
+open Std.Result
 
 let prologue = {|
 #include <stddef.h>

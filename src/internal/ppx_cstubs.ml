@@ -1811,6 +1811,6 @@ let mapper _config _cookies =
   {default_mapper with structure_item; structure ; expr; typ; type_declaration}
 
 let init () =
-  let () = Ppxc__script._init () in
+  let () = Ppxc__script_real._init () in
   Migrate_parsetree.Driver.register
     ~name:"ppx_cstubs" Mparsetree.ast_version mapper

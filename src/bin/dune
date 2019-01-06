@@ -1,0 +1,9 @@
+(executable
+ (name exec)
+ (modes byte)
+ (link_flags (-linkall))
+ (libraries ppx_cstubs.internal)
+)
+(install
+ (section bin)
+ (files (exec.exe as ppx_cstubs)))

@@ -1,0 +1,8 @@
+# DUNE_GEN
+
+# for merlin only. Generates correct types,
+# but incorrect code ...
+package "merlin" (
+  requires(-ppx_driver) = ""
+  ppx(-custom_ppx,-ppx_driver) = "ppx_cstubs --as-ppx"
+)
