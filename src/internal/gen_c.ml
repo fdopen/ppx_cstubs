@@ -61,8 +61,8 @@ type ret =
   ; (* caml_copy_double(call_native(..,.. *)
     ibyte_native_accessor_differ : bool
   ; inative_ret_type : string
-  (* if something else than value should be used, necessary to support passing
-     unboxed values *) }
+        (* if something else than value should be used, necessary to support
+           passing unboxed values *) }
 
 let ret_info_prim : type a.
        a Ctypes_primitive_types.prim
@@ -277,8 +277,8 @@ type param =
   ; (* call_native(Long_val(a[0]),...) *)
     byte_native_accessor_differ : bool
   ; native_param_type : string
-  (* if something else than value should be used, necessary to support passing
-     unboxed values *) }
+        (* if something else than value should be used, necessary to support
+           passing unboxed values *) }
 
 let pinfo_prim : type a.
        a Ctypes_primitive_types.prim
@@ -779,8 +779,7 @@ module Inline = struct
            case. *)
         if noalloc = false then
           error
-            "passing OCaml values to inline code is only supported for \
-             noalloc functions"
+            {|passing OCaml values to inline code is only supported for noalloc functions|}
       | Primitive _ -> ()
       | Void -> ()
       | Abstract _ -> ()
@@ -821,7 +820,8 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc l =
       else Buffer.add_string buf @@ f n ) ;
   Buffer.add_string buf "){\n" ;
   let ls, unused_vars =
-    try Inline.replace_vars l c_body with Inline_lexer.Bad_expander ->
+    try Inline.replace_vars l c_body
+    with Inline_lexer.Bad_expander ->
       error "not escaped '$' in inline source code"
   in
   let is_void = List.exists ~f:fst param_i in
