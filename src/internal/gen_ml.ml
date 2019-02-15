@@ -40,11 +40,43 @@ let mk_typ ?attrs ?(l = []) s =
 
 let managed_buffer () = mk_typ "Cstubs_internals.managed_buffer"
 
-let ident_of_ml_prim : type a.
-    a Ctypes_primitive_types.ml_prim -> noalloc:bool -> Parsetree.core_type =
+let prim_supports_attr : type a. a Ctypes_primitive_types.prim -> bool =
   let open Ctypes_primitive_types in
-  fun t ~noalloc ->
-    let f ~a t = if noalloc then mk_typ ~attrs:a t else mk_typ t in
+  fun t ->
+    match Ctypes_primitive_types.ml_prim t with
+    | ML_float -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_int -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_int32 -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_int64 -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_nativeint -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_char -> false
+    | ML_bool -> false
+    | ML_complex -> false
+    | ML_llong -> false
+    | ML_long -> false
+    | ML_sint -> false
+    | ML_size_t -> false
+    | ML_uchar -> false
+    | ML_uint -> false
+    | ML_uint16 -> false
+    | ML_uint32 -> false
+    | ML_uint64 -> false
+    | ML_uint8 -> false
+    | ML_ullong -> false
+    | ML_ulong -> false
+    | ML_ushort -> false
+    | ML_ldouble -> false
+    | ML_complexld -> false
+
+let ident_of_ml_prim : type a.
+    no_attr:bool -> a Ctypes_primitive_types.ml_prim -> Parsetree.core_type =
+  let open Ctypes_primitive_types in
+  fun ~no_attr t ->
+    let f ~a t =
+      if no_attr = false && Ocaml_config.version () >= (4, 3, 0) then
+        mk_typ ~attrs:a t
+      else mk_typ t
+    in
     match t with
     | ML_char -> mk_typ "char"
     | ML_bool -> mk_typ "bool"
@@ -88,7 +120,7 @@ let rec typ_of_ctyp : type a. mod_path:string list -> a typ -> 'b =
       | Void -> (`Complete, mk_typ "unit")
       | Primitive p ->
         ( `Complete
-        , ident_of_ml_prim ~noalloc:false (Ctypes_primitive_types.ml_prim p) )
+        , ident_of_ml_prim ~no_attr:true (Ctypes_primitive_types.ml_prim p) )
       | Pointer x ->
         let i, l = typ_of_ctyp ~mod_path x in
         (i, mk_typ ~l:[l] "Ctypes_static.ptr")
@@ -162,7 +194,7 @@ let create_struct ~mod_path ~type_name ~field_names ~locs str =
   in
   unbox str
 
-let ml_typ_of_arg_typ ~mod_path ~noalloc t =
+let ml_typ_of_arg_typ ~mod_path t =
   let rec iter : type a. bool -> a typ -> 'b =
     let open Ctypes_static in
     fun inside_view -> function
@@ -172,14 +204,15 @@ let ml_typ_of_arg_typ ~mod_path ~noalloc t =
       | Struct _ when inside_view -> (`Incomplete, Typ.any ())
       | Union _ when inside_view -> (`Incomplete, Typ.any ())
       | Abstract _ when inside_view -> (`Incomplete, Typ.any ())
-      | View _ when inside_view -> (`Incomplete, Typ.any ())
       | OCaml _ when inside_view -> (`Incomplete, Typ.any ())
       | Void -> (`Complete, mk_typ "unit")
       | Primitive p ->
-        if inside_view && noalloc = false then (`Incomplete, Typ.any ())
+        if inside_view && prim_supports_attr p = false then
+          (`Incomplete, Typ.any ())
         else
           ( `Complete
-          , ident_of_ml_prim ~noalloc (Ctypes_primitive_types.ml_prim p) )
+          , ident_of_ml_prim ~no_attr:false (Ctypes_primitive_types.ml_prim p)
+          )
       | Pointer x -> (
         match typ_of_ctyp ~mod_path x with
         | `Incomplete, _ -> (`Incomplete, mk_typ ~l:[Typ.any ()] "Ctypes.ptr")
@@ -213,26 +246,31 @@ let ml_typ_of_arg_typ ~mod_path ~noalloc t =
   iter false t
 
 let rec ml_typ_of_return_typ : type a.
-    a typ -> noalloc:bool -> inside_view:bool -> Parsetree.core_type =
+    a typ -> no_attr:bool -> inside_view:bool -> Parsetree.core_type =
   let open Ctypes_static in
-  let mk_ptr noalloc =
-    let attrs = if noalloc = false then None else Some "unboxed" in
+  let mk_ptr no_attr =
+    let attrs =
+      if no_attr = false && Ocaml_config.version () >= (4, 3, 0) then
+        Some "unboxed"
+      else None
+    in
     mk_typ ?attrs "nativeint"
   in
-  fun t ~noalloc ~inside_view ->
+  fun t ~no_attr ~inside_view ->
     match t with
     | Void -> if inside_view then Typ.any () else mk_typ "unit"
     | Primitive p ->
-      if inside_view && noalloc = false then Typ.any ()
-      else ident_of_ml_prim ~noalloc (Ctypes_primitive_types.ml_prim p)
+      if inside_view && prim_supports_attr p = false then Typ.any ()
+      else ident_of_ml_prim ~no_attr (Ctypes_primitive_types.ml_prim p)
     | Struct _ -> managed_buffer ()
     | Union _ -> managed_buffer ()
     | Abstract _ -> managed_buffer ()
-    | Pointer _ -> mk_ptr noalloc
-    | Funptr _ -> mk_ptr noalloc
+    | Pointer _ -> mk_ptr no_attr
+    | Funptr _ -> mk_ptr no_attr
     | View {ty = Struct {tag; _}; format_typ = Some ft; _}
-      when ft == Evil_hack.format_typ -> Marshal.from_string tag 0
-    | View {ty; _} -> ml_typ_of_return_typ ty ~noalloc ~inside_view:true
+      when ft == Evil_hack.format_typ ->
+      Marshal.from_string tag 0
+    | View {ty; _} -> ml_typ_of_return_typ ty ~no_attr ~inside_view:true
     | Array _ as a ->
       U.error "Unexpected array type in the return type: %s"
         (Ctypes.string_of_typ a)
@@ -246,8 +284,8 @@ let rec ml_typ_of_return_typ : type a.
     | OCaml FloatArray ->
       U.error "cstubs does not support OCaml float arrays as return values"
 
-let ml_typ_of_return_typ t ~noalloc =
-  ml_typ_of_return_typ t ~noalloc ~inside_view:false
+let ml_typ_of_return_typ t ~no_attr =
+  ml_typ_of_return_typ t ~no_attr ~inside_view:false
 
 let pat_expand_prim : type a.
     a Ctypes_primitive_types.prim -> Parsetree.pattern =
@@ -291,16 +329,18 @@ let extract_pointer opt =
     match e.pexp_desc with
     | Pexp_apply
         ( { pexp_desc = Pexp_ident {txt = Ldot (Lident "Ctypes", ptr); loc = _}
-          ; pexp_attributes = []; _ }
+          ; pexp_attributes = []
+          ; _ }
         , [(Nolabel, ({pexp_desc = Pexp_ident _; _} as a))] )
-      when (ptr = "ptr" && opt = false) || (opt && ptr = "ptr_opt") -> Some a
+      when (ptr = "ptr" && opt = false) || (opt && ptr = "ptr_opt") ->
+      Some a
     | _ -> None
 
 let extract_pointer_opt = extract_pointer true
 
 let extract_pointer = extract_pointer false
 
-let pat_expand_in t ~noalloc ~fparam ?type_expr param_name =
+let pat_expand_in t ~fparam ?type_expr param_name =
   let error t =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support passing %s as parameter" x
@@ -317,7 +357,7 @@ let pat_expand_in t ~noalloc ~fparam ?type_expr param_name =
       | Void -> (None, None)
       | Primitive p ->
         let r =
-          if inside_view && noalloc then
+          if inside_view && prim_supports_attr p then
             let p = pat_expand_prim p in
             Some [%pat? Ctypes_static.Primitive [%p p]]
           else None
@@ -345,7 +385,8 @@ let pat_expand_in t ~noalloc ~fparam ?type_expr param_name =
               [%pat?
                 Ctypes_static.View
                   { Ctypes_static.write = [%p p]
-                  ; Ctypes_static.ty = [%p pat2]; _ }]
+                  ; Ctypes_static.ty = [%p pat2]
+                  ; _ }]
           in
           let expr = match nexpr2 with None -> nfparam | Some x -> x in
           (Some pat, Some expr) )
@@ -387,7 +428,7 @@ let pat_expand_in t ~noalloc ~fparam ?type_expr param_name =
   in
   iter t ?type_expr ~fparam false
 
-let pat_expand_out ?type_expr ~noalloc t param_name =
+let pat_expand_out ?type_expr t param_name =
   let error t =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support %s as return values" x
@@ -424,7 +465,7 @@ let pat_expand_out ?type_expr ~noalloc t param_name =
     match t with
     | Void -> (None, None)
     | Primitive p ->
-      ( ( if inside_view && noalloc then
+      ( ( if inside_view && prim_supports_attr p then
           let p = pat_expand_prim p in
           Some [%pat? Ctypes_static.Primitive [%p p]]
         else None )
@@ -536,8 +577,8 @@ type param_info =
   ; is_inline_ocaml_type : bool
   ; annot_needed : bool
   ; (* do I need to repeat the Ctype.typ to type the generated function *)
-    constr_ptype : core_type
-  (* x y z Ctypes.typ expanded as far as possible *) }
+    constr_ptype : core_type (* x y z Ctypes.typ expanded as far as possible *)
+  }
 
 type ret_info =
   { rext_ptype : core_type
@@ -596,7 +637,8 @@ let ctypes_typ_constr expr i ct =
     match ct.ptyp_desc with
     | Ptyp_constr
         ({txt = Ldot (Lident "Ctypes", "typ"); _}, [{ptyp_desc = Ptyp_any; _}])
-    -> expr
+      ->
+      expr
     | _ -> Exp.constraint_ expr ct
   in
   let t = Typ.var (poly_prefix i) in
@@ -736,21 +778,20 @@ let collect_info fn ~mod_path cinfo lexpr =
     in
     U.with_loc loc
     @@ fun () ->
-    let noalloc = cinfo.Gen_c.noalloc in
     match fn with
     | CS.Returns t ->
       let ris_inline_ocaml_type = is_inline_ocaml_type t in
-      let rext_ptype = ml_typ_of_return_typ t ~noalloc in
+      let rext_ptype =
+        ml_typ_of_return_typ t ~no_attr:cinfo.Gen_c.return_errno
+      in
       let rext_ptype =
         match cinfo.Gen_c.return_errno with
         | false -> rext_ptype
         | true ->
-          let t = ml_typ_of_return_typ Ctypes.sint ~noalloc:false in
+          let t = ml_typ_of_return_typ Ctypes.sint ~no_attr:true in
           Typ.tuple [rext_ptype; t]
       in
-      let rmatch_pat, res_trans =
-        pat_expand_out ~noalloc ?type_expr t param_name
-      in
+      let rmatch_pat, res_trans = pat_expand_out ?type_expr t param_name in
       let res_trans =
         match (cinfo.Gen_c.return_errno, res_trans) with
         | false, _ | true, None -> res_trans
@@ -778,9 +819,9 @@ let collect_info fn ~mod_path cinfo lexpr =
     | CS.Function (a, b) ->
       let fun_expr, fun_pat = mk_ex_pat @@ param_name () in
       let match_pat, param_trans =
-        pat_expand_in ?type_expr a ~fparam:fun_expr param_name ~noalloc
+        pat_expand_in ?type_expr a ~fparam:fun_expr param_name
       in
-      let type_info, ext_ptype = ml_typ_of_arg_typ a ~mod_path ~noalloc in
+      let type_info, ext_ptype = ml_typ_of_arg_typ a ~mod_path in
       let label = Asttypes.Nolabel in
       let is_inline_ocaml_type = is_inline_ocaml_type a in
       let annot_needed = type_info <> `Complete && param_trans = None in

@@ -3,6 +3,7 @@ break-sequences=true
 doc-comments=before
 field-space=loose
 let-and=sparse
+infix-precedence=parens
 cases-exp-indent=2
 type-decl=sparse
 wrap-comments=true

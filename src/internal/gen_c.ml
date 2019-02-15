@@ -546,30 +546,33 @@ let gen_common a ~locs ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
   let params_length = List.length params in
   if params_length > 1 && List.exists ~f:(fun s -> s.is_void) params then
     error
-      "you can't pass void as parameter to a function with two or more \
-       parameters" ;
+      {| you can't pass void as parameter to a function with two or more parameters |} ;
   if release_runtime_lock then check_no_ocaml a locs ;
+  let native_accessors = Ocaml_config.version () >= (4, 3, 0) in
+  (* [@unboxed] and [@untagged] only supported since 4.03.0. No workarounds in
+     order to support older versions :D *)
   let noalloc =
     noalloc
     && return_errno = false
     && release_runtime_lock = false
     && List.for_all params ~f:(fun x -> x.noalloc_possible)
     && ret.inj_noalloc_possible
-    && Ocaml_config.version () >= (4, 3, 0)
-    (* [@unboxed] and [@untagged] only supported since 4.03.0. No workarounds
-       in order to support older versions :D *)
+    && native_accessors
   in
   let gen_byte_version =
     params_length > 5
-    || noalloc
+    || ( native_accessors
        && ( List.exists params ~f:(fun x -> x.byte_native_accessor_differ)
-          || ret.ibyte_native_accessor_differ )
+          || (ret.ibyte_native_accessor_differ && return_errno = false) ) )
   in
   let buf = Buffer.create 128 in
   let cname_main = stubname in
   let cname_byte = "b" ^ stubname in
   (* first character is always significant. It's not the case for a suffix *)
-  let native_ret_type = if noalloc then ret.inative_ret_type else "value" in
+  let native_ret_type =
+    if native_accessors && return_errno = false then ret.inative_ret_type
+    else "value"
+  in
   Printf.bprintf buf {|#ifdef __cplusplus
 extern "C" {
 #endif
@@ -578,7 +581,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i p ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      if noalloc then Buffer.add_string buf p.native_param_type
+      if native_accessors then Buffer.add_string buf p.native_param_type
       else Buffer.add_string buf "value" ) ;
   Buffer.add_string buf ");\n" ;
   (* byte prototype *)
@@ -600,7 +603,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i x ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      let t = if noalloc then x.native_param_type else "value" in
+      let t = if native_accessors then x.native_param_type else "value" in
       Printf.bprintf buf "%s %s" t x.ocaml_param ) ;
   Buffer.add_string buf ")  {\n" ;
   let params_with_protection =
@@ -634,7 +637,7 @@ extern "C" {
   (* declare variables, convert ocaml values to native ctypes *)
   List.iter params ~f:(fun x ->
       Buffer.add_string buf "  " ;
-      let t = if noalloc then x.prj_noalloc () else x.prj_alloc () in
+      let t = if native_accessors then x.prj_noalloc () else x.prj_alloc () in
       Buffer.add_string buf t ;
       Buffer.add_char buf '\n' ) ;
   (* declare variables for result *)
@@ -659,7 +662,10 @@ extern "C" {
     Printf.bprintf buf "  caml_acquire_runtime_system();\n" ;
   if ret.is_rvoid = false then (
     Buffer.add_string buf "  " ;
-    let s = if noalloc then ret.inj_noalloc () else ret.inj_alloc () in
+    let s =
+      if native_accessors && return_errno = false then ret.inj_noalloc ()
+      else ret.inj_alloc ()
+    in
     Buffer.add_string buf s ;
     Buffer.add_char buf '\n' ) ;
   let return_val = if ret.is_rvoid then "Val_unit" else ret.ocaml_ret_var in
@@ -669,7 +675,9 @@ extern "C" {
   in
   if params_with_protection = [] then
     Printf.bprintf buf "  return %s;" return_val
-  else Printf.bprintf buf "  CAMLreturn(%s);" return_val ;
+  else if native_ret_type = "value" then
+    Printf.bprintf buf "  CAMLreturn(%s);" return_val
+  else Printf.bprintf buf "  CAMLreturnT(%s,%s);" native_ret_type return_val ;
   Buffer.add_string buf "\n}\n" ;
   if gen_byte_version then (
     if params_length > 5 then
@@ -688,11 +696,11 @@ extern "C" {
             if params_length < 6 then Printf.sprintf "a%d" i
             else Printf.sprintf "a[%d]" i
           in
-          if noalloc then x.prj_byte_noalloc t else t )
+          if native_accessors then x.prj_byte_noalloc t else t )
     in
     let t = String.concat ", " l in
     let t = String.concat "" ["("; cname_main; "("; t; ")"; ")"] in
-    let t = if noalloc then ret.inj_byte_noalloc t else t in
+    let t = if native_accessors then ret.inj_byte_noalloc t else t in
     Buffer.add_string buf t ;
     Buffer.add_string buf ");\n}\n" ) ;
   { stub_source = Buffer.contents buf
