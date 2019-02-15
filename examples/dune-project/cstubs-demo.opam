@@ -1,0 +1,24 @@
+opam-version: "2.0"
+maintainer: "my@mail.postbox"
+authors: ["me"]
+homepage: "https://github.com/user/cstubs-demo"
+bug-reports: "https://github.com/user/cstubs-demo/issues"
+dev-repo: "git+https://github.com/user/cstubs-demo.git"
+
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "dune" {build}
+  "ppx_cstubs"
+  "ctypes"
+]
+
+synopsis: """
+Dummy project for ppx_cstubs usage
+"""
+
+description: """
+This example shows how to use ppx_cstubs with dune
+"""

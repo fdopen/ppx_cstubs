@@ -1,0 +1,5 @@
+(executables
+ (names main)
+ (public_names hello)
+ (libraries namelib unix)
+ (package cstubs-demo))

@@ -1,0 +1,22 @@
+; dune.configurator is used to query compilation and link flags
+(rule
+ (targets c_flags.sexp c_library_flags.sexp c_flags.lines)
+ (deps (:discover config/discover.exe))
+ (action (run %{discover})))
+
+; rule to create namelib.ml and namelib_stubs.c from namelib.c.ml
+; c_flags.lines from the rule above is used
+(rule
+  (targets namelib.ml namelib_stubs.c)
+  (deps (:first-dep namelib.c.ml) c_flags.lines)
+  (action (chdir %{workspace_root} (run %{bin:ppx_cstubs} %{first-dep} -o %{targets} -- %{read-lines:c_flags.lines}))))
+
+; normal instructions for creating a library with c stub files
+; c_flags.sexp and c_library_flags.sexp are created above
+(library
+ (name namelib)
+ (c_names namelib_stubs)
+ (c_flags (:include c_flags.sexp))
+ (c_library_flags (:include c_library_flags.sexp))
+ (libraries unix ctypes ppx_cstubs)
+ (synopsis "dummy lib"))

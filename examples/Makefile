@@ -1,13 +1,12 @@
 .PHONY: clean default
 
-OCAML_CONFIG:=$(shell ocamlfind c -config | tr -d '\015')
+OCAML_VERSION:=$(shell ocamlfind c -config | awk -F '[\t\r ]+' '/^version/ {print $$2}')
 OCAML_VERSION_MAJOR=$(word 1, $(subst ., ,$(OCAML_VERSION)))
 OCAML_VERSION_MINOR=$(word 2, $(subst ., ,$(OCAML_VERSION)))
-OCAML_VERSION:=$(shell ocamlfind c -config | awk '/^version/ {print $$2}')
-OCAML_SYSTEM:=$(shell ocamlfind c -config | awk '/^system/ {print $$2}')
 ifeq ($(OCAML_VERSION_MAJOR).$(OCAML_VERSION_MINOR),4.02)
 EXAMPLES=
 else
+OCAML_SYSTEM:=$(shell ocamlfind c -config | awk -F '[\t\r ]+' '/^system/ {print $$2}')
 ifeq ($(OCAML_SYSTEM),linux)
 EXAMPLES=inline.exe time.exe getpwent.exe
 else
@@ -17,13 +16,7 @@ endif
 
 default: ftw.exe $(EXAMPLES)
 
-
-.PHONY: help
-help:
-	echo $(OCAML_VERSION_MAJOR)
-	echo $(OCAML_VERSION_MINOR)
-	echo $(OCAML_SYSTEM)
-
+.SECONDARY:
 %.ml %_stubs.c: %.c.ml
 	@dune exec --no-print-directory --display=quiet -- ppx_cstubs $< -pretty -o-ml $(basename $@).ml -o-c $(basename $@)_stubs.c
 

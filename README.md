@@ -215,6 +215,7 @@ type%c point = {
   x: int;
   y: int;
 } [@@ as_record]
+(* [@@ with_record] will create two types: point and point_record *)
 
 external add: point -> point -> point = "add"
 external add_ptr: point ptr -> point ptr -> point ptr -> void = "add_ptr"
