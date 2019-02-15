@@ -49,8 +49,13 @@ let string_of_typ_exn ?name t =
   if check_printable t then Ctypes_type_printing_fake.string_of_typ ?name t
   else Ctypes.string_of_typ ?name t
 
+type t_typ =
+  | Rvoid
+  | Rfloat
+  | Rother
+
 type ret =
-  { is_rvoid : bool
+  { r_typ : t_typ
   ; ocaml_ret_var : string
   ; c_rvar : string
   ; decl_rvar : unit -> string
@@ -66,12 +71,13 @@ type ret =
 
 let ret_info_prim : type a.
        a Ctypes_primitive_types.prim
+    -> all_float:bool
     -> ocaml_ret_var:string
     -> c_rvar:string
     -> decl_rvar:(unit -> string)
     -> ret =
   let open Ctypes_primitive_types in
-  fun p ~ocaml_ret_var ~c_rvar ~decl_rvar ->
+  fun p ~all_float ~ocaml_ret_var ~c_rvar ~decl_rvar ->
     let inj_alloc, inj_noalloc', to_value =
       let s =
         match p with
@@ -110,44 +116,50 @@ let ret_info_prim : type a.
       , (fun () -> Printf.sprintf "%s = %s;" ocaml_ret_var c_rvar)
       , fun var -> Printf.sprintf "%s(%s)" s var )
     in
-    let inj_noalloc_impossible () =
-      { is_rvoid = false
+    let inj_c ~noalloc r_typ =
+      { r_typ
       ; ocaml_ret_var
       ; c_rvar
       ; decl_rvar
-      ; inj_noalloc_possible = false
+      ; inj_noalloc_possible = noalloc
       ; inj_alloc
       ; inj_noalloc = inj_alloc
       ; inj_byte_noalloc = Std.identity
       ; ibyte_native_accessor_differ = false
       ; inative_ret_type = "value" }
     in
+    let inj_noalloc_impossible () = inj_c ~noalloc:false Rother in
     let inj_float () =
-      { is_rvoid = false
-      ; ocaml_ret_var
-      ; c_rvar
-      ; decl_rvar
-      ; inj_noalloc_possible = true
-      ; inj_alloc
-      ; inj_noalloc = inj_noalloc'
-      ; inj_byte_noalloc = to_value
-      ; ibyte_native_accessor_differ = true
-      ; inative_ret_type = "double" }
+      if Ocaml_config.version () < (4, 3, 0) && all_float = false then
+        inj_c ~noalloc:false Rfloat
+      else
+        { r_typ = Rfloat
+        ; ocaml_ret_var
+        ; c_rvar
+        ; decl_rvar
+        ; inj_noalloc_possible = true
+        ; inj_alloc
+        ; inj_noalloc = inj_noalloc'
+        ; inj_byte_noalloc = to_value
+        ; ibyte_native_accessor_differ = true
+        ; inative_ret_type = "double" }
     in
     let inj_camlint () =
-      { is_rvoid = false
-      ; ocaml_ret_var
-      ; c_rvar
-      ; decl_rvar
-      ; inj_noalloc_possible = true
-      ; inj_alloc
-      ; inj_noalloc = inj_noalloc'
-      ; inj_byte_noalloc = to_value
-      ; ibyte_native_accessor_differ = true
-      ; inative_ret_type = "intnat" }
+      if Ocaml_config.version () < (4, 3, 0) then inj_c ~noalloc:true Rother
+      else
+        { r_typ = Rother
+        ; ocaml_ret_var
+        ; c_rvar
+        ; decl_rvar
+        ; inj_noalloc_possible = true
+        ; inj_alloc
+        ; inj_noalloc = inj_noalloc'
+        ; inj_byte_noalloc = to_value
+        ; ibyte_native_accessor_differ = true
+        ; inative_ret_type = "intnat" }
     in
     let inj_intalias () =
-      { is_rvoid = false
+      { r_typ = Rother
       ; ocaml_ret_var
       ; c_rvar
       ; decl_rvar
@@ -159,16 +171,18 @@ let ret_info_prim : type a.
       ; inative_ret_type = "value" }
     in
     let inj_intb ctype =
-      { is_rvoid = false
-      ; ocaml_ret_var
-      ; c_rvar
-      ; decl_rvar
-      ; inj_noalloc_possible = true
-      ; inj_alloc
-      ; inj_noalloc = inj_noalloc'
-      ; inj_byte_noalloc = to_value
-      ; ibyte_native_accessor_differ = true
-      ; inative_ret_type = ctype }
+      if Ocaml_config.version () < (4, 3, 0) then inj_noalloc_impossible ()
+      else
+        { r_typ = Rother
+        ; ocaml_ret_var
+        ; c_rvar
+        ; decl_rvar
+        ; inj_noalloc_possible = true
+        ; inj_alloc
+        ; inj_noalloc = inj_noalloc'
+        ; inj_byte_noalloc = to_value
+        ; ibyte_native_accessor_differ = true
+        ; inative_ret_type = ctype }
     in
     match p with
     | Schar -> inj_camlint ()
@@ -204,6 +218,7 @@ let ret_info_prim : type a.
 
 let rec ret_info : type a.
        a typ
+    -> all_float:bool
     -> user_noalloc:bool
     -> ocaml_ret_var:string
     -> c_rvar:string
@@ -211,24 +226,9 @@ let rec ret_info : type a.
     -> ret =
   let open Ctypes_static in
   let error s = error "cstubs does not support returning %s" s in
-  fun t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar ->
-    let pptr () =
-      { is_rvoid = false
-      ; ocaml_ret_var
-      ; c_rvar
-      ; decl_rvar
-      ; inj_noalloc_possible = true
-      ; inj_alloc =
-          (fun () ->
-            Printf.sprintf "%s = CTYPES_FROM_PTR(%s);" ocaml_ret_var c_rvar )
-      ; inj_noalloc =
-          (fun () -> Printf.sprintf "%s = (intnat)(%s);" ocaml_ret_var c_rvar)
-      ; inj_byte_noalloc = Printf.sprintf "CTYPES_FROM_PTR(%s)"
-      ; ibyte_native_accessor_differ = true
-      ; inative_ret_type = "intnat" }
-    in
+  fun t ~all_float ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar ->
     let standard ?(is_void = false) ~inj_noalloc_possible inj =
-      { is_rvoid = is_void
+      { r_typ = (if is_void then Rvoid else Rother)
       ; ocaml_ret_var
       ; c_rvar
       ; decl_rvar
@@ -238,6 +238,25 @@ let rec ret_info : type a.
       ; inj_byte_noalloc = Std.identity
       ; ibyte_native_accessor_differ = false
       ; inative_ret_type = "value" }
+    in
+    let pptr () =
+      let inj_alloc () =
+        Printf.sprintf "%s = CTYPES_FROM_PTR(%s);" ocaml_ret_var c_rvar
+      in
+      if Ocaml_config.version () < (4, 3, 0) then
+        standard ~inj_noalloc_possible:false inj_alloc
+      else
+        { r_typ = Rother
+        ; ocaml_ret_var
+        ; c_rvar
+        ; decl_rvar
+        ; inj_noalloc_possible = true
+        ; inj_alloc
+        ; inj_noalloc =
+            (fun () -> Printf.sprintf "%s = (intnat)(%s);" ocaml_ret_var c_rvar)
+        ; inj_byte_noalloc = Printf.sprintf "CTYPES_FROM_PTR(%s)"
+        ; ibyte_native_accessor_differ = true
+        ; inative_ret_type = "intnat" }
     in
     let cp () =
       let inj () =
@@ -250,7 +269,8 @@ let rec ret_info : type a.
     | Void ->
       let inj () = Printf.sprintf "%s = Val_unit;" ocaml_ret_var in
       standard ~inj_noalloc_possible:true ~is_void:true inj
-    | Primitive p -> ret_info_prim p ~ocaml_ret_var ~c_rvar ~decl_rvar
+    | Primitive p ->
+      ret_info_prim p ~all_float ~ocaml_ret_var ~c_rvar ~decl_rvar
     | Pointer _ -> pptr ()
     | Funptr _ -> pptr ()
     | Struct _ -> cp ()
@@ -260,13 +280,13 @@ let rec ret_info : type a.
       let inj () = Printf.sprintf "%s = %s;" ocaml_ret_var c_rvar in
       standard ~inj_noalloc_possible:user_noalloc inj
     | View {ty; _} ->
-      ret_info ty ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar
+      ret_info ty ~all_float ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar
     | Array _ -> error "arrays"
     | Bigarray _ -> error "bigarrays"
     | OCaml _ -> error "ocaml references as return values"
 
 type param =
-  { is_void : bool
+  { typ : t_typ
   ; ocaml_param : string
   ; c_var : string
   ; runtime_protect : bool
@@ -285,9 +305,10 @@ let pinfo_prim : type a.
     -> ctype:string
     -> c_var:string
     -> ocaml_param:string
+    -> all_float:bool
     -> param =
   let open Ctypes_primitive_types in
-  fun p ~ctype ~c_var ~ocaml_param ->
+  fun p ~ctype ~c_var ~ocaml_param ~all_float ->
     let f s =
       ( (fun () -> Printf.sprintf "%s %s = %s(%s);" ctype c_var s ocaml_param)
       , fun g -> Printf.sprintf "%s(%s)" s g )
@@ -331,21 +352,8 @@ let pinfo_prim : type a.
       else fun () ->
         Printf.sprintf "%s %s = (%s)(%s);" ctype c_var ctype ocaml_param
     in
-    let int_t t =
-      { is_void = false
-      ; ocaml_param
-      ; c_var
-      ; runtime_protect = false
-      ; prj_alloc
-      ; noalloc_possible = true
-      ; prj_noalloc = fprj_noalloc t
-      ; prj_byte_noalloc = prj_byte_noalloc'
-      ; byte_native_accessor_differ = true
-      ; native_param_type = t }
-    in
-    let noalloc_int () = int_t "intnat" in
-    let standard () =
-      { is_void = false
+    let standard_c typ =
+      { typ
       ; ocaml_param
       ; c_var
       ; runtime_protect = false
@@ -356,17 +364,36 @@ let pinfo_prim : type a.
       ; byte_native_accessor_differ = false
       ; native_param_type = "value" }
     in
+    let standard () = standard_c Rother in
+    let int_t t =
+      if Ocaml_config.version () < (4, 3, 0) then standard ()
+      else
+        { typ = Rother
+        ; ocaml_param
+        ; c_var
+        ; runtime_protect = false
+        ; prj_alloc
+        ; noalloc_possible = true
+        ; prj_noalloc = fprj_noalloc t
+        ; prj_byte_noalloc = prj_byte_noalloc'
+        ; byte_native_accessor_differ = true
+        ; native_param_type = t }
+    in
+    let noalloc_int () = int_t "intnat" in
     let float () =
-      { is_void = false
-      ; ocaml_param
-      ; c_var
-      ; runtime_protect = false
-      ; prj_alloc
-      ; noalloc_possible = true
-      ; prj_noalloc = fprj_noalloc "double"
-      ; prj_byte_noalloc = prj_byte_noalloc'
-      ; byte_native_accessor_differ = true
-      ; native_param_type = "double" }
+      if Ocaml_config.version () < (4, 3, 0) && all_float = false then
+        standard_c Rfloat
+      else
+        { typ = Rfloat
+        ; ocaml_param
+        ; c_var
+        ; runtime_protect = false
+        ; prj_alloc
+        ; noalloc_possible = true
+        ; prj_noalloc = fprj_noalloc "double"
+        ; prj_byte_noalloc = prj_byte_noalloc'
+        ; byte_native_accessor_differ = true
+        ; native_param_type = "double" }
     in
     let p' = p in
     match p' with
@@ -407,13 +434,14 @@ let rec pinfo : type a b.
     -> user_noalloc:bool
     -> c_var:string
     -> ocaml_param:string
+    -> all_float:bool
     -> param =
   let module C = Ctypes_static in
   let error s = error "cstubs does not support passing %s" s in
-  fun p orig ~user_noalloc ~c_var ~ocaml_param ->
+  fun p orig ~user_noalloc ~c_var ~ocaml_param ~all_float ->
     let standard ?(runtime_protect = true) ?(noalloc_possible = true)
         ?(is_void = false) f =
-      { is_void
+      { typ = (if is_void then Rvoid else Rother)
       ; ocaml_param
       ; c_var
       ; runtime_protect
@@ -451,7 +479,7 @@ let rec pinfo : type a b.
           Printf.sprintf "(void)%s;" ocaml_param )
     | C.Primitive x ->
       let ct = string_of_typ_exn p in
-      pinfo_prim ~ctype:ct x ~c_var ~ocaml_param
+      pinfo_prim ~all_float ~ctype:ct x ~c_var ~ocaml_param
     | C.Array (_, _) -> error "arrays"
     | C.Bigarray _ -> error "bigarrays"
     | C.Pointer _ -> hptr true
@@ -459,7 +487,8 @@ let rec pinfo : type a b.
     | C.View {C.format_typ = Some ft; _} when ft == Evil_hack.format_typ ->
       standard ~noalloc_possible:user_noalloc ~runtime_protect:false (fun () ->
           Printf.sprintf "value %s = %s;" c_var ocaml_param )
-    | C.View {C.ty; _} -> pinfo ty p ~user_noalloc ~c_var ~ocaml_param
+    | C.View {C.ty; _} ->
+      pinfo ty p ~all_float ~user_noalloc ~c_var ~ocaml_param
     | C.Struct _ -> stru ()
     | C.Union _ -> stru ()
     | C.Funptr _ -> hptr false
@@ -477,7 +506,7 @@ let with_loc locs f =
 
 let extract =
   let open Ctypes_static in
-  fun ~user_noalloc ~locs a ->
+  fun ~all_float ~user_noalloc ~locs a ->
     let i = ref 0 in
     let name () =
       let res = Printf.sprintf "ppxc__%x" !i in
@@ -494,12 +523,14 @@ let extract =
         let ocaml_ret_var = name () in
         let c_rvar = name () in
         let decl_rvar () = string_of_typ_exn ~name:c_rvar t in
-        let r = ret_info t ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar in
+        let r =
+          ret_info t ~all_float ~user_noalloc ~ocaml_ret_var ~c_rvar ~decl_rvar
+        in
         (r, [])
       | Function (a, b) ->
         let ocaml_param = name () in
         let c_var = name () in
-        let c = pinfo a ~user_noalloc ~c_var ~ocaml_param in
+        let c = pinfo a ~all_float ~user_noalloc ~c_var ~ocaml_param in
         let r, l = extract b locs in
         (r, c :: l)
     in
@@ -510,6 +541,7 @@ type info =
   ; stub_name : string
   ; stub_name_byte : string option
   ; noalloc : bool
+  ; float : bool
   ; return_errno : bool }
 
 let rec check_no_ocaml : type a. a Ctypes.fn -> Location.t list -> unit =
@@ -542,36 +574,42 @@ and check_no_ocaml_t : type a. Location.t list -> a Ctypes.typ -> unit =
 let gen_common a ~locs ~stubname ~cfunc_value ~release_runtime_lock ~noalloc
     ~return_errno =
   let user_noalloc = noalloc in
-  let ret, params = extract ~user_noalloc ~locs a in
+  let ((ret, params) as rp) = extract ~all_float:false ~user_noalloc ~locs a in
+  let ret, params =
+    if
+      Ocaml_config.version () >= (4, 3, 0)
+      || user_noalloc = false
+      || return_errno
+      || release_runtime_lock
+      || ret.r_typ <> Rfloat
+      || List.exists params ~f:(fun x -> x.typ <> Rfloat)
+    then rp
+    else extract ~all_float:true ~user_noalloc ~locs a
+  in
   let params_length = List.length params in
-  if params_length > 1 && List.exists ~f:(fun s -> s.is_void) params then
+  if params_length > 1 && List.exists ~f:(fun s -> s.typ = Rvoid) params then
     error
       {| you can't pass void as parameter to a function with two or more parameters |} ;
   if release_runtime_lock then check_no_ocaml a locs ;
-  let native_accessors = Ocaml_config.version () >= (4, 3, 0) in
-  (* [@unboxed] and [@untagged] only supported since 4.03.0. No workarounds in
-     order to support older versions :D *)
+  (* noalloc must be kept in sync with float formular above for OCaml 4.02 *)
   let noalloc =
     noalloc
     && return_errno = false
     && release_runtime_lock = false
     && List.for_all params ~f:(fun x -> x.noalloc_possible)
     && ret.inj_noalloc_possible
-    && native_accessors
   in
   let gen_byte_version =
     params_length > 5
-    || ( native_accessors
-       && ( List.exists params ~f:(fun x -> x.byte_native_accessor_differ)
-          || (ret.ibyte_native_accessor_differ && return_errno = false) ) )
+    || List.exists params ~f:(fun x -> x.byte_native_accessor_differ)
+    || (ret.ibyte_native_accessor_differ && return_errno = false)
   in
   let buf = Buffer.create 128 in
   let cname_main = stubname in
   let cname_byte = "b" ^ stubname in
   (* first character is always significant. It's not the case for a suffix *)
   let native_ret_type =
-    if native_accessors && return_errno = false then ret.inative_ret_type
-    else "value"
+    if return_errno then "value" else ret.inative_ret_type
   in
   Printf.bprintf buf {|#ifdef __cplusplus
 extern "C" {
@@ -581,8 +619,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i p ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      if native_accessors then Buffer.add_string buf p.native_param_type
-      else Buffer.add_string buf "value" ) ;
+      Buffer.add_string buf p.native_param_type ) ;
   Buffer.add_string buf ");\n" ;
   (* byte prototype *)
   if gen_byte_version then
@@ -603,8 +640,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i x ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      let t = if native_accessors then x.native_param_type else "value" in
-      Printf.bprintf buf "%s %s" t x.ocaml_param ) ;
+      Printf.bprintf buf "%s %s" x.native_param_type x.ocaml_param ) ;
   Buffer.add_string buf ")  {\n" ;
   let params_with_protection =
     if release_runtime_lock = false && user_noalloc = true then []
@@ -637,17 +673,16 @@ extern "C" {
   (* declare variables, convert ocaml values to native ctypes *)
   List.iter params ~f:(fun x ->
       Buffer.add_string buf "  " ;
-      let t = if native_accessors then x.prj_noalloc () else x.prj_alloc () in
-      Buffer.add_string buf t ;
+      Buffer.add_string buf @@ x.prj_noalloc () ;
       Buffer.add_char buf '\n' ) ;
   (* declare variables for result *)
-  if ret.is_rvoid = false then (
+  if ret.r_typ <> Rvoid then (
     Printf.bprintf buf "  %s %s;\n" native_ret_type ret.ocaml_ret_var ;
     Printf.bprintf buf "  %s;\n" @@ ret.decl_rvar () ) ;
   if release_runtime_lock then
     Printf.bprintf buf "  caml_release_runtime_system();\n" ;
   if return_errno then Printf.bprintf buf "  errno = 0;\n" ;
-  if ret.is_rvoid = false then Printf.bprintf buf "  %s = " ret.c_rvar
+  if ret.r_typ <> Rvoid then Printf.bprintf buf "  %s = " ret.c_rvar
   else Buffer.add_string buf "  " ;
   ( match cfunc_value with
   | `Fun cfunc ->
@@ -655,20 +690,19 @@ extern "C" {
     Buffer.add_char buf '(' ;
     List.iteri params ~f:(fun i x ->
         if i <> 0 then Buffer.add_string buf ", " ;
-        if x.is_void = false then Buffer.add_string buf x.c_var ) ;
+        if x.typ <> Rvoid then Buffer.add_string buf x.c_var ) ;
     Buffer.add_string buf ");\n"
   | `Value v -> Printf.bprintf buf "&%s;\n" v ) ;
   if release_runtime_lock then
     Printf.bprintf buf "  caml_acquire_runtime_system();\n" ;
-  if ret.is_rvoid = false then (
+  if ret.r_typ <> Rvoid then (
     Buffer.add_string buf "  " ;
-    let s =
-      if native_accessors && return_errno = false then ret.inj_noalloc ()
-      else ret.inj_alloc ()
-    in
+    let s = if return_errno then ret.inj_alloc () else ret.inj_noalloc () in
     Buffer.add_string buf s ;
     Buffer.add_char buf '\n' ) ;
-  let return_val = if ret.is_rvoid then "Val_unit" else ret.ocaml_ret_var in
+  let return_val =
+    if ret.r_typ = Rvoid then "Val_unit" else ret.ocaml_ret_var
+  in
   let return_val =
     if return_errno = false then return_val
     else Printf.sprintf "ctypes_pair_with_errno(%s)" return_val
@@ -696,17 +730,23 @@ extern "C" {
             if params_length < 6 then Printf.sprintf "a%d" i
             else Printf.sprintf "a[%d]" i
           in
-          if native_accessors then x.prj_byte_noalloc t else t )
+          x.prj_byte_noalloc t )
     in
     let t = String.concat ", " l in
     let t = String.concat "" ["("; cname_main; "("; t; ")"; ")"] in
-    let t = if native_accessors then ret.inj_byte_noalloc t else t in
+    let t = if return_errno then t else ret.inj_byte_noalloc t in
     Buffer.add_string buf t ;
     Buffer.add_string buf ");\n}\n" ) ;
+  let float =
+    noalloc
+    && ret.r_typ = Rfloat
+    && List.for_all params ~f:(fun x -> x.typ = Rfloat)
+  in
   { stub_source = Buffer.contents buf
   ; stub_name = cname_main
   ; stub_name_byte = (if gen_byte_version then Some cname_byte else None)
   ; noalloc
+  ; float
   ; return_errno }
 
 let gen_fun a ~locs ~stubname ~cfunc ~release_runtime_lock ~noalloc

@@ -40,11 +40,12 @@ let mk_typ ?attrs ?(l = []) s =
 
 let managed_buffer () = mk_typ "Cstubs_internals.managed_buffer"
 
-let prim_supports_attr : type a. a Ctypes_primitive_types.prim -> bool =
+let prim_supports_attr : type a.
+    a Ctypes_primitive_types.prim -> cinfo:Gen_c.info -> bool =
   let open Ctypes_primitive_types in
-  fun t ->
+  fun t ~cinfo ->
     match Ctypes_primitive_types.ml_prim t with
-    | ML_float -> Ocaml_config.version () >= (4, 3, 0)
+    | ML_float -> Ocaml_config.version () >= (4, 3, 0) || cinfo.Gen_c.float
     | ML_int -> Ocaml_config.version () >= (4, 3, 0)
     | ML_int32 -> Ocaml_config.version () >= (4, 3, 0)
     | ML_int64 -> Ocaml_config.version () >= (4, 3, 0)
@@ -194,7 +195,7 @@ let create_struct ~mod_path ~type_name ~field_names ~locs str =
   in
   unbox str
 
-let ml_typ_of_arg_typ ~mod_path t =
+let ml_typ_of_arg_typ ~mod_path ~cinfo t =
   let rec iter : type a. bool -> a typ -> 'b =
     let open Ctypes_static in
     fun inside_view -> function
@@ -207,7 +208,7 @@ let ml_typ_of_arg_typ ~mod_path t =
       | OCaml _ when inside_view -> (`Incomplete, Typ.any ())
       | Void -> (`Complete, mk_typ "unit")
       | Primitive p ->
-        if inside_view && prim_supports_attr p = false then
+        if inside_view && prim_supports_attr p ~cinfo = false then
           (`Incomplete, Typ.any ())
         else
           ( `Complete
@@ -246,31 +247,34 @@ let ml_typ_of_arg_typ ~mod_path t =
   iter false t
 
 let rec ml_typ_of_return_typ : type a.
-    a typ -> no_attr:bool -> inside_view:bool -> Parsetree.core_type =
+    a typ -> inside_view:bool -> cinfo:Gen_c.info -> Parsetree.core_type =
   let open Ctypes_static in
-  let mk_ptr no_attr =
+  let mk_ptr cinfo =
     let attrs =
-      if no_attr = false && Ocaml_config.version () >= (4, 3, 0) then
-        Some "unboxed"
+      if
+        cinfo.Gen_c.return_errno = false && Ocaml_config.version () >= (4, 3, 0)
+      then Some "unboxed"
       else None
     in
     mk_typ ?attrs "nativeint"
   in
-  fun t ~no_attr ~inside_view ->
+  fun t ~inside_view ~cinfo ->
     match t with
     | Void -> if inside_view then Typ.any () else mk_typ "unit"
     | Primitive p ->
-      if inside_view && prim_supports_attr p = false then Typ.any ()
-      else ident_of_ml_prim ~no_attr (Ctypes_primitive_types.ml_prim p)
+      if inside_view && prim_supports_attr p ~cinfo = false then Typ.any ()
+      else
+        ident_of_ml_prim ~no_attr:cinfo.Gen_c.return_errno
+          (Ctypes_primitive_types.ml_prim p)
     | Struct _ -> managed_buffer ()
     | Union _ -> managed_buffer ()
     | Abstract _ -> managed_buffer ()
-    | Pointer _ -> mk_ptr no_attr
-    | Funptr _ -> mk_ptr no_attr
+    | Pointer _ -> mk_ptr cinfo
+    | Funptr _ -> mk_ptr cinfo
     | View {ty = Struct {tag; _}; format_typ = Some ft; _}
       when ft == Evil_hack.format_typ ->
       Marshal.from_string tag 0
-    | View {ty; _} -> ml_typ_of_return_typ ty ~no_attr ~inside_view:true
+    | View {ty; _} -> ml_typ_of_return_typ ty ~cinfo ~inside_view:true
     | Array _ as a ->
       U.error "Unexpected array type in the return type: %s"
         (Ctypes.string_of_typ a)
@@ -284,8 +288,8 @@ let rec ml_typ_of_return_typ : type a.
     | OCaml FloatArray ->
       U.error "cstubs does not support OCaml float arrays as return values"
 
-let ml_typ_of_return_typ t ~no_attr =
-  ml_typ_of_return_typ t ~no_attr ~inside_view:false
+let ml_typ_of_return_typ t ~cinfo =
+  ml_typ_of_return_typ t ~inside_view:false ~cinfo
 
 let pat_expand_prim : type a.
     a Ctypes_primitive_types.prim -> Parsetree.pattern =
@@ -340,7 +344,7 @@ let extract_pointer_opt = extract_pointer true
 
 let extract_pointer = extract_pointer false
 
-let pat_expand_in t ~fparam ?type_expr param_name =
+let pat_expand_in t ~fparam ~cinfo ?type_expr param_name =
   let error t =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support passing %s as parameter" x
@@ -357,7 +361,7 @@ let pat_expand_in t ~fparam ?type_expr param_name =
       | Void -> (None, None)
       | Primitive p ->
         let r =
-          if inside_view && prim_supports_attr p then
+          if inside_view && prim_supports_attr ~cinfo p then
             let p = pat_expand_prim p in
             Some [%pat? Ctypes_static.Primitive [%p p]]
           else None
@@ -428,7 +432,7 @@ let pat_expand_in t ~fparam ?type_expr param_name =
   in
   iter t ?type_expr ~fparam false
 
-let pat_expand_out ?type_expr t param_name =
+let pat_expand_out ?type_expr ~cinfo t param_name =
   let error t =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support %s as return values" x
@@ -465,7 +469,7 @@ let pat_expand_out ?type_expr t param_name =
     match t with
     | Void -> (None, None)
     | Primitive p ->
-      ( ( if inside_view && prim_supports_attr p then
+      ( ( if inside_view && prim_supports_attr ~cinfo p then
           let p = pat_expand_prim p in
           Some [%pat? Ctypes_static.Primitive [%p p]]
         else None )
@@ -589,7 +593,13 @@ type ret_info =
   ; rconstr_ptype : core_type }
 
 let build_external ~ocaml_name param_infos ret_info cinfo =
-  let prim = [cinfo.Gen_c.stub_name] in
+  let prim =
+    if Ocaml_config.version () >= (4, 3, 0) then []
+    else
+      let l = if cinfo.Gen_c.noalloc then ["noalloc"] else [] in
+      if cinfo.Gen_c.float then "float" :: l else l
+  in
+  let prim = cinfo.Gen_c.stub_name :: prim in
   let prim =
     match cinfo.Gen_c.stub_name_byte with None -> prim | Some s -> s :: prim
   in
@@ -599,9 +609,11 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
       ~f:(fun a acc -> Typ.arrow a.label a.ext_ptype acc )
   in
   let attrs =
-    match cinfo.Gen_c.noalloc with
-    | false -> []
-    | true -> [(U.mk_loc "noalloc", PStr [])]
+    if Ocaml_config.version () < (4, 3, 0) then []
+    else
+      match cinfo.Gen_c.noalloc with
+      | false -> []
+      | true -> [(U.mk_loc "noalloc", PStr [])]
   in
   let p = Val.mk ~attrs ~prim name t in
   Str.primitive p
@@ -781,17 +793,17 @@ let collect_info fn ~mod_path cinfo lexpr =
     match fn with
     | CS.Returns t ->
       let ris_inline_ocaml_type = is_inline_ocaml_type t in
-      let rext_ptype =
-        ml_typ_of_return_typ t ~no_attr:cinfo.Gen_c.return_errno
-      in
+      let rext_ptype = ml_typ_of_return_typ t ~cinfo in
       let rext_ptype =
         match cinfo.Gen_c.return_errno with
         | false -> rext_ptype
         | true ->
-          let t = ml_typ_of_return_typ Ctypes.sint ~no_attr:true in
+          let t = ml_typ_of_return_typ Ctypes.sint ~cinfo in
           Typ.tuple [rext_ptype; t]
       in
-      let rmatch_pat, res_trans = pat_expand_out ?type_expr t param_name in
+      let rmatch_pat, res_trans =
+        pat_expand_out ~cinfo ?type_expr t param_name
+      in
       let res_trans =
         match (cinfo.Gen_c.return_errno, res_trans) with
         | false, _ | true, None -> res_trans
@@ -819,9 +831,9 @@ let collect_info fn ~mod_path cinfo lexpr =
     | CS.Function (a, b) ->
       let fun_expr, fun_pat = mk_ex_pat @@ param_name () in
       let match_pat, param_trans =
-        pat_expand_in ?type_expr a ~fparam:fun_expr param_name
+        pat_expand_in ~cinfo ?type_expr a ~fparam:fun_expr param_name
       in
-      let type_info, ext_ptype = ml_typ_of_arg_typ a ~mod_path in
+      let type_info, ext_ptype = ml_typ_of_arg_typ a ~cinfo ~mod_path in
       let label = Asttypes.Nolabel in
       let is_inline_ocaml_type = is_inline_ocaml_type a in
       let annot_needed = type_info <> `Complete && param_trans = None in

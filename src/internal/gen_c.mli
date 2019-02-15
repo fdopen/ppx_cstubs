@@ -18,6 +18,7 @@ type info =
   ; stub_name : string
   ; stub_name_byte : string option
   ; noalloc : bool
+  ; float : bool
   ; return_errno : bool }
 
 val gen_fun :
