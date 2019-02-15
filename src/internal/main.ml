@@ -31,6 +31,15 @@ let cpp_main () =
     Printf.sprintf "%s [<file>] -o-ml my_module.ml -o-c my_module_stubs.c"
       executable
   in
+  let anon_is_target = ref false in
+  let na f p =
+    anon_is_target := false ;
+    f p
+  in
+  let arg_set_string v = Arg.String (na (fun s -> v := s)) in
+  let arg_set v = Arg.Unit (na (fun () -> v := true)) in
+  let arg_string f = Arg.String (na f) in
+  let arg_set_int v = Arg.Int (na (fun a -> v := a)) in
   let ml_output = ref "" in
   let c_output = ref "" in
   let pretty_print = ref false in
@@ -45,42 +54,61 @@ let cpp_main () =
   let verbose = ref 0 in
   let absname = ref false in
   let nopervasives = ref false in
+  let set_output_by_suffix s =
+    match CCString.Split.right ~by:"." s with
+    | None ->
+      if CCString.lowercase_ascii s = "none" then c_output := s
+      else raise (Arg.Bad s)
+    | Some (_, suf) -> (
+      if String.length suf = 0 then raise (Arg.Bad s) ;
+      match CCChar.lowercase_ascii suf.[0] with
+      | 'r' | 'm' -> ml_output := s
+      | 'c' -> c_output := s
+      | _ -> raise (Arg.Bad s) )
+  in
   let spec =
     Arg.align
       [ ( "-o-ml"
-        , Arg.Set_string ml_output
+        , arg_set_string ml_output
         , "<file>    write generated OCaml file to <file>" )
       ; ( "-o-c"
-        , Arg.Set_string c_output
+        , arg_set_string c_output
         , "<file>    write generated C file to <file>. 'none' to disable c \
            output" )
-      ; ( "-cflag"
-        , Arg.String (fun s -> cflags := s :: !cflags)
-        , "<opt>     Pass option <opt> to the C compiler" )
-      ; ( "-I"
+      ; ( "-o"
         , Arg.String
             (fun s ->
+              anon_is_target := true ;
+              set_output_by_suffix s )
+        , "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> \
+           and <file2>. The files must have proper suffixes." )
+      ; ( "-cflag"
+        , arg_string (fun s -> cflags := s :: !cflags)
+        , "<opt>     Pass option <opt> to the C compiler" )
+      ; ( "-I"
+        , arg_string (fun s ->
               include_dirs := s :: !include_dirs ;
-              oflags := s :: "-I" :: !oflags )
+              oflags := s :: "-I" :: !oflags ;
+              anon_is_target := false )
         , "<dir>     Add <dir> to the list of include directories" )
       ; ( "-pkg"
-        , Arg.String (fun s -> findlib_pkgs := s :: !findlib_pkgs)
+        , arg_string (fun s -> findlib_pkgs := s :: !findlib_pkgs)
         , "<opt>     import types from findlib package <opt>" )
       ; ( "-toolchain"
-        , Arg.String (fun s -> toolchain := Some s)
+        , arg_string (fun s -> toolchain := Some s)
         , "<opt>     use ocamlfind toolchain <opt>" )
-      ; ("-keep-tmp", Arg.Set keep_tmp, "     Don't delete temporary files")
+      ; ("-keep-tmp", arg_set keep_tmp, "     Don't delete temporary files")
       ; ( "-pretty"
-        , Arg.Set pretty_print
+        , arg_set pretty_print
         , "     Print a human readable ml file instead of the binary ast" )
       ; ( "-verbose"
-        , Arg.Set_int verbose
+        , arg_set_int verbose
         , "<level>   Set the level of verbosity. By default, it is set to 0, \
            what means no debug messages at all on stderr" )
       ; ( "-absname"
-        , Arg.Set absname
+        , arg_set absname
         , "     Show absolute filenames in error messages" )
-      ; ("-nopervasives", Arg.Set nopervasives, "     (undocumented)")
+      ; ("-nopervasives", arg_set nopervasives, "     (undocumented)")
       ; ( "--"
         , Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest)
         , "     Pass all following parameters verbatim to the c compiler" ) ]
@@ -102,12 +130,16 @@ let cpp_main () =
   Arg.parse spec
     (fun a ->
       if a = "" then raise (Arg.Bad a) ;
-      let la = CCString.lowercase_ascii a in
-      if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo"
-      then add_cma_file a
-      else (
-        if !source <> None then raise (Arg.Bad a) ;
-        source := Some a ) )
+      if !anon_is_target then (
+        anon_is_target := false ;
+        set_output_by_suffix a )
+      else
+        let la = CCString.lowercase_ascii a in
+        if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo"
+        then add_cma_file a
+        else (
+          if !source <> None then raise (Arg.Bad a) ;
+          source := Some a ) )
     usage ;
   let source =
     match !source with
