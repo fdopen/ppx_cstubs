@@ -73,15 +73,15 @@ let cpp_main () =
         , "<file>    write generated OCaml file to <file>" )
       ; ( "-o-c"
         , arg_set_string c_output
-        , "<file>    write generated C file to <file>. 'none' to disable c \
-           output" )
+        , "<file>    write generated C file to <file>. 'none' to disable c output"
+        )
       ; ( "-o"
         , Arg.String
             (fun s ->
               anon_is_target := true ;
               set_output_by_suffix s )
-        , "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> \
-           and <file2>. The files must have proper suffixes." )
+        , "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes."
+        )
       ; ( "-cflag"
         , arg_string (fun s -> cflags := s :: !cflags)
         , "<opt>     Pass option <opt> to the C compiler" )
@@ -103,8 +103,8 @@ let cpp_main () =
         , "     Print a human readable ml file instead of the binary ast" )
       ; ( "-verbose"
         , arg_set_int verbose
-        , "<level>   Set the level of verbosity. By default, it is set to 0, \
-           what means no debug messages at all on stderr" )
+        , "<level>   Set the level of verbosity. By default, it is set to 0, what means no debug messages at all on stderr"
+        )
       ; ( "-absname"
         , arg_set absname
         , "     Show absolute filenames in error messages" )
@@ -130,16 +130,17 @@ let cpp_main () =
   Arg.parse spec
     (fun a ->
       if a = "" then raise (Arg.Bad a) ;
-      if !anon_is_target then (
+      let la = CCString.lowercase_ascii a in
+      if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo"
+      then (
+        anon_is_target := false ;
+        add_cma_file a )
+      else if !anon_is_target then (
         anon_is_target := false ;
         set_output_by_suffix a )
-      else
-        let la = CCString.lowercase_ascii a in
-        if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo"
-        then add_cma_file a
-        else (
-          if !source <> None then raise (Arg.Bad a) ;
-          source := Some a ) )
+      else (
+        if !source <> None then raise (Arg.Bad a) ;
+        source := Some a ) )
     usage ;
   let source =
     match !source with

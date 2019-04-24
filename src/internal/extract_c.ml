@@ -132,7 +132,7 @@ let cnt =
     res
 
 let int_to_char_array i =
-  let s = Printf.sprintf "%d" i in
+  let s = string_of_int i in
   let b = Buffer.create (String.length s * 4) in
   String.iter (fun c -> Printf.bprintf b "'%c'," c) s ;
   Buffer.contents b
@@ -198,9 +198,7 @@ let prepare_extract_int ?(disable_checks = false) ?min ?max ~buf ~c_header
     let id_x, str =
       gen
       @@ Printf.sprintf
-           "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | \
-            (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | \
-            (((unsigned)(%s)) << 4u) )"
+           "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
            s_int s_min s_max s_user_min s_user_max
     in
     Buffer.add_string buf str ;
@@ -225,8 +223,10 @@ let threads () =
   match Findlib.package_directory "threads" with
   | exception Fl_package_base.No_such_package _ -> None
   | dir ->
-    if List.exists !Config.load_path ~f:(( = ) dir) then Some "-thread"
-    else None
+    let dir = Util.unslashify_path dir in
+    List.find_map !Config.load_path ~f:(fun d ->
+        let d = Util.unslashify_path d in
+        if d = dir then Some "-thread" else None )
 
 type obj = (int, string) Hashtbl.t
 
@@ -236,7 +236,7 @@ let compile ?ebuf c_prog =
   finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln)
   @@ fun () ->
   CCIO.with_out ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] cfln
-    (fun ch -> output_string ch c_prog ) ;
+    (fun ch -> output_string ch c_prog) ;
   let obj = Filename.chop_suffix cfln ".c" ^ Ocaml_config.ext_obj () in
   let c_flags =
     (* that's a suboptimal solution. `ocamlc -c foo.c -o foo.o` doesn't work:
@@ -311,8 +311,7 @@ let compile ?ebuf c_prog =
                 Hashtbl.add htl (int_of_string id1) str ;
                 Re.Group.stop g 0 )
               else succ i
-            with
-            | Not_found | Failure _ -> succ i
+            with Not_found | Failure _ -> succ i
           in
           iter end' s len htl
     in
@@ -368,10 +367,10 @@ let extract info htl =
       | exception Failure _ -> r.return (Error Info_not_found)
       | x -> x
     in
-    let verify i er = if int' land (1 lsl i) = 0 then r.return (Error er) in
-    verify 0 Not_an_integer ;
-    verify 1 (Underflow res) ;
-    verify 2 (Overflow res) ;
-    verify 3 (User_underflow res) ;
-    verify 4 (User_overflow res) ;
+    let er er = r.return (Error er) in
+    if int' land (1 lsl 0) = 0 then er Not_an_integer ;
+    if int' land (1 lsl 1) = 0 then er (Underflow res) ;
+    if int' land (1 lsl 2) = 0 then er (Overflow res) ;
+    if int' land (1 lsl 3) = 0 then er (User_underflow res) ;
+    if int' land (1 lsl 4) = 0 then er (User_overflow res) ;
     Ok res

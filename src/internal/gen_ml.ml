@@ -606,7 +606,7 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
   let name = U.mk_loc ocaml_name in
   let t =
     ListLabels.fold_right param_infos ~init:ret_info.rext_ptype
-      ~f:(fun a acc -> Typ.arrow a.label a.ext_ptype acc )
+      ~f:(fun a acc -> Typ.arrow a.label a.ext_ptype acc)
   in
   let attrs =
     if Ocaml_config.version () < (4, 3, 0) then []
@@ -933,10 +933,8 @@ let common ~mod_path fn ext_name cinfo common =
             let e = Exp.constraint_ fn_expr typ_fn in
             Some [%expr if false then [%e ignore_fun ()] [%e e]]
           else None
-        | `Extern (el, retexpr) | `Foreign_value (el, retexpr) -> (
-          match build_ignore_expr (el, param_infos) (retexpr, ret_info) with
-          | None -> None
-          | Some e -> Some e )
+        | `Extern (el, retexpr) | `Foreign_value (el, retexpr) ->
+          build_ignore_expr (el, param_infos) (retexpr, ret_info)
       in
       match dexpr with
       | None -> no_type_repeat ()

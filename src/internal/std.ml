@@ -144,6 +144,26 @@ module Util = struct
 
   let no_warn_unused name expr =
     no_warn_unused_post406 name expr |> no_warn_unused_pre406
+
+  let replace ~old ~new' s =
+    let len = String.length s in
+    let b = Bytes.create len in
+    for i = 0 to pred len do
+      let x = s.[i] in
+      Bytes.set b i (if x = old then new' else x)
+    done ;
+    ( if len > 1 then
+      let c1 = Bytes.get b 0 in
+      let c2 = Bytes.get b 1 in
+      if c2 = ':' && c1 >= 'a' && c1 <= 'z' && (len = 2 || Bytes.get b 2 = new')
+      then Bytes.set b 0 (CCChar.uppercase_ascii c1) ) ;
+    Bytes.unsafe_to_string b
+
+  (*let slashify_path s = if Sys.win32 then replace ~old:'\\' ~new':'/' s else
+    s *)
+
+  let unslashify_path s =
+    if Sys.win32 then replace ~old:'/' ~new':'\\' s else s
 end
 
 module Result = struct

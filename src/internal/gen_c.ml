@@ -488,7 +488,9 @@ let rec pinfo : type a b.
       standard ~noalloc_possible:user_noalloc ~runtime_protect:false (fun () ->
           Printf.sprintf "value %s = %s;" c_var ocaml_param )
     | C.View {C.ty; _} ->
-      pinfo ty p ~all_float ~user_noalloc ~c_var ~ocaml_param
+      (* TODO: if there is a view of a view and both define format_typ, which
+         one should be used? *)
+      pinfo ty orig ~all_float ~user_noalloc ~c_var ~ocaml_param
     | C.Struct _ -> stru ()
     | C.Union _ -> stru ()
     | C.Funptr _ -> hptr false
@@ -876,10 +878,7 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc l =
   if unused_vars && is_void = false then
     error "not all labelled parameters have been used" ;
   if
-    is_void
-    && CCString.for_all
-         (function ' ' | '\n' | '\t' -> false | _ -> true)
-         c_body
+    CCString.for_all (function ' ' | '\n' | '\t' -> false | _ -> true) c_body
   then
     (* avoid muddling `external foo : ...` and `external%c foo : ... ` *)
     error "function code doesn't look like inline code" ;

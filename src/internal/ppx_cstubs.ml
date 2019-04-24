@@ -89,7 +89,7 @@ module Extract = struct
       let t, c = type_to_ctype_fn ~lookup a in
       (([%expr Ctypes.static_funptr [%e t]] [@metaloc loc]), c)
     | Ptyp_constr ({txt = Lident (("funptr" | "funptr_opt") as ns); loc}, [a])
-    ->
+      ->
       U.with_loc loc
       @@ fun () ->
       let t, c = type_to_ctype_fn ~lookup a in
@@ -215,7 +215,8 @@ module Extract = struct
                 [ { pstr_desc =
                       Pstr_eval
                         ( {pexp_desc = Pexp_constant (Pconst_string (x, _)); _}
-                        , [] ); _ } ] ->
+                        , [] )
+                  ; _ } ] ->
               Some x
             | _ -> error ~loc:x.loc "unsupported expression in cname" )
     in
@@ -229,8 +230,8 @@ module Extract = struct
             match t with
             | PStr
                 [ { pstr_desc =
-                      Pstr_eval (({pexp_desc = Pexp_fun _; _} as e), []); _ }
-                ] ->
+                      Pstr_eval (({pexp_desc = Pexp_fun _; _} as e), [])
+                  ; _ } ] ->
               Some e
             | _ -> error ~loc:x.loc "unsupported expression in unexpected" )
     in
@@ -490,8 +491,7 @@ module Ppx_mod = struct
         let module A = Ast_helper in
         let ms = A.Mod.structure l in
         let mb = A.Mb.mk (U.mk_loc (main_name ())) ms in
-        let generated_module = A.Str.module_ mb in
-        [generated_module]
+        [A.Str.module_ mb]
       in
       match !Options.mode with
       | Options.Regular -> l
@@ -573,8 +573,7 @@ module C_content = struct
           @@ fun ch -> output_string ch source )
       | Some _, None ->
         prerr_endline
-          "no c file necessary, set -o-c to 'none' and update your build \
-           instructions" ;
+          "no c file necessary, set -o-c to 'none' and update your build instructions" ;
         exit 2
       | None, None -> ()
       | None, Some _ -> failwith "internal error: c source not generated"
@@ -850,7 +849,9 @@ module H = struct
       let script =
         [%stri
           let () =
-            let (ppxc__s : _ Ctypes.typ) = [%e seal_struct] in
+            let (ppxc__s : _ Ctypes.structured Ctypes.typ) =
+              [%e seal_struct]
+            in
             let () = Ctypes.ppxc__private_seal ppxc__s in
             Ppxc__script.Extract.seal [%e id_size.Id.script_param]
               [%e id_align.Id.script_param] ppxc__s]
@@ -874,7 +875,8 @@ module H = struct
     | c -> (
       match c.[0] with
       | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | '<' | '=' | '>'
-       |'?' | '@' | '^' | '|' | '~' -> true
+       |'?' | '@' | '^' | '|' | '~' ->
+        true
       | _ -> false )
 
   let rec build_ctypes_fn params ret =
@@ -1486,7 +1488,7 @@ module H = struct
       then error "struct entry marked as bitmask" ;
       let check_type s =
         if Hashtbl.mem Keywords.htl_types s then
-          error "type name %s is reserverd, choose another name" s
+          error "type name %S is reserverd, choose another name" s
       in
       let names =
         List.fold_left ~init:[] tl ~f:(fun ac -> function
@@ -1520,8 +1522,7 @@ module H = struct
               | _ when enforce_bitmask = false -> e
               | Enum_both ->
                 error
-                  "@@@@with_bitmask and type%%c_bitmask f = ... are \
-                   incompatible"
+                  "@@@@with_bitmask and type%%c_bitmask f = ... are incompatible"
               | Enum_normal ->
                 if e.etypedef then
                   error
@@ -1602,8 +1603,8 @@ let mark_if_used ?pexp_outer mapper stri pvb pexp =
     | PStr
         [ { pstr_desc =
               Pstr_eval
-                ({pexp_desc = Pexp_constant (Pconst_integer (x, None)); _}, []); _
-          } ] ->
+                ({pexp_desc = Pexp_constant (Pconst_integer (x, None)); _}, [])
+          ; _ } ] ->
       int_of_string x
     | _ -> error "attribute %S is reserved" Attributes.replace_attr_string
   in
@@ -1623,9 +1624,10 @@ let mark_if_used ?pexp_outer mapper stri pvb pexp =
 let remove_empty str =
   List.filter str ~f:(function
     | { pstr_desc =
-          Pstr_value (Nonrecursive, [{pvb_attributes = [({txt; _}, _)]; _}]); _
-      }
-      when txt == Attributes.remove_string -> false
+          Pstr_value (Nonrecursive, [{pvb_attributes = [({txt; _}, _)]; _}])
+      ; _ }
+      when txt == Attributes.remove_string ->
+      false
     | _ -> true )
 
 let mark_empty a =
@@ -1635,7 +1637,8 @@ let mark_empty a =
     | Ppat_construct ({txt = Longident.Lident "()"; _}, None) -> (
       match a.pvb_expr with
       | { pexp_desc = Pexp_construct ({txt = Longident.Lident "()"; _}, None)
-        ; pexp_attributes = []; _ } ->
+        ; pexp_attributes = []
+        ; _ } ->
         {a with pvb_attributes = [Attributes.remove_attrib]}
       | _ -> a )
     | _ -> a
@@ -1646,9 +1649,10 @@ let add_tdl_entries str =
        | { pstr_desc =
              Pstr_eval
                ({pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}, l)
-         ; pstr_loc; _ }
+         ; pstr_loc
+         ; _ }
          when List.exists l ~f:(fun (x, _) -> x.txt == Attributes.tdl_string)
-       -> (
+         -> (
          match Hashtbl.find_all htl_tdl_entries @@ int_of_string s with
          | exception Failure _ ->
            error ~loc:pstr_loc "fatal: type info not found"
@@ -1749,15 +1753,19 @@ let mapper _config _cookies =
           Pstr_extension
             ( ( {txt = "c"; _}
               , PStr [{pstr_desc = Pstr_primitive strpri; pstr_loc; _}] )
-            , _ ); _ }
-      when strpri.pval_prim <> [] -> external' ~is_inline:true pstr_loc strpri
+            , _ )
+      ; _ }
+      when strpri.pval_prim <> [] ->
+      external' ~is_inline:true pstr_loc strpri
     | {pstr_desc = Pstr_primitive strpri; pstr_loc} when strpri.pval_prim <> []
-    -> external' ~is_inline:false pstr_loc strpri
+      ->
+      external' ~is_inline:false pstr_loc strpri
     | { pstr_desc =
           Pstr_extension
             ( ( {txt = ("c" | "c_union" | "c_bitmask") as txt; _}
               , PStr [{pstr_desc = Pstr_type (rf, tl); pstr_loc}] )
-            , _ ); _ } ->
+            , _ )
+      ; _ } ->
       Ast_helper.default_loc := pstr_loc ;
       let enforce_union = txt = "c_union" in
       let enforce_bitmask = txt = "c_bitmask" in
@@ -1770,8 +1778,10 @@ let mapper _config _cookies =
                         Pstr_value
                           ( Nonrecursive
                           , [{pvb_pat = pat; pvb_expr = exp; pvb_attributes; _}]
-                          ); _ } ] )
-            , _ ); _ } ->
+                          )
+                    ; _ } ] )
+            , _ )
+      ; _ } ->
       (*| [%stri let%c [%p? pat] = [%e? exp]]*)
       let t =
         unbox_box_constr exp
@@ -1780,7 +1790,8 @@ let mapper _config _cookies =
           match exp.pexp_desc with
           | Pexp_apply
               ( { pexp_desc = Pexp_ident {txt = Longident.Lident s; loc = _}
-                ; pexp_attributes = []; _ }
+                ; pexp_attributes = []
+                ; _ }
               , l ) ->
             (s, l, false)
           | Pexp_constant _ -> ("", [], true)
@@ -1812,8 +1823,10 @@ let mapper _config _cookies =
                       { pexp_desc =
                           Pexp_extension
                             ( {txt = "c"; _}
-                            , PStr [{pstr_desc = Pstr_eval (e, []); _}] ); _ }; _
-                  } as a ) ] ); _ } as stri ->
+                            , PStr [{pstr_desc = Pstr_eval (e, []); _}] )
+                      ; _ }
+                  ; _ } as a ) ] )
+      ; _ } as stri ->
       let t =
         unbox_box_constr e
         @@ fun e ->
@@ -1822,7 +1835,8 @@ let mapper _config _cookies =
           match e.pexp_desc with
           | Pexp_apply
               ( { pexp_desc = Pexp_ident {txt = Longident.Lident s; loc = _}
-                ; pexp_attributes = []; _ }
+                ; pexp_attributes = []
+                ; _ }
               , l ) ->
             (s, l)
           | Pexp_apply _ -> ("", [])
@@ -1859,7 +1873,8 @@ let mapper _config _cookies =
     | { pstr_desc =
           Pstr_eval
             ( {pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}
-            , (_ :: _ as l) ); _ }
+            , (_ :: _ as l) )
+      ; _ }
       when List.exists l ~f:(fun (x, _) ->
                x.txt == Attributes.replace_expr_string ) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
@@ -1869,8 +1884,10 @@ let mapper _config _cookies =
             ( Nonrecursive
             , [ ( { pvb_expr =
                       { pexp_desc = Pexp_ident _
-                      ; pexp_attributes = _ :: _ as l; _ } as pexp; _ } as pvb
-                ) ] ); _ } as stri
+                      ; pexp_attributes = _ :: _ as l
+                      ; _ } as pexp
+                  ; _ } as pvb ) ] )
+      ; _ } as stri
       when List.exists l ~f:(fun (x, _) ->
                x.txt == Attributes.replace_attr_string ) ->
       mark_if_used mapper stri pvb pexp
@@ -1881,9 +1898,12 @@ let mapper _config _cookies =
                       { pexp_desc =
                           Pexp_constraint
                             ( ( { pexp_desc = Pexp_ident _
-                                ; pexp_attributes = _ :: _ as l; _ } as pexp )
-                            , ct ); _ } as pexp_outer; _ } as pvb ) ] ); _ } as
-      stri
+                                ; pexp_attributes = _ :: _ as l
+                                ; _ } as pexp )
+                            , ct )
+                      ; _ } as pexp_outer
+                  ; _ } as pvb ) ] )
+      ; _ } as stri
       when List.exists l ~f:(fun (x, _) ->
                x.txt == Attributes.replace_attr_string ) ->
       mark_if_used ~pexp_outer:(pexp_outer, ct) mapper stri pvb pexp
@@ -1898,14 +1918,16 @@ let mapper _config _cookies =
   let expr_scan mapper = function
     | { pexp_desc =
           Pexp_extension
-            ({txt = "c"; _}, PStr [{pstr_desc = Pstr_eval (e, []); _}]); _ } -> (
+            ({txt = "c"; _}, PStr [{pstr_desc = Pstr_eval (e, []); _}])
+      ; _ } -> (
       unbox_box_constr e
       @@ fun e ->
       let s, l =
         match e.pexp_desc with
         | Pexp_apply
             ( { pexp_desc = Pexp_ident {txt = Longident.Lident s; loc = _}
-              ; pexp_attributes = []; _ }
+              ; pexp_attributes = []
+              ; _ }
             , l ) ->
           (s, l)
         | Pexp_apply _ -> ("", [])
@@ -1932,7 +1954,8 @@ let mapper _config _cookies =
   in
   let expr_replace mapper = function
     | { pexp_desc = Pexp_constant (Pconst_integer (s, None))
-      ; pexp_attributes = _ :: _ as attribs; _ }
+      ; pexp_attributes = _ :: _ as attribs
+      ; _ }
       when List.exists attribs ~f:(fun (x, _) ->
                x.txt == Attributes.replace_expr_string ) -> (
       try Hashtbl.find Script_result.htl_expr (int_of_string s)
@@ -1956,15 +1979,16 @@ let mapper _config _cookies =
                 [ { pstr_desc =
                       Pstr_eval
                         ( {pexp_desc = Pexp_constant (Pconst_integer (s, _)); _}
-                        , _ ); _ } ] ->
+                        , _ )
+                  ; _ } ] ->
               Some s
             | _ -> fail () )
     in
     match id with
     | None -> fail ()
     | Some s -> (
-      try int_of_string s |> Hashtbl.find htl with
-      | Not_found | Failure _ -> fail () )
+      try int_of_string s |> Hashtbl.find htl
+      with Not_found | Failure _ -> fail () )
   in
   let rec type_declaration mapper tdl =
     if
@@ -2007,7 +2031,8 @@ let mapper _config _cookies =
                  x.txt == Attributes.replace_typ_string ) ->
         from_htl Script_result.htl_type Attributes.replace_typ_string attribs
       | { ptyp_desc = Ptyp_constr (norig, _) as orig
-        ; ptyp_attributes = _ :: _ as attribs; _ } as ptyp
+        ; ptyp_attributes = _ :: _ as attribs
+        ; _ } as ptyp
         when List.exists attribs ~f:(fun (x, _) ->
                  x.txt == Attributes.replace_struct_string ) ->
         let _, _, params =

@@ -31,5 +31,5 @@ Preprocessor for quick and dirty stub generation
 description: """
 ppx_cstubs is a ppx-based preprocessor for quick and dirty stub generation with
 ctypes. ppx_cstubs creates two files from a single ml file: a file with c stub
-code and a OCaml file with all additional boilerplate code.
+code and an OCaml file with all additional boilerplate code.
 """

@@ -161,7 +161,7 @@ module Const = struct
                  Buffer.contents ebuf
                  |> CCString.split_on_char '\n'
                  |> List.take 7
-                 |> List.map ~f:String.trim
+                 |> List.map ~f:CCString.rtrim
                  |> List.iter ~f:prerr_endline ;
              r.Std.return (Some (loc, info_str))
            | Ok _ -> () ) ;
@@ -439,7 +439,7 @@ module Extract = struct
     let eid = get_enum_id enum_type_id in
     Const.add ~no_expr:true ~disable_checks:true ~info_str eid enum_loc
       Ctypes.camlint str ;
-    ListLabels.iter enum_l ~f:(fun c ->
+    List.iter enum_l ~f:(fun c ->
         U.with_loc c.ee_loc
         @@ fun () ->
         let info_str = "enum constant " ^ c.ee_cname in
@@ -585,7 +585,7 @@ module Build = struct
             else U.error "inline code requires named parameters"
           else
             let names =
-              ListLabels.map el
+              List.map el
                 ~f:
                   Asttypes.(
                     fun (x, _) ->
@@ -599,7 +599,7 @@ module Build = struct
             names'
         in
         let names =
-          ListLabels.mapi names ~f:(fun i a ->
+          List.mapi names ~f:(fun i a ->
               let s =
                 Printf.sprintf "ppxc__var%d_%s" i (U.safe_ascii_only a)
               in
@@ -622,7 +622,7 @@ module Build = struct
       else if remove_labels then
         List.map el ~f:(fun (_, b) -> (Asttypes.Nolabel, b))
       else
-        ListLabels.map el ~f:(fun ((x, y) as xy) ->
+        List.map el ~f:(fun ((x, y) as xy) ->
             let open Asttypes in
             match x with
             | Labelled s ->

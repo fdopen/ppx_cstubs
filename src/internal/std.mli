@@ -67,6 +67,8 @@ module Util : sig
 
   val no_warn_unused :
     string -> Parsetree.expression -> Parsetree.structure_item
+
+  val unslashify_path : string -> string
 end
 
 module Result : sig
