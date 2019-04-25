@@ -54,7 +54,7 @@ external%c puts_flush : str:string -> bool = {|
   return (r == 0); /* `return` is mandatory, unless your function is void */
 |} [@@ release_runtime_lock]
 
-let _ : int = puts_flush ~str:"Hello World"
+let _ : bool = puts_flush ~str:"Hello World"
 ```
 
 This way several switches between the OCaml runtime and C are
