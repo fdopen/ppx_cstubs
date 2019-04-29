@@ -247,7 +247,8 @@ unions can declared in a similar way:
 typedef union {
     long l;
     double d;
-} data;```
+} data;
+```
 
 ```ocaml
 type%c_union data = {
