@@ -1,17 +1,20 @@
 (* This file is part of ppx_cstubs (https://github.com/fdopen/ppx_cstubs)
- * Copyright (c) 2018 fdopen
+ * Copyright (c) 2018-2019 fdopen
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, version 3.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, with linking exception;
+ * either version 2.1 of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *)
 
 open Mparsetree.Ast_cur
 module List = CCListLabels
@@ -77,8 +80,8 @@ extern "C" {
         function
         | Replace_text id ->
           let s =
-            try Hashtbl.find htl_id_text id with Not_found ->
-              U.error "fatal: incomplete source code"
+            try Hashtbl.find htl_id_text id
+            with Not_found -> U.error "fatal: incomplete source code"
           in
           (succ cnt, s :: ac)
         | Header s -> (cnt, s :: ac)
@@ -404,7 +407,8 @@ module Extract = struct
   let get_enum_id = function
     | Marshal_types.E_normal x
      |Marshal_types.E_bitmask x
-     |Marshal_types.E_normal_bitmask (x, _) -> x
+     |Marshal_types.E_normal_bitmask (x, _) ->
+      x
 
   let enum_fake_view (l : 'a list) (typedef : bool) (name : string)
       (typ : 'b Ctypes.typ) : 'a Ctypes.typ * 'a list Ctypes.typ =
@@ -487,7 +491,7 @@ module Build = struct
         | Funptr _ -> ef t
         | OCaml _ -> ef t
         | View {ty = Pointer (Primitive Ctypes_primitive_types.Char); read; _}
-        ->
+          ->
           let len = String.length res in
           let ar = Ctypes.CArray.make Ctypes.char (len + 1) in
           String.iteri (Ctypes.CArray.set ar) res ;
@@ -640,8 +644,8 @@ module Build = struct
       try
         let s = Hashtbl.find Const.htl_id_str_result id in
         int_of_string s
-      with
-      | Not_found | Failure _ -> U.error "can't determine type of enum %s" name
+      with Not_found | Failure _ ->
+        U.error "can't determine type of enum %s" name
     in
     let float_flag_bit = 15
     (* constants from ctypes_primitives.h *)
@@ -727,7 +731,8 @@ module Build = struct
           in
           Const.extract_single id ;
           let i_str =
-            try Hashtbl.find Const.htl_id_str_result id with Not_found ->
+            try Hashtbl.find Const.htl_id_str_result id
+            with Not_found ->
               U.error "can't determine enum constant %S" c.ee_cname
           in
           (* avoid overflow detection in Extract.extract_all *)
@@ -1082,7 +1087,7 @@ module Ctypes_make = struct
       let s : [`priv] Ctypes_static.structure Ctypes.typ =
         Ctypes.structure typ
       in
-      let _ : _ Ctypes.field = Ctypes.field s "i" Ctypes.camlint in
+      let (_ : _ Ctypes.field) = Ctypes.field s "i" Ctypes.camlint in
       let () = Ctypes.seal s in
       Ctypes.view ~format_typ:Evil_hack.format_typ ~read:Std.identity
         ~write:Std.identity s

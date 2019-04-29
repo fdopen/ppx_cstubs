@@ -1,17 +1,20 @@
 (* This file is part of ppx_cstubs (https://github.com/fdopen/ppx_cstubs)
- * Copyright (c) 2018 fdopen
+ * Copyright (c) 2018-2019 fdopen
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, version 3.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, with linking exception;
+ * either version 2.1 of the License, or (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>. *)
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *)
 
 open Mparsetree.Ast_cur
 open Parsetree
@@ -86,8 +89,8 @@ let get_remove_string_exn name attr =
           | PStr
               [ { pstr_desc =
                     Pstr_eval
-                      ({pexp_desc = Pexp_constant (Pconst_string (s, _)); _}, _); _
-                } ] ->
+                      ({pexp_desc = Pexp_constant (Pconst_string (s, _)); _}, _)
+                ; _ } ] ->
             res := Some s ;
             false
           | _ -> failwith "surprising content in attribute" )
@@ -147,8 +150,8 @@ let replace_expr = function
 let replace_stri = function
   | { pstr_desc =
         Pstr_value
-          (Nonrecursive, [({pvb_attributes = _ :: _ as attribs; _} as a)]); _
-    } as stri ->
+          (Nonrecursive, [({pvb_attributes = _ :: _ as attribs; _} as a)])
+    ; _ } as stri ->
     if List.exists attribs ~f:(fun (x, _) -> x.txt == a_orig_name) then
       let s, pvb_attributes = get_remove_string_exn a_orig_name attribs in
       let pvb_pat =
@@ -167,8 +170,8 @@ let replace_stri = function
         U.no_warn_unused_pre406 stri
     else stri
   | { pstr_desc =
-        Pstr_type (rec', [({ptype_attributes = _ :: _ as attribs; _} as a)]); _
-    } as stri
+        Pstr_type (rec', [({ptype_attributes = _ :: _ as attribs; _} as a)])
+    ; _ } as stri
     when List.exists attribs ~f:(fun (x, _) -> x.txt == a_inmod_ref) ->
     let s, ptype_attributes = get_remove_string_exn a_inmod_ref attribs in
     if is_uniq_type s then U.empty_stri ()
@@ -213,7 +216,8 @@ let create_type_ref_final ?(l = []) id mod_path =
 
 let replace_typ = function
   | { ptyp_desc = Ptyp_constr (_, lorig) as orig
-    ; ptyp_attributes = _ :: _ as attribs; _ } as typ
+    ; ptyp_attributes = _ :: _ as attribs
+    ; _ } as typ
     when List.exists attribs ~f:(fun (x, _) -> x.txt == a_reference_string) ->
     let s, ptyp_attributes =
       get_remove_string_exn a_reference_string attribs
