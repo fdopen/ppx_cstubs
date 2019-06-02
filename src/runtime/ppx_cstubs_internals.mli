@@ -27,6 +27,8 @@ val add_field :
 
 external to_voidp : nativeint -> Cstubs_internals.voidp = "%identity"
 
+external identity : 'a -> 'a = "%identity"
+
 val invalid_code : unit -> 'a
 
 val build_enum :
@@ -41,15 +43,58 @@ val build_enum_bitmask :
      string
   -> 'a Ctypes.typ
   -> typedef:bool
+  -> ?unexpected:('b list -> int64 -> 'b list)
   -> ('b * 'a) list
   -> 'b list Ctypes.typ
 
-val string_write : string -> char Ctypes_static.ptr
+module Signed : sig
+  module Nativeint : Signed.S with type t = nativeint
 
-val string_read : nativeint -> string
+  module Int8 : Signed.S with type t = int
 
-val string_opt_read : nativeint -> string option
+  module Int16 : Signed.S with type t = int
 
-val string_opt_write : string option -> char Ctypes_static.ptr
+  module Int32 : Signed.S with type t = int
+
+  module Schar : Signed.S with type t = int
+
+  module Short : Signed.S with type t = int
+end
+
+module Callback : sig
+  module type Info = sig
+    type real
+
+    val real : real Ctypes_static.fn
+  end
+
+  module Make (H : Info) : sig
+    type fn = H.real
+
+    type 'a t
+
+    type raw_pointer
+
+    val t : H.real t Ctypes.static_funptr Ctypes.typ
+
+    val fn : fn Ctypes_static.fn
+
+    val make_pointer : raw_pointer -> H.real t Ctypes.static_funptr
+  end
+
+  val make : 'a Ctypes.fn -> (module Info with type real = 'a)
+
+  (*
+  always two hops to prune `real` away for nicer type hints:
+
+  module E = Make ((val make (int @-> returning int)))
+  *)
+end
+
+module Shadow : sig
+  val ( @-> ) : 'a Ctypes.typ -> 'b Ctypes.fn -> ('a -> 'b) Ctypes.fn
+
+  val returning : 'a Ctypes.typ -> 'a Ctypes.fn
+end
 
 (**/**)

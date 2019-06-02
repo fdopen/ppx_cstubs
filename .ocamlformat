@@ -8,5 +8,5 @@ let-and=sparse
 infix-precedence=parens
 cases-exp-indent=2
 type-decl=sparse
-wrap-comments=true
+wrap-comments=false
 break-infix=fit-or-vertical

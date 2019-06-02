@@ -29,13 +29,16 @@ module Util : sig
 
   val error : ?loc:Ast_helper.loc -> ('a, unit, string, 'b) format4 -> 'a
 
+  val error_exn : ?loc:Ast_helper.loc -> ('a, unit, string, exn) format4 -> 'a
+
   val safe_ascii_only : string -> string
 
   val safe_ascii_only_ml : string -> string
 
   val safe_cname : prefix:string -> string
 
-  val safe_mlname : ?nowarn:bool -> ?prefix:string -> unit -> string
+  val safe_mlname :
+    ?capitalize:bool -> ?nowarn:bool -> ?prefix:string -> unit -> string
 
   val with_loc : Ast_helper.loc -> (unit -> 'a) -> 'a
 
@@ -71,11 +74,22 @@ module Util : sig
   val no_warn_unused :
     string -> Parsetree.expression -> Parsetree.structure_item
 
-  val unslashify_path : string -> string
+  val cloc_comment : Mparsetree.Ast_cur.Ast_helper.loc -> string
+
+  val unsuffixed_file_name : unit -> string
+
+  (* [%sig: ...] [%sigi: ...] broken for some Ocaml versions ... *)
+  val sig_from_mod_type : Parsetree.structure_item -> Parsetree.signature
+
+  val ocaml_warning : string -> Parsetree.attribute
 end
 
 module Result : sig
   type ('a, 'b) result = ('a, 'b) Result.result =
     | Ok of 'a
     | Error of 'b
+end
+
+module Various : sig
+  val use_threads : unit -> bool
 end

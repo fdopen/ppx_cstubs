@@ -29,15 +29,15 @@ let init =
     ( if !Options.nopervasives then Clflags.nopervasives := true ;
       toplevel_env := Compmisc.initial_env () ;
       Topfind.log := ignore ;
-      Topdirs.dir_directory
-      @@ flib_protect Findlib.package_directory "integers" ;
-      Topdirs.dir_directory @@ flib_protect Findlib.package_directory "ctypes" ;
-      let dir = flib_protect Findlib.package_directory "ppx_cstubs" in
-      let dir = Filename.concat dir "internal" in
-      let () = Topdirs.dir_directory dir in
+      let l = [ "integers"; "ctypes"; "ppx_cstubs" ; "ppx_cstubs.internal" ] in
+      CCListLabels.iter l ~f:(fun p ->
+        Topdirs.dir_directory @@ flib_protect Findlib.package_directory p);
       if !Options.findlib_pkgs <> [] then (
-        Topfind.predicates := ["byte"] ;
-        flib_protect Topfind.don't_load_deeply ["ppx_cstubs.internal"] ;
+        Topfind.add_predicates ["byte"];
+        flib_protect Topfind.don't_load_deeply ["ppx_cstubs.internal"];
+        if Std.Various.use_threads () then (
+          Topfind.add_predicates ["mt";"mt_posix"];
+          flib_protect Topfind.load_deeply ["threads"]);
         flib_protect Topfind.load_deeply !Options.findlib_pkgs ) ;
       ListLabels.iter !Options.cma_files ~f:(fun s ->
           let dir = Filename.dirname s in
@@ -61,11 +61,19 @@ let eval_expression =
     let str = [{P.pstr_desc = P.Pstr_eval (expr, []); P.pstr_loc = loc}] in
     let st = to_current.M.Versions.copy_structure str in
     Typecore.reset_delayed_checks () ;
+#if OCAML_VERSION >= (4, 8, 0)
+    let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st loc in
+#else
     let str, _sg, newenv = Typemod.type_structure !toplevel_env st loc in
+#endif
     let lam = Translmod.transl_toplevel_definition str in
     Warnings.check_fatal () ;
     let init_code, fun_code = Bytegen.compile_phrase lam in
-#if OCAML_VERSION >= (4, 3, 0)
+#if OCAML_VERSION >= (4, 8, 0)
+    let code, reloc, events =
+      Emitcode.to_memory init_code fun_code
+    in
+#elif OCAML_VERSION >= (4, 3, 0)
     let code, code_size, reloc, events =
       Emitcode.to_memory init_code fun_code
     in
@@ -78,6 +86,19 @@ let eval_expression =
     Symtable.patch_object code reloc ;
     Symtable.check_global_initialized reloc ;
     Symtable.update_global_table () ;
+#if OCAML_VERSION >= (4, 8, 0)
+    let bytecode, closure = Meta.reify_bytecode code [| events |] None in
+    try
+      let retval = closure () in
+      if can_free then Meta.release_bytecode bytecode;
+      toplevel_env := newenv ;
+      retval
+    with
+    | x ->
+      if can_free then Meta.release_bytecode bytecode;
+      Symtable.restore_state initial_symtable ;
+      raise x
+#else
     let free =
       let called = ref false in
       fun () ->
@@ -98,3 +119,11 @@ let eval_expression =
       free () ;
       Symtable.restore_state initial_symtable ;
       raise x
+#endif
+
+let set_absname x =
+#if OCAML_VERSION >= (4, 8, 0)
+  Clflags.absname := x
+#else
+  Location.absname := x
+#endif

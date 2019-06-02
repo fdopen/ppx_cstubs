@@ -19,9 +19,7 @@
 type extr_info
 
 type info =
-  { signed : bool
-  ; min : string option
-  ; max : string option
+  { ctype : string
   ; info : extr_info }
 
 type result =
@@ -32,3 +30,9 @@ type result =
 val prepare : 'a Ctypes_static.typ -> info option
 
 val gen : info -> string -> result
+
+val gen_ext :
+     'a Ctypes_static.typ
+  -> string
+  -> Mparsetree.Ast_cur.Parsetree.expression
+  -> result option

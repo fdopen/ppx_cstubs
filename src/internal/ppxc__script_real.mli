@@ -524,6 +524,33 @@ module Ctypes_make : sig
 end
 
 (* everything below is private. Don't use it *)
+
+module type Opaque_result = sig
+  type t
+
+  val t : t Ctypes.typ
+end
+
+module type Unsigned_result = sig
+  include Unsigned.S
+
+  val t : t Ctypes.typ
+end
+
+module type Signed_result = sig
+  include Signed.S
+
+  val t : t Ctypes.typ
+end
+
+module type Anysigned_result = sig
+  include Unsigned.S
+
+  val min_int : t
+
+  val t : t Ctypes.typ
+end
+
 module Extract : sig
   val constant : string -> string -> 'a Ctypes.typ -> unit
 
@@ -540,17 +567,53 @@ module Extract : sig
 
   val seal : string -> string -> 'a Ctypes.typ -> unit
 
-  val enum : string -> ?typedef:bool -> string -> [> `A] Ctypes.typ
+  val enum : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 
-  val enum2 : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
+  val int_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Signed_result)
+
+  val uint_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Unsigned_result)
+
+  val aint_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Anysigned_result)
+
+  val opaque :
+       size:string
+    -> align:string
+    -> typ:string
+    -> mi:string
+    -> string
+    -> (module Opaque_result)
+
+  val abstract :
+       size:string
+    -> align:string
+    -> string
+    -> 'a Ctypes_static.abstract Ctypes_static.typ
+
+  val ocaml_funptr :
+    string -> 'a Ctypes_static.static_funptr Ctypes_static.typ -> unit
 end
 
 module Build : sig
   val reg_trace_fn : int -> 'a Ctypes.fn -> 'a Ctypes.fn
 
-  val reg_trace : int -> 'a Ctypes.typ -> 'a Ctypes.typ
+  val reg_trace : ?no_dup:bool -> int -> 'a Ctypes.typ -> 'a Ctypes.typ
 
-  val constant : string -> string -> 'a Ctypes.typ -> 'a
+  val constant : string -> string -> string -> 'a Ctypes.typ -> unit
 
   val foreign_value :
        string
@@ -565,15 +628,7 @@ module Build : sig
   val external' :
     string -> string -> 'a Ctypes.fn -> marshal_info:string -> unit
 
-  val enum :
-       string
-    -> string
-    -> ?typedef:bool
-    -> ?unexpected:(int64 -> 'a)
-    -> ('a * int64) list
-    -> 'a Ctypes.typ
-
-  val enum2 : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
+  val enum : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 
   val foreign :
        string
@@ -592,14 +647,51 @@ module Build : sig
 
   val add_type_ref : 'a Ctypes.typ -> string -> unit
 
-  val create_record : int -> string -> 'a Ctypes.typ -> unit
-
   val field :
        string
     -> _ Ctypes_static.structured Ctypes.typ
     -> string
     -> 'a Ctypes.typ
     -> unit
+
+  val int_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Signed_result)
+
+  val uint_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Unsigned_result)
+
+  val aint_alias :
+       string
+    -> mod_name:string
+    -> ?strict:bool
+    -> string
+    -> (module Anysigned_result)
+
+  val opaque :
+       size:string
+    -> align:string
+    -> typ:string
+    -> mi:string
+    -> string
+    -> (module Opaque_result)
+
+  val abstract : string -> 'a Ctypes_static.abstract Ctypes_static.typ
+
+  val trace_custom : 'a Ctypes_static.typ -> 'a Ctypes_static.typ
+
+  val add_custom :
+    old:'a Ctypes_static.typ -> new':'b Ctypes_static.typ -> unit
+
+  val ocaml_funptr :
+    string -> 'a Ctypes_static.static_funptr Ctypes_static.typ -> unit
 end
 
 module Main : sig

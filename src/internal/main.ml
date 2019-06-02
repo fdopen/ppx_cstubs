@@ -52,9 +52,10 @@ let cpp_main () =
   let include_dirs = ref [] in
   let keep_tmp = ref false in
   let toolchain = ref None in
+  let cc = ref None in
   let findlib_pkgs = ref [] in
   let cma_files = ref [] in
-  let verbose = ref 0 in
+  let verbose = ref 1 in
   let absname = ref false in
   let nopervasives = ref false in
   let set_output_by_suffix s =
@@ -106,12 +107,17 @@ let cpp_main () =
         , "     Print a human readable ml file instead of the binary ast" )
       ; ( "-verbose"
         , arg_set_int verbose
-        , "<level>   Set the level of verbosity. By default, it is set to 0, what means no debug messages at all on stderr"
-        )
+        , "<level>   Set the level of verbosity. By default, it is set to 1" )
+      ; ( "-quiet"
+        , Arg.Unit (na (fun () -> verbose := 0))
+        , "         Make ppx_cstubs silent. Same as -verbose 0" )
       ; ( "-absname"
         , arg_set absname
         , "     Show absolute filenames in error messages" )
       ; ("-nopervasives", arg_set nopervasives, "     (undocumented)")
+      ; ( "-cc"
+        , arg_string (fun s -> cc := Some s)
+        , "<command>      Use <command> as the C compiler" )
       ; ( "--"
         , Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest)
         , "     Pass all following parameters verbatim to the c compiler" ) ]
@@ -159,7 +165,7 @@ let cpp_main () =
     | s -> s
   in
   if ml_output = c_output then error_exit "use different output files" ;
-  if !absname then Location.absname := true ;
+  if !absname then Toplevel.set_absname true ;
   let h s =
     let s = CCString.lowercase_ascii s in
     let s = Filename.basename s in
@@ -180,6 +186,7 @@ let cpp_main () =
   Options.cma_files := List.rev !cma_files ;
   Options.findlib_pkgs := List.rev !findlib_pkgs ;
   Options.verbosity := !verbose ;
+  Options.cc := !cc ;
   if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init () ;
   (* trigger exceptions *)
   Ocaml_config.init () ;

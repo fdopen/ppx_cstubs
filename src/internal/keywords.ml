@@ -28,7 +28,8 @@ let () =
     ; "ptr_opt"
     ; "returning"
     ; "seal"
-    ; "static_funptr" ]
+    ; "static_funptr"
+    ; "@->" ]
 
 (* cmitomli ctypes.cmi | awk '/val [^\(]/ {print $2}' | ...*)
 

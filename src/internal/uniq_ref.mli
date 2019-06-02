@@ -38,7 +38,6 @@ type ocaml_t
 
 val make_type_alias :
      ?tdl_attrs:attribute list
-  -> ?params:(core_type * Mparsetree.Ast_cur.Asttypes.variance) list
   -> string list
   -> string
   -> structure_item * ocaml_t

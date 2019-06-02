@@ -47,5 +47,7 @@ val build_inline_fun :
   -> (string * string) list
   -> string
 
+val gen_callback_fun : 'a Ctypes.fn -> Marshal_types.ocaml_funptr -> string
+
 (* fixme: MOVE*)
 val is_void : 'a Ctypes.typ -> bool

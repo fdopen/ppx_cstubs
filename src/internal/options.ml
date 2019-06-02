@@ -22,7 +22,7 @@ let keep_tmp = ref false
 
 let nopervasives = ref false
 
-let verbosity = ref 0
+let verbosity = ref 1
 
 let c_flags : string list ref = ref []
 
@@ -50,10 +50,12 @@ type mode =
 
 let mode = ref Regular
 
+let cc : string option ref = ref None
+
 let reset () =
   keep_tmp := false ;
   nopervasives := false ;
-  verbosity := 0 ;
+  verbosity := 1 ;
   c_flags := [] ;
   ocaml_flags := ocaml_flags_default ;
   c_output_file := None ;
@@ -62,4 +64,5 @@ let reset () =
   toolchain := None ;
   findlib_pkgs := [] ;
   cma_files := [] ;
-  mode := Regular
+  mode := Regular ;
+  cc := None

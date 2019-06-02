@@ -50,13 +50,22 @@ val foreign_value :
 
 val constraint_of_typ : mod_path:string list -> 'a Ctypes.typ -> core_type
 
-val create_struct :
-     mod_path:string list
-  -> type_name:string
-  -> field_names:string list
-  -> locs:Marshal_types.loc list
-  -> 'a Ctypes.typ
-  -> type_declaration * type_declaration * core_type list
+val ocaml_funptr : Marshal_types.ocaml_funptr -> 'a Ctypes.fn -> unit
 
 (* move me somewhere else ... *)
 val stdlib_fun : string -> expression
+
+type record_stris =
+  { r_modul : structure_item
+  ; r_include_top : structure_item
+  ; r_include_bottom : structure_item }
+
+val gen_record_stris :
+     mod_path:string list
+  -> type_name:string
+  -> (string * Mparsetree.Ast_cur.Ast_helper.loc * expression) list
+  -> record_stris
+
+val pat_expand_prim : 'a Ctypes_primitive_types.prim -> pattern
+
+val match_nw : expression -> case -> expression

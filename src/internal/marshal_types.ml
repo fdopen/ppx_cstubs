@@ -47,8 +47,8 @@ type enum_type =
   | E_normal_bitmask of id * id
 
 type enum_entry =
-  { ee_signed_id : int
-  ; ee_unsigned_id : int
+  { ee_int_id : int
+  ; ee_type_check : int
   ; ee_loc : Location.t
   ; ee_expr : expr
   ; ee_cname : string }
@@ -58,11 +58,29 @@ type enum =
   ; enum_name : string
   ; enum_is_typedef : bool
   ; enum_type_id : enum_type
+  ; enum_is_int_bitmask : bool
   ; enum_loc : loc
-  ; enum_unexpected : expr }
+  ; enum_unexpected : expr
+  ; enum_unexpected_bits : expr }
 
 type struct_record_params =
   { sr_mod_path : string list
   ; sr_type_name : string
   ; sr_field_names : string list
   ; sr_locs : loc list }
+
+type opaque_params =
+  { o_binding_name : string
+  ; o_uniq_ref_id : Uniq_ref.t }
+
+type ocaml_funptr =
+  { cb_mod_path : string list
+  ; cb_binding_name : string
+  ; cb_bottom : id
+  ; cb_orig_mod : string
+  ; cb_top : id
+  ; cb_top_mod : string
+  ; cb_acquire_runtime : bool
+  ; cb_thread_registration : bool
+  ; cb_user_fun : Parsetree.expression
+  ; cb_init_fun : string }

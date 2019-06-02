@@ -33,5 +33,3 @@ val remove_attrib : string Location.loc * Parsetree.payload
 val replace_attr_string : string
 
 val replace_typ_string : string
-
-val replace_struct_string : string

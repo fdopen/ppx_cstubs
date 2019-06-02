@@ -21,62 +21,35 @@ module List = CCListLabels
 module U = Std.Util
 
 type structured =
-  { s_id : Uniq_ref.t
-  ; s_type_id : Uniq_ref.ocaml_t
+  { s_type_id : Uniq_ref.ocaml_t
   ; s_is_union : bool }
 
-type view_state =
-  | Vs_Unknown
-  | Vs_Complete
-  | Vs_Parameterized
-
-type view_structured =
-  { vs_id : Uniq_ref.t
-  ; vs_type_id : Uniq_ref.ocaml_t
-  ; mutable vs_state : view_state }
-
 type view_enum =
-  { ve_id : Uniq_ref.t
-  ; ve_type_id : Uniq_ref.ocaml_t
+  { ve_type_id : Uniq_ref.ocaml_t
   ; ve_is_list : bool }
 
-type view_predefined = {vp_ct : unit -> Parsetree.core_type}
-
-type custom = {cust_id : Uniq_ref.t}
+type view_abstract = {via_type_id : Uniq_ref.ocaml_t}
 
 type t =
   | Structured of structured
-  | View_structured of view_structured
+  | View_structured of view_abstract
   | View_typedef_structured of structured
   | View_enum of view_enum
-  | View_predefined of view_predefined
-  | Custom of custom
+  | View_int_alias of view_abstract
+  | Opaque of view_abstract
+  | Abstract of view_abstract
+  | Funptr of view_abstract
 
 type type_abstract
 
 let abstract : 'a Ctypes.typ -> type_abstract = Obj.magic
 
-let t_predefined =
-  [ ( abstract Ctypes.string
-    , View_predefined {vp_ct = (fun () -> U.mk_typc "string")} )
-  ; ( abstract Ctypes.string_opt
-    , View_predefined
-        {vp_ct = (fun () -> U.mk_typc ~l:[U.mk_typc "string"] "option")} ) ]
-
 let v_types = CCVector.create ()
 
-let init_predef () =
-  List.iter t_predefined ~f:(fun s -> CCVector.push v_types s)
-
-let () = init_predef ()
-
-let clear () =
-  CCVector.clear v_types ;
-  init_predef ()
+let clear () = CCVector.clear v_types
 
 let add_type : 'a Ctypes.typ -> t -> unit =
  fun t s ->
-  (* TODO: optimize for faster find. But the order must be preserved *)
   let t = abstract t in
   CCVector.push v_types (t, s)
 
@@ -88,40 +61,36 @@ let find : 'a Ctypes.typ -> t option =
     v_types
 
 let get_core_type mp = function
-  | View_structured {vs_type_id; vs_state = Vs_Complete; _} ->
-    `Complete (Uniq_ref.create_type_ref_final vs_type_id mp)
-  | View_structured {vs_type_id; vs_state = Vs_Parameterized; _} ->
-    let l = [Ast_helper.Typ.any ()] in
-    `Incomplete (Uniq_ref.create_type_ref_final ~l vs_type_id mp)
-  | View_structured {vs_state = Vs_Unknown; _} | Custom _ -> `Unknown
-  | View_typedef_structured {s_type_id; s_is_union; _}
-   |Structured {s_type_id; s_is_union; _} ->
+  | View_typedef_structured {s_type_id; s_is_union}
+   |Structured {s_type_id; s_is_union} ->
     let constr = Uniq_ref.create_type_ref_final s_type_id mp in
     let s =
       match s_is_union with
-      | false -> "Ctypes_static.structure"
-      | true -> "Ctypes_static.union"
+      | false -> "Ctypes.structure"
+      | true -> "Ctypes.union"
     in
     `Complete (U.mk_typc ~l:[constr] s)
-  | View_predefined {vp_ct; _} -> `Complete (vp_ct ())
-  | View_enum {ve_is_list; ve_type_id; _} -> (
+  | View_enum {ve_is_list; ve_type_id} -> (
     let constr = Uniq_ref.create_type_ref_final ve_type_id mp in
     match ve_is_list with
     | false -> `Complete constr
     | true -> `Complete (U.mk_typc ~l:[constr] "list") )
+  | View_structured {via_type_id}
+   |Opaque {via_type_id}
+   |View_int_alias {via_type_id} ->
+    `Complete (Uniq_ref.create_type_ref_final via_type_id mp)
+  | Abstract {via_type_id} ->
+    let constr = Uniq_ref.create_type_ref_final via_type_id mp in
+    `Complete (U.mk_typc ~l:[constr] "Ctypes.abstract")
+  | Funptr {via_type_id} ->
+    let f t =
+      let constr = Uniq_ref.create_type_ref_final ~l:[t] via_type_id mp in
+      Ast_helper.Typ.constr (U.mk_lid "Ctypes.static_funptr") [constr]
+    in
+    `Funptr f
 
 let get_core_type t mod_path =
   match find t with None -> `Unknown | Some s -> get_core_type mod_path s
-
-let change_struct_view_state t s =
-  match find t with
-  | None -> assert false
-  | Some t -> (
-    match t with
-    | View_structured t -> t.vs_state <- s
-    | Custom _ | View_typedef_structured _ | View_enum _ | View_predefined _
-     |Structured _ ->
-      assert false )
 
 let is_typedef_struct t =
   match find t with
@@ -129,6 +98,9 @@ let is_typedef_struct t =
   | Some t -> (
     match t with
     | View_typedef_structured _ -> true
-    | View_structured _ | Custom _ | View_enum _ | View_predefined _
-     |Structured _ ->
+    | View_structured _ | View_enum _ | Structured _ | View_int_alias _
+     |Opaque _ | Abstract _ | Funptr _ ->
       false )
+
+let add_custom ~old ~new' =
+  match find old with None -> () | Some x -> add_type new' x

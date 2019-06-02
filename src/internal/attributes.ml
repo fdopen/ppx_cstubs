@@ -35,5 +35,3 @@ let remove_attrib = h remove_string
 let replace_attr_string = "ppxc__replace_attr"
 
 let replace_typ_string = "ppxc__replace_typ"
-
-let replace_struct_string = "ppxc__replace_struct"
