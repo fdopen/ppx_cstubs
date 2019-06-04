@@ -1,0 +1,26 @@
+remote_theme: fdopen/just-the-docs
+search_enabled: true
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-relative-links
+
+aux_links:
+  "ppx_cstubs on github":
+    - "//github.com/fdopen/ppx_cstubs"
+
+relative_links:
+  enabled:     true
+
+permalink: pretty
+
+sass:
+  style: compressed
+
+compress_html:
+  clippings: all
+  comments: all
+  endings: all
+  startings: []
+  blank_lines: false
+  profile: false
