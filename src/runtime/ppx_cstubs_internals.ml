@@ -214,6 +214,8 @@ module Signed = struct
       [@@@ocaml.warning "-32"]
 
       let equal (x : nativeint) (y : nativeint) = x = y
+
+      let pp fmt x = Format.fprintf fmt "%nd" x
     end
 
     include Nativeint
@@ -356,6 +358,12 @@ module Signed = struct
     let max = max
 
     let min = min
+
+    [@@@ocaml.warning "-32"]
+
+    let equal (x : t) (y : t) = x = y
+
+    let pp fmt x = Format.fprintf fmt "%d" x
   end
 
   module Int8 = Short_int (struct

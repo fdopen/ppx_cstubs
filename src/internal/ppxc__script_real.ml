@@ -780,6 +780,12 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
 
       let ( lsr ) = shift_right_logical
     end
+
+    [@@@ocaml.warning "-32"]
+
+    let equal _ _ = fail ()
+
+    let pp _ _ = fail ()
   end
 
   let common_int_alias id_loc _ ?mod_name:_ ?strict:_ ctyp =
