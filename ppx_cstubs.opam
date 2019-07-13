@@ -4,13 +4,14 @@ authors: [ "andreashauptmann@t-online.de" ]
 license: "LGPL-2.1+ with OCaml linking exception"
 homepage: "https://github.com/fdopen/ppx_cstubs"
 dev-repo: "git+https://github.com/fdopen/ppx_cstubs.git"
+doc: "https://fdopen.github.io/ppx_cstubs/"
 bug-reports: "https://github.com/fdopen/ppx_cstubs/issues"
 
 build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
-  "ctypes" {>= "0.13.0" & <= "0.15.0"}
+  "ctypes" {>= "0.13.0" & < "0.15.0"}
   "integers"
   "num"
   "result"
@@ -19,7 +20,7 @@ depends: [
   "ocaml" {>= "4.02.3" & < "4.09.0"}
   "ocaml-migrate-parsetree"
   "ocamlfind" # not only a build dependency, it depends on findlib.top
-  "dune" {build & >= "1.6"}
+  "dune" {>= "1.6"}
   "ppx_tools_versioned" {>= "5.0.1"}
   "re" {>= "1.7.2"}
 ]
