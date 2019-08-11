@@ -22,3 +22,5 @@ val eval_expression : Mparsetree.Ast_cur.Parsetree.expression -> Obj.t
 
 (* doesn't belong here, but keep the cppo mess to one file ... *)
 val set_absname : bool -> unit
+
+val set_argv : string array -> unit

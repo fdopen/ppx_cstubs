@@ -194,16 +194,7 @@ let cpp_main () =
   let l = source :: l in
   let l = if !pretty_print then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
-  (* what an evil hack .... *)
-  let new_argv = Array.of_list l in
-  let orig_argv_length = Array.length Sys.argv in
-  let new_argv_length = Array.length new_argv in
-  assert (new_argv_length <= orig_argv_length) ;
-  ArrayLabels.blit ~src:new_argv ~src_pos:0 ~dst:Sys.argv ~dst_pos:0
-    ~len:new_argv_length ;
-  if new_argv_length <> orig_argv_length then
-    Obj.truncate (Obj.repr Sys.argv) new_argv_length ;
-  Arg.current := 0 ;
+  Toplevel.set_argv @@ Array.of_list l ;
   common_main ()
 
 let merlin_main () =

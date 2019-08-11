@@ -127,3 +127,21 @@ let set_absname x =
 #else
   Location.absname := x
 #endif
+
+#if OCAML_VERSION >= (4, 9, 0)
+external caml_sys_modify_argv : string array -> unit = "caml_sys_modify_argv"
+#endif
+
+let set_argv new_argv =
+#if OCAML_VERSION >= (4, 9, 0)
+  caml_sys_modify_argv new_argv ;
+#else
+  let orig_argv_length = Array.length Sys.argv in
+  let new_argv_length = Array.length new_argv in
+  assert (new_argv_length <= orig_argv_length) ;
+  ArrayLabels.blit ~src:new_argv ~src_pos:0 ~dst:Sys.argv ~dst_pos:0
+    ~len:new_argv_length ;
+  if new_argv_length <> orig_argv_length then
+    Obj.truncate (Obj.repr Sys.argv) new_argv_length ;
+#endif
+  Arg.current := 0
