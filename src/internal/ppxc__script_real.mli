@@ -507,14 +507,6 @@ module Ctypes_make : sig
     val coerce_fn : 'a fn -> 'b fn -> 'a -> 'b
 
     (* private. Don't use. Only available during code generation *)
-    val ppxc__private_field :
-         ('s, ([< `Struct | `Union] as 'b)) Ctypes_static.structured typ
-      -> string
-      -> 'a typ
-      -> ('a, ('s, 'b) Ctypes_static.structured) field
-
-    val ppxc__private_seal :
-      ('a, [< `Struct | `Union]) Ctypes_static.structured typ -> unit
 
     val ppxc__private_ocaml_typ :
       string -> [`priv] Ctypes_static.structure Ctypes.typ
@@ -552,7 +544,7 @@ module type Anysigned_result = sig
 end
 
 module Extract : sig
-  val constant : string -> string -> 'a Ctypes.typ -> unit
+  val constant : string -> string -> string -> 'a Ctypes.typ -> unit
 
   val register_fun_place : string -> unit
 
@@ -560,12 +552,18 @@ module Extract : sig
 
   val field :
        string
-    -> _ Ctypes_static.structured Ctypes.typ
+    -> 't Ctypes.typ
     -> string
     -> 'a Ctypes.typ
-    -> unit
+    -> ( 'a
+       , (('s, [< `Struct | `Union]) Ctypes_static.structured as 't) )
+       Ctypes_static.field
 
-  val seal : string -> string -> 'a Ctypes.typ -> unit
+  val seal :
+       string
+    -> string
+    -> ('a, [< `Struct | `Union]) Ctypes_static.structured Ctypes_static.typ
+    -> unit
 
   val enum : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 
@@ -649,10 +647,12 @@ module Build : sig
 
   val field :
        string
-    -> _ Ctypes_static.structured Ctypes.typ
+    -> 't Ctypes.typ
     -> string
     -> 'a Ctypes.typ
-    -> unit
+    -> ( 'a
+       , (('s, [< `Struct | `Union]) Ctypes_static.structured as 't) )
+       Ctypes_static.field
 
   val int_alias :
        string
@@ -683,7 +683,11 @@ module Build : sig
     -> string
     -> (module Opaque_result)
 
-  val abstract : string -> 'a Ctypes_static.abstract Ctypes_static.typ
+  val abstract :
+       size:string
+    -> align:string
+    -> string
+    -> 'a Ctypes_static.abstract Ctypes_static.typ
 
   val trace_custom : 'a Ctypes_static.typ -> 'a Ctypes_static.typ
 
@@ -692,6 +696,12 @@ module Build : sig
 
   val ocaml_funptr :
     string -> 'a Ctypes_static.static_funptr Ctypes_static.typ -> unit
+
+  val seal :
+       string
+    -> string
+    -> ('a, [< `Struct | `Union]) Ctypes_static.structured Ctypes_static.typ
+    -> unit
 end
 
 module Main : sig

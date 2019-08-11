@@ -27,14 +27,7 @@ open Std
 let error = Util.error
 
 module List = CCListLabels
-
-module U = struct
-  include Std.Util
-
-  let named_stri n expr =
-    let pat = mk_pat n in
-    [%stri let [%p pat] = [%e expr]]
-end
+module U = Std.Util
 
 module Extract = struct
   let rec variable_from_pattern_constr a =
@@ -295,9 +288,9 @@ module Extract = struct
       let enum_type =
         match ebitmask with false -> Enum_normal | true -> Enum_bitmask
       in
-      let whithmask, attribs = get_remove "with_bitmask" attribs in
+      let with_bitmask, attribs = get_remove "with_bitmask" attribs in
       let enum_type =
-        match whithmask with
+        match with_bitmask with
         | false -> enum_type
         | true ->
           if enum_type <> Enum_normal then
@@ -381,9 +374,10 @@ module Ppx_mod_top_common (M : sig end) = struct
 
   let get_entries () =
     match !state with
-    | Root x | Module (_, _, x) | Let_module (_, _, x) | Anon_module (_, _, x)
-      ->
-      List.rev x
+    | Root x -> List.rev x
+    | Module _ | Let_module _ | Anon_module _ ->
+      error
+        "internal error. Ppx_mod_top_common.get_entries not called at root level"
 
   let add_entry x =
     match !state with
@@ -414,6 +408,8 @@ module Ppx_mod_top_common (M : sig end) = struct
       let x = Str.module_ mb in
       add_entry x
 
+  let r_er () = error "ppx_cstubs failed to parse the AST"
+
   let close_let_module_module loc =
     U.with_loc loc
     @@ fun () ->
@@ -421,8 +417,7 @@ module Ppx_mod_top_common (M : sig end) = struct
     | Let_module (t, s, l) ->
       state := t ;
       add_module false s l
-    | Anon_module _ | Module _ | Root _ ->
-      error "ppx_cstubs failed to parse the AST"
+    | Anon_module _ | Module _ | Root _ -> r_er ()
 
   let close_module loc =
     U.with_loc loc
@@ -431,8 +426,7 @@ module Ppx_mod_top_common (M : sig end) = struct
     | Module (t, s, l) ->
       state := t ;
       add_module false s l
-    | Anon_module _ | Let_module _ | Root _ ->
-      error "ppx_cstubs failed to parse the AST"
+    | Anon_module _ | Let_module _ | Root _ -> r_er ()
 
   let close_let_module_expr loc =
     U.with_loc loc
@@ -441,8 +435,7 @@ module Ppx_mod_top_common (M : sig end) = struct
     | Module (t, s, l) ->
       state := t ;
       add_module true s l
-    | Anon_module _ | Let_module _ | Root _ ->
-      error "ppx_cstubs failed to parse the AST"
+    | Anon_module _ | Let_module _ | Root _ -> r_er ()
 
   let close_module_anon loc =
     U.with_loc loc
@@ -451,8 +444,7 @@ module Ppx_mod_top_common (M : sig end) = struct
     | Anon_module (t, s, l) ->
       state := t ;
       add_module true s l
-    | Module _ | Let_module _ | Root _ ->
-      error "ppx_cstubs failed to parse the AST"
+    | Module _ | Let_module _ | Root _ -> r_er ()
 end
 
 module Ppx_mod = struct
@@ -500,11 +492,10 @@ module Ppx_mod = struct
     Ast_helper.Exp.ident ?attrs r
 
   let modules () =
-    let entries = get_entries () in
-    if entries = [] then []
+    let l = get_entries () in
+    if l = [] then []
     else
       let l =
-        let l = get_entries () in
         let l =
           [%stri open! Ppx_cstubs_internals.Shadow [@@ocaml.warning "-33-66"]]
           :: l
@@ -561,15 +552,10 @@ module Ppx_mod = struct
     if name_check then check_name false name ;
     let module Ur = Uniq_ref in
     let mod_path = get_mod_path () in
-    let r = Ur.make mod_path name expr in
+    let r = Ur.make ?main_ref_attrs:attrs mod_path name expr in
     add_entry r.Ur.topmod_vb ;
     add_entry r.Ur.topmod_ref ;
-    let expr = r.Ur.main_ref in
-    match attrs with
-    | None -> expr
-    | Some l ->
-      let pexp_attributes = expr.pexp_attributes @ l in
-      {expr with pexp_attributes}
+    r.Ur.main_ref
 
   let add_external stri_external stri_expr ~name =
     check_name true name ;
@@ -586,17 +572,14 @@ module Ppx_mod = struct
     add_entry stri_expr ;
     create_ref name
 
-  let add_opaq attrs stri name =
+  let add_opaq main_ref_attrs stri name =
     check_name false name ;
     let module Ur = Uniq_ref in
     let mod_path = get_mod_path () in
-    let r = Ur.make mod_path name [%expr ()] in
+    let r = Ur.make ~main_ref_attrs mod_path name [%expr ()] in
     add_entry stri ;
     add_entry r.Ur.topmod_ref ;
-    let e = r.Ur.main_ref in
-    let pexp_attributes = e.pexp_attributes @ attrs in
-    let e = {e with pexp_attributes} in
-    (r.Ur.id, e)
+    (r.Ur.id, r.Ur.main_ref)
 
   let add_unit expr =
     add_entry [%stri let () = [%e expr]] ;
@@ -604,19 +587,16 @@ module Ppx_mod = struct
 end
 
 module C_content = struct
-  let write_file () : unit =
-    if Options.(!mode = Emulate) then ()
-    else
+  let write_file () =
+    if Options.(!mode = Regular) then
       match (!Options.c_output_file, !Script_result.c_source) with
       | Some fln, Some source -> (
         Options.c_output_file := None ;
         match fln with
         | "-" -> output_string stdout source
         | _ ->
-          CCIO.with_out ?mode:None
-            ~flags:[Open_creat; Open_trunc; Open_binary]
-            fln
-          @@ fun ch -> output_string ch source )
+          CCIO.with_out ~flags:[Open_creat; Open_trunc; Open_binary] fln
+            (fun ch -> output_string ch source) )
       | Some _, None ->
         prerr_endline
           "no c file necessary, set -o-c to 'none' and update your build instructions" ;
@@ -730,12 +710,12 @@ module Top = struct
     let expr =
       [%expr
         let module M : sig end = struct
-          open! Ppxc__script.Run_environment [@@ocaml.warning "-33"]
+          open! Ppxc__script.Run_environment [@@ocaml.warning "-33-66"]
 
           [%%s
           [ctypes]]
 
-          open! Ctypes [@@ocaml.warning "-33"]
+          open! Ctypes [@@ocaml.warning "-33-66"]
 
           let () =
             let module Extract_c_consts : sig end = struct
@@ -804,23 +784,16 @@ module H = struct
   let constant = function
     | [(Nolabel, str_expr); (Nolabel, type_expr)] ->
       let id = Id.get () in
-      let script =
-        [%stri
-          let () =
-            let (ppxc__s : string) = [%e str_expr] in
-            let (ppxc__t : _ Ctypes.typ) = [%e type_expr] in
-            Ppxc__script.Extract.constant [%e id.Id.script_param] ppxc__s
-              ppxc__t]
-      in
-      Top.add_extract script ;
       let tx = U.marshal_to_str_expr type_expr in
-      let script =
+      let f f =
         [%stri
           let () =
-            Ppxc__script.Build.constant [%e id.Id.script_param] [%e str_expr]
-              [%e tx] [%e type_expr]]
+            let (ppxc__s : string) = [%e str_expr]
+            and (ppxc__t : _ Ctypes.typ) = [%e type_expr] in
+            [%e f] [%e id.Id.script_param] ppxc__s [%e tx] ppxc__t]
       in
-      Top.add_build_external script ;
+      Top.add_extract @@ f [%expr Ppxc__script.Extract.constant] ;
+      Top.add_build_external @@ f [%expr Ppxc__script.Build.constant] ;
       let name = U.safe_mlname () in
       Ppx_mod.add_named ~name_check:false name id.Id.expr
     | l -> error_msg "constant" l
@@ -828,12 +801,10 @@ module H = struct
   let marshal_expr (e : Marshal_types.expr) = U.marshal_to_str_expr e
 
   let register_fun id =
-    let script =
+    Top.add_extract
       [%stri
         let () =
           Ppxc__script.Extract.register_fun_place [%e id.Id.script_param]]
-    in
-    Top.add_extract script
 
   let foreign_value = function
     | [(Nolabel, str_expr); (Nolabel, typ_expr)] ->
@@ -845,17 +816,15 @@ module H = struct
       register_fun id_stri_external ;
       let mp = Ppx_mod.get_mod_path () |> U.marshal_to_str_expr in
       let texpr = marshal_expr typ_expr in
-      let script =
+      Top.add_build_external
         [%stri
           let () =
-            let (ppxc__s : string) = [%e str_expr] in
-            let (ppxc__t : _ Ctypes.typ) = [%e typ_expr] in
+            let (ppxc__s : string) = [%e str_expr]
+            and (ppxc__t : _ Ctypes.typ) = [%e typ_expr] in
             Ppxc__script.Build.foreign_value
               [%e id_stri_external.Id.script_param]
               [%e id_stri_expr.Id.script_param] [%e mp] ppxc__t ppxc__s
-              [%e name_expr] [%e texpr]]
-      in
-      Top.add_build_external script ;
+              [%e name_expr] [%e texpr]] ;
       Ppx_mod.add_external_anon id_stri_external.Id.stri id_stri_expr.Id.stri
         name
     | l -> error_msg "foreign_value" l
@@ -868,13 +837,11 @@ module H = struct
         match x.pexp_desc with
         | Pexp_ident _ -> ()
         | _ -> error "'header' requires a string constant" ) ) ;
-      let script =
+      Top.add_extract
         [%stri
           let () =
             let ppxc__1 : string = [%e x] in
-            Ppxc__script.Extract.header ppxc__1]
-      in
-      Top.add_extract script ;
+            Ppxc__script.Extract.header ppxc__1] ;
       [%expr ()]
     | l -> error_msg "header" l
 
@@ -888,13 +855,9 @@ module H = struct
           let (ppxc__st
                 : (_, [< `Struct | `Union]) Ctypes.structured Ctypes.typ) =
             [%e structure]
-          in
-          let (ppxc__s : string) = [%e str_expr] in
-          let (ppxc__t : _ Ctypes.typ) = [%e type_expr] in
-          let () =
-            [%e func] [%e id.Id.script_param] ppxc__st ppxc__s ppxc__t
-          in
-          Ctypes.ppxc__private_field ppxc__st ppxc__s ppxc__t]
+          and (ppxc__s : string) = [%e str_expr]
+          and (ppxc__t : _ Ctypes.typ) = [%e type_expr] in
+          [%e func] [%e id.Id.script_param] ppxc__st ppxc__s ppxc__t]
     in
     Top.add_extract @@ f [%expr Ppxc__script.Extract.field] ;
     Top.add_build_external @@ f [%expr Ppxc__script.Build.field] ;
@@ -910,21 +873,18 @@ module H = struct
     | [(Nolabel, seal_struct)] ->
       let id_size = Id.get () in
       let id_align = Id.get () in
-      let script =
+      let f f =
         [%stri
           let () =
-            let (ppxc__s : _ Ctypes.structured Ctypes.typ) =
+            let (ppxc__s
+                  : (_, [< `Struct | `Union]) Ctypes.structured Ctypes.typ) =
               [%e seal_struct]
             in
-            let () = Ctypes.ppxc__private_seal ppxc__s in
-            Ppxc__script.Extract.seal [%e id_size.Id.script_param]
-              [%e id_align.Id.script_param] ppxc__s]
+            [%e f] [%e id_size.Id.script_param] [%e id_align.Id.script_param]
+              ppxc__s]
       in
-      Top.add_extract script ;
-      let script =
-        [%stri let () = Ctypes.ppxc__private_seal [%e seal_struct]]
-      in
-      Top.add_build_external script ;
+      Top.add_extract @@ f [%expr Ppxc__script.Extract.seal] ;
+      Top.add_build_external @@ f [%expr Ppxc__script.Build.seal] ;
       let nexpr =
         [%expr
           Ppx_cstubs_internals.seal [%e seal_struct] ~size:[%e id_size.Id.expr]
@@ -964,15 +924,15 @@ module H = struct
       | [a] -> a
       | _ -> error ~loc:v.pval_loc "too many c functions referenced"
     in
-    ( if is_inline = false then
+    if is_inline = false then (
       let c = c_name.[0] in
       if U.safe_ascii_only c_name <> c_name || (c >= '0' && c <= '9') then
-        error "invalid identifier for c function:%S" c_name ) ;
+        error "invalid identifier for c function:%S" c_name ;
+      if remove_labels then
+        error ~loc:v.pval_loc "remove_labels only supported for inline code" ) ;
     let remove_labels =
       remove_labels || (is_inline && is_ocaml_operator name)
     in
-    if is_inline = false && remove_labels then
-      error ~loc:v.pval_loc "remove_labels only supported for inline code" ;
     let ret, el = Extract.fun_def is_inline [] v.pval_type in
     let fun_expr = build_ctypes_fn (List.map ~f:snd el) ret in
     let id_stri_expr = Id.get () in
@@ -1002,15 +962,13 @@ module H = struct
     if is_inline then (* order matters *)
       register_fun id_stri_expr ;
     register_fun id_stri_ext ;
-    let script =
+    Top.add_build_external
       [%stri
         let () =
           let (ppxc__fn : _ Ctypes.fn) = [%e fun_expr] in
           Ppxc__script.Build.external' [%e id_stri_ext.Id.script_param]
             [%e id_stri_expr.Id.script_param] ppxc__fn
-            ~marshal_info:[%e marshal_info]]
-    in
-    Top.add_build_external script ;
+            ~marshal_info:[%e marshal_info]] ;
     (* create a dummy function that can be referenced in Ctypes.view, etc.
        Constraint necessary to avoid warning 21 (unsound type, never returns) *)
     let script = U.mk_typc ~l:[Typ.var "b"] "Ctypes.typ" in
@@ -1027,7 +985,7 @@ module H = struct
             Exp.constraint_ nac @@ Typ.arrow l (Typ.var "a") (Typ.var "b")
           else nac)
     in
-    let script = [%stri let [%p U.mk_pat name] = [%e script]] in
+    let script = U.named_stri name script in
     Top.add_extract script ;
     Top.add_build_external script ;
     fres
@@ -1068,21 +1026,17 @@ module H = struct
           ~ocaml_name:[%e U.str_expr ocaml_name] ~typ_expr:[%e typ_expr]]
     in
     let call = Exp.apply f_expr l in
-    let script = [%stri let () = [%e call]] in
-    Top.add_build_external script ;
+    Top.add_build_external [%stri let () = [%e call]] ;
     Ppx_mod.add_external_anon id_stri_external.Id.stri id_stri_expr.Id.stri
       ocaml_name
 
   let fn binding_name expr =
     let pat = U.mk_pat binding_name in
-    let script = [%stri let ([%p pat] : _ Ctypes.fn) = [%e expr]] in
-    Top.add_extract script ;
+    Top.add_extract [%stri let ([%p pat] : _ Ctypes.fn) = [%e expr]] ;
     let id_expr, attrs = Id.get_usage_id () in
-    let script =
+    Top.add_build_external
       [%stri
-        let [%p pat] = Ppxc__script.Build.reg_trace_fn [%e id_expr] [%e expr]]
-    in
-    Top.add_build_external script ;
+        let [%p pat] = Ppxc__script.Build.reg_trace_fn [%e id_expr] [%e expr]] ;
     Ppx_mod.add_named ~attrs binding_name expr
 
   let add_to_created_types =
@@ -1105,17 +1059,14 @@ module H = struct
       in
       let str_expr = U.marshal_to_str_expr t in
       let name_expr = U.mk_ident binding_name in
-      let script =
+      Top.add_build_external
         [%stri
           let () = Ppxc__script.Build.add_type_ref [%e name_expr] [%e str_expr]]
-      in
-      Top.add_build_external script
 
   let add_ctyp ?build_expr ?(add_typ_constraint = true) ?(name_check = true)
       ?ct bname expr =
     let pat = U.mk_pat bname in
-    let script = [%stri let ([%p pat] : _ Ctypes.typ) = [%e expr]] in
-    Top.add_extract script ;
+    Top.add_extract [%stri let ([%p pat] : _ Ctypes.typ) = [%e expr]] ;
     let typ_id, expr_constrained =
       match add_typ_constraint with
       | false -> (None, expr)
@@ -1202,8 +1153,8 @@ module H = struct
         let alias_name = private_pref orig_name in
         let struct_expr = U.mk_ident alias_name in
         let fnames =
-          List.map sl ~f:(function
-              | {field_name; field_expr; field_cname; field_loc} ->
+          List.map sl
+            ~f:(fun {field_name; field_expr; field_cname; field_loc} ->
               U.with_loc field_loc
               @@ fun () ->
               let str_expr = U.str_expr field_cname in
@@ -1378,33 +1329,29 @@ module H = struct
             let p1 =
               match enum_type with
               | Enum_normal | Enum_both -> U.mk_pat alias_name
-              | Enum_bitmask -> [%pat? _]
+              | Enum_bitmask -> Pat.any ()
             in
             let p2 =
               match enum_type with
-              | Enum_normal -> [%pat? _]
+              | Enum_normal -> Pat.any ()
               | Enum_bitmask -> U.mk_pat alias_name
               | Enum_both -> U.mk_pat alias_name_bitmask
             in
             [%pat? [%p p1], [%p p2]]
           in
-          let script =
+          Top.add_extract
             [%stri
               let ([%p pat] : 'a Ctypes.typ * 'a list Ctypes.typ) =
-                Ppxc__script.Extract.enum [%e exp_l] [%e sparam]]
-          in
-          Top.add_extract script ;
+                Ppxc__script.Extract.enum [%e exp_l] [%e sparam]] ;
           let id_expr, attrs = Id.get_usage_id () in
-          let script =
+          Top.add_build_external
             [%stri
               let [%p pat] =
                 let (ppxc__1, ppxc__2) : 'a Ctypes.typ * 'a list Ctypes.typ =
                   Ppxc__script.Build.enum [%e exp_l] [%e sparam]
                 in
                 ( Ppxc__script.Build.reg_trace [%e id_expr] ppxc__1
-                , Ppxc__script.Build.reg_trace [%e id_expr] ppxc__2 )]
-          in
-          Top.add_build_external script ;
+                , Ppxc__script.Build.reg_trace [%e id_expr] ppxc__2 )] ;
           let f ~is_list ?(bitmask_name = false) name = function
             | None -> ()
             | Some id ->
@@ -1472,8 +1419,7 @@ module H = struct
               let expr = U.named_stri orig_name (constr expr) in
               Hashtbl.add htl_tdl_entries tdl_entry_id expr
             else
-              let str = [%stri let [%p U.mk_pat alias_name] = [%e expr]] in
-              add_stri_to_all str
+              add_stri_to_all [%stri let [%p U.mk_pat alias_name] = [%e expr]]
           in
           ( match stypedef with
           | false -> add (`Struct ct) expr
@@ -1573,7 +1519,7 @@ module H = struct
       tdl_entry
 
   let pexp_const name expr =
-    let script = [%stri let [%p U.mk_pat name] = [%e expr]] in
+    let script = U.named_stri name expr in
     Top.add_extract script ;
     Top.add_build_external script ;
     Ppx_mod.add_named name expr
@@ -1657,12 +1603,10 @@ module H = struct
       let constr = U.mk_typc ~l:[U.mk_typc binding_name] "Ctypes.typ" in
       let pat = Pat.constraint_ (U.mk_pat binding_name) constr in
       Top.add_extract [%stri let [%p pat] = [%e expr]] ;
-      let stri =
+      Top.add_build_external
         [%stri
           let [%p pat] =
-            Ppxc__script.Build.reg_trace [%e usage_id_expr] [%e expr]]
-      in
-      Top.add_build_external stri ;
+            Ppxc__script.Build.reg_trace [%e usage_id_expr] [%e expr]] ;
       let mp = Ppx_mod.get_mod_path () in
       let st, typ_ref = Uniq_ref.make_type_alias mp binding_name in
       Ppx_mod.Structure.add_entry st ;
@@ -1702,7 +1646,8 @@ module H = struct
     Top.add_extract [%stri let [%p pat] = [%e expr]] ;
     let expr =
       [%expr
-        Ppxc__script.Build.abstract [%e str_expr]
+        Ppxc__script.Build.abstract ~size:[%e id_size.Id.script_param]
+          ~align:[%e id_align.Id.script_param] [%e str_expr]
         |> Ppxc__script.Build.reg_trace [%e usage_id_expr]]
     in
     Top.add_build_external [%stri let [%p pat] = [%e expr]] ;
@@ -1790,13 +1735,11 @@ module H = struct
     Top.add_build_external stri ;
     Ppx_mod.Structure.add_entry stri ;
     let id_expr, attrs = Id.get_usage_id () in
-    let stri =
+    Top.add_build_external
       [%stri
         let (_ : _ Ctypes.static_funptr Ctypes.typ) =
           Ppxc__script.Build.reg_trace ~no_dup:true [%e id_expr]
-            [%e U.mk_ident (lmod_name.txt ^ ".t")]]
-    in
-    Top.add_build_external stri ;
+            [%e U.mk_ident (lmod_name.txt ^ ".t")]] ;
     let mp = Ppx_mod.get_mod_path () in
     let mp = mp @ [lmod_name.txt] in
     let _, typ_ref = Uniq_ref.make_type_alias mp "t" in
@@ -1813,12 +1756,10 @@ module H = struct
     let ne = U.mk_ident n in
     let build_expr = [%expr Ppxc__script.Build.trace_custom [%e ne]] in
     let ret = add_ctyp ~build_expr name e in
-    let s =
+    Top.add_build_external
       [%stri
         let () =
-          Ppxc__script.Build.add_custom ~old:[%e ne] ~new':[%e U.mk_ident name]]
-    in
-    Top.add_build_external s ;
+          Ppxc__script.Build.add_custom ~old:[%e ne] ~new':[%e U.mk_ident name]] ;
     ret
 end
 
@@ -1901,7 +1842,8 @@ let add_tdl_entries str =
   @@ List.map str ~f:(function
        | { pstr_desc =
              Pstr_eval
-               ({pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}, l)
+               ( {pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}
+               , (_ :: _ as l) )
          ; pstr_loc
          ; _ }
          when List.exists l ~f:(fun x ->
@@ -2381,36 +2323,37 @@ let mapper _config _cookies =
     | P.Initial_scan -> expr_scan mapper pexp
     | P.Replace -> expr_replace mapper (Uniq_ref.replace_expr pexp)
   in
-  let from_htl htl name attribs =
-    let fail () = failwith "invalid parsetree generated (typ replacement)" in
-    let id =
-      List.find_map attribs ~f:(fun x ->
-          if x.attr_name.txt != name then None
-          else
-            match x.attr_payload with
-            | PStr
-                [ { pstr_desc =
-                      Pstr_eval
-                        ( {pexp_desc = Pexp_constant (Pconst_integer (s, _)); _}
-                        , _ )
-                  ; _ } ] ->
-              Some s
-            | _ -> fail ())
-    in
-    match id with
-    | None -> fail ()
-    | Some s -> (
-      try int_of_string s |> Hashtbl.find htl
-      with Not_found | Failure _ -> fail () )
-  in
   let typ mapper ptyp =
     if !phase <> P.Replace then default_mapper.typ mapper ptyp
     else
       match Uniq_ref.replace_typ ptyp with
       | {ptyp_desc = Ptyp_any; ptyp_attributes = _ :: _ as attribs; _}
         when List.exists attribs ~f:(fun x ->
-                 x.attr_name.txt == Attributes.replace_typ_string) ->
-        from_htl Script_result.htl_type Attributes.replace_typ_string attribs
+                 x.attr_name.txt == Attributes.replace_typ_string) -> (
+        let fail () =
+          failwith "invalid parsetree generated (typ replacement)"
+        in
+        let id =
+          List.find_map attribs ~f:(fun x ->
+              if x.attr_name.txt != Attributes.replace_typ_string then None
+              else
+                match x.attr_payload with
+                | PStr
+                    [ { pstr_desc =
+                          Pstr_eval
+                            ( { pexp_desc =
+                                  Pexp_constant (Pconst_integer (s, _))
+                              ; _ }
+                            , _ )
+                      ; _ } ] ->
+                  Some s
+                | _ -> fail ())
+        in
+        match id with
+        | None -> fail ()
+        | Some s -> (
+          try int_of_string s |> Hashtbl.find Script_result.htl_type
+          with Not_found | Failure _ -> fail () ) )
       | x -> default_mapper.typ mapper x
   in
   let module_expr mapper m =

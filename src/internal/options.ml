@@ -52,6 +52,14 @@ let mode = ref Regular
 
 let cc : string option ref = ref None
 
+let toolchain_used () =
+  if !toolchain <> None then true
+  else
+    match Sys.getenv "OCAMLFIND_TOOLCHAIN" with
+    | exception Not_found -> false
+    | "" -> false
+    | _ -> true
+
 let reset () =
   keep_tmp := false ;
   nopervasives := false ;

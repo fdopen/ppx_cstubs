@@ -74,6 +74,8 @@ module Util : sig
   val no_warn_unused :
     string -> Parsetree.expression -> Parsetree.structure_item
 
+  val no_c_comments : string -> string
+
   val cloc_comment : Mparsetree.Ast_cur.Ast_helper.loc -> string
 
   val unsuffixed_file_name : unit -> string
@@ -82,6 +84,8 @@ module Util : sig
   val sig_from_mod_type : Parsetree.structure_item -> Parsetree.signature
 
   val ocaml_warning : string -> Parsetree.attribute
+
+  val named_stri : string -> Parsetree.expression -> Parsetree.structure_item
 end
 
 module Result : sig

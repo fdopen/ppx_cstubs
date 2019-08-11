@@ -405,7 +405,7 @@ union ppxc_example_union {
 #define PPXC_MAX_SIGNED_TYPE(typ) ((PPXC_HALF_MAX_SIGNED_TYPE(typ) - ((typ)1)) + PPXC_HALF_MAX_SIGNED_TYPE(typ))
 #define PPXC_MIN_SIGNED_TYPE(typ) ( ((typ)-1) - PPXC_MAX_SIGNED_TYPE(typ))
 
-#define PPXC_MIN_TYPE(typ) ( ((typ)-1) < 1 ? PPXC_MIN_SIGNED_TYPE(typ): (typ)0)
+#define PPXC_MIN_TYPE(typ) ( ((typ)-1) < 1 ? PPXC_MIN_SIGNED_TYPE(typ) : (typ)0)
 #define PPXC_MAX_TYPE(typ) ( (typ) (~PPXC_MIN_TYPE(typ)))
 |}
 
@@ -451,7 +451,8 @@ let prepare_extract_int ?(bit32 = false) ?(disable_checks = false) ~ctype ~expr
 %s %s = %s;
 char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
 |}
-        com_loc ctype var1 expr var2 expr expr
+        com_loc ctype var1 expr var2 expr
+        (Std.Util.no_c_comments expr)
   in
   let stringify = if bit32 then "PPXC__SNSTR" else "PPXC__NSTR" in
   let gen prepend info =
@@ -477,11 +478,12 @@ DISABLE_LIMIT_WARNINGS_POP()
     if disable_checks = true then ({id; intern = Unchecked_integer}, res_str1)
     else
       let s_int = Printf.sprintf "( PPXC_IS_INTEGER_DEF_TRUE(%s) )" expr in
+      let int_size = if bit32 then "32" else "64" in
       let s_min =
-        Printf.sprintf "( (%s) >= 0 || (%s) >= INT64_MIN )" expr expr
+        Printf.sprintf "( (%s) >= 0 || (%s) >= INT%s_MIN )" expr expr int_size
       in
       let s_max =
-        Printf.sprintf "( (%s) <= 0 || (%s) <= UINT64_MAX )" expr expr
+        Printf.sprintf "( (%s) <= 0 || (%s) <= UINT%s_MAX )" expr expr int_size
       in
       let s_user_min =
         Printf.sprintf "( (%s) >= 0 || (%s) >= (PPXC_MIN_TYPE(%s)) )" expr expr
@@ -629,8 +631,6 @@ type extract_error =
   | Info_not_found
   | Overflow of string
   | Underflow of string
-  | User_overflow of string
-  | User_underflow of string
   | Not_an_integer
 
 let normalise_int str =
@@ -678,6 +678,6 @@ let extract info htl =
     if int' land (1 lsl 0) = 0 then er Not_an_integer ;
     if int' land (1 lsl 1) = 0 then er (Underflow res) ;
     if int' land (1 lsl 2) = 0 then er (Overflow res) ;
-    if int' land (1 lsl 3) = 0 then er (User_underflow res) ;
-    if int' land (1 lsl 4) = 0 then er (User_overflow res) ;
+    if int' land (1 lsl 3) = 0 then er (Underflow res) ;
+    if int' land (1 lsl 4) = 0 then er (Overflow res) ;
     Ok res

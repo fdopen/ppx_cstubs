@@ -45,8 +45,8 @@ let rec add_field :
     u.ufields <- BoxedField r :: u.ufields ;
     r
   | View {ty; _} ->
-    let {ftype; foffset; fname} = add_field ty fname foffset ftype in
-    {ftype; foffset; fname}
+    let ({fname = _; _} as r) = add_field ty fname foffset ftype in
+    r
   | _ -> failwith ("Unexpected field " ^ fname)
 
 external identity : 'a -> 'a = "%identity"

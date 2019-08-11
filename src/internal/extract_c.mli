@@ -43,8 +43,6 @@ type extract_error =
   | Info_not_found
   | Overflow of string
   | Underflow of string
-  | User_overflow of string
-  | User_underflow of string
   | Not_an_integer
 
 val extract : extract_info -> obj -> (string, extract_error) CCResult.t

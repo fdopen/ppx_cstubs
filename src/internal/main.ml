@@ -187,9 +187,9 @@ let cpp_main () =
   Options.findlib_pkgs := List.rev !findlib_pkgs ;
   Options.verbosity := !verbose ;
   Options.cc := !cc ;
-  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init () ;
   (* trigger exceptions *)
   Ocaml_config.init () ;
+  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init () ;
   let l = if ml_output = "-" then [] else ["-o"; ml_output] in
   let l = source :: l in
   let l = if !pretty_print then l else "--dump-ast" :: l in

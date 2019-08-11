@@ -44,7 +44,7 @@ val build_inline_fun :
   -> c_body:string
   -> locs:Location.t list
   -> noalloc:bool
-  -> (string * string) list
+  -> (Mparsetree.Ast_cur.Asttypes.arg_label * Marshal_types.expr) list
   -> string
 
 val gen_callback_fun : 'a Ctypes.fn -> Marshal_types.ocaml_funptr -> string

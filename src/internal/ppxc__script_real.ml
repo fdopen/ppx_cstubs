@@ -38,9 +38,9 @@ module C_content = struct
   type t =
     | Header of string * Marshal_types.loc
     | Extract_header of string * Marshal_types.loc * exn
-    | Extract_text of
+    | Extract_source of
         string * Marshal_types.loc * exn * (Extract_c.obj -> unit)
-    | Replace_text of id
+    | Function of id
 
   let default_header =
     {|
@@ -86,7 +86,7 @@ module C_content = struct
 #endif
 |}
 
-  let htl_id_text = Hashtbl.create 16
+  let htl_id_func = Hashtbl.create 16
 
   let init_entries =
     let loc = !Ast_helper.default_loc in
@@ -99,7 +99,7 @@ module C_content = struct
 
   let clear () =
     entries := init_entries ;
-    Hashtbl.clear htl_id_text
+    Hashtbl.clear htl_id_func
 
   let add_header h loc = entries := Header (h, loc) :: !entries
 
@@ -107,34 +107,35 @@ module C_content = struct
     entries := Extract_header (h, loc, exn) :: !entries
 
   let add_extract_source h loc exn f =
-    entries := Extract_text (h, loc, exn, f) :: !entries
+    entries := Extract_source (h, loc, exn, f) :: !entries
 
-  let add_function id s = Hashtbl.replace htl_id_text id s
+  let add_function id s = Hashtbl.replace htl_id_func id s
 
-  let add_function_place id = entries := Replace_text id :: !entries
+  let add_function_place id = entries := Function id :: !entries
 
   let get_extract_source () =
     List.fold_left ~init:[] !entries ~f:(fun a ->
       function
-      | Header (h, _) | Extract_text (h, _, _, _) | Extract_header (h, _, _) ->
+      | Header (h, _) | Extract_source (h, _, _, _) | Extract_header (h, _, _)
+        ->
         h :: a
-      | Replace_text _ -> a)
+      | Function _ -> a)
     |> String.concat "\n"
 
   let get_source () =
     let cnt, l =
       List.fold_left ~init:(0, []) !entries ~f:(fun ((cnt, ac) as cnt_ac) ->
         function
-        | Replace_text id ->
+        | Function id ->
           let s =
-            try Hashtbl.find htl_id_text id
+            try Hashtbl.find htl_id_func id
             with Not_found -> U.error "fatal: incomplete source code"
           in
           (succ cnt, s :: ac)
         | Header (s, _) -> (cnt, s :: ac)
-        | Extract_header _ | Extract_text _ -> cnt_ac)
+        | Extract_header _ | Extract_source _ -> cnt_ac)
     in
-    if Hashtbl.length htl_id_text <> cnt then
+    if Hashtbl.length htl_id_func <> cnt then
       U.error "fatal: source code incomplete" ;
     if cnt = 0 then None else Some (String.concat "\n\n" l)
 end
@@ -188,9 +189,8 @@ module Const = struct
         match x with
         | Info_not_found ->
           U.error ~loc "constant extraction failed for unknown reasons"
-        | User_overflow s | Overflow s -> U.error ~loc "number too large:%s" s
-        | Underflow s | User_underflow s ->
-          U.error ~loc "number too small:%s" s
+        | Overflow s -> U.error ~loc "number too large:%s" s
+        | Underflow s -> U.error ~loc "number too small:%s" s
         | Not_an_integer -> U.error "constant is not an integer" )
     in
     if Options.(!mode = Emulate) then h "1"
@@ -241,8 +241,7 @@ module Const = struct
         function
         | C_content.Header (s, l) -> (s, `Header l) :: ac
         | C_content.Extract_header (s, l, e) -> (s, `Eheader (l, e)) :: ac
-        | C_content.Extract_text _ -> ac
-        | C_content.Replace_text _ -> ac)
+        | C_content.Extract_source _ | C_content.Function _ -> ac)
     in
     let l_s = List.map l ~f:fst in
     let len = List.length l in
@@ -253,9 +252,10 @@ module Const = struct
         List.fold_left !C_content.entries ~init:[] ~f:(fun ac ->
           function
           | C_content.Header (s, l) -> (s, `Header l) :: ac
-          | C_content.Extract_header (s, l, e) -> (s, `Eheader (l, e)) :: ac
-          | C_content.Extract_text (s, l, e, _) -> (s, `Eheader (l, e)) :: ac
-          | C_content.Replace_text _ -> ac)
+          | C_content.Extract_header (s, l, e)
+           |C_content.Extract_source (s, l, e, _) ->
+            (s, `Eheader (l, e)) :: ac
+          | C_content.Function _ -> ac)
       in
       let l_s = List.map l ~f:fst in
       let len = List.length l in
@@ -266,20 +266,19 @@ module Const = struct
     if !compiled = false && Options.(!mode <> Emulate) then (
       let open C_content in
       compiled := true ;
-      let extract =
+      if
         List.exists !C_content.entries ~f:(function
-          | Header _ | Extract_header _ | Replace_text _ -> false
-          | Extract_text _ -> true)
-      in
-      if extract then
+          | Header _ | Extract_header _ | Function _ -> false
+          | Extract_source _ -> true)
+      then
         let source = C_content.get_extract_source () in
         let ebuf = Buffer.create 1024 in
         match Extract_c.compile ~ebuf source with
         | Ok obj ->
           if Buffer.length ebuf > 0 then Buffer.output_buffer stderr ebuf ;
           List.iter (List.rev !C_content.entries) ~f:(function
-            | Header _ | Extract_header _ | Replace_text _ -> ()
-            | Extract_text (_, _, _, f) -> f obj)
+            | Header _ | Extract_header _ | Function _ -> ()
+            | Extract_source (_, _, _, f) -> f obj)
         | Error _ -> find_failing ebuf )
 
   let extract_single_einfo id =
@@ -396,7 +395,9 @@ module Trace = struct
       | Funptr fn ->
         h !typs_funptr ;
         trace_fn fn
-      | Array _ -> h !typs_array
+      | Array (ty, _) ->
+        h !typs_array ;
+        trace ty
       | Bigarray _ -> h !typs_bigarray
       | OCaml _ -> h !typs_ocaml
       | Primitive _ -> h !typs_prim
@@ -445,7 +446,7 @@ module type Anysigned_result = sig
 end
 
 module Extract = struct
-  let constant id_loc str t =
+  let constant id_loc str _ t =
     let id, loc = U.from_id_loc_param id_loc in
     let info_str = "constant " ^ str in
     Const.add ~no_expr:true ~info_str id loc t str
@@ -466,7 +467,7 @@ module Extract = struct
     let param = U.safe_cname ~prefix:ctyp in
     let param_typed = Gen_c.string_of_typ_exn ~name:param (Ctypes.ptr stru) in
     let fun_name = U.safe_cname ~prefix:ctyp in
-    let com_loc = Std.Util.cloc_comment loc in
+    let com_loc = U.cloc_comment loc in
     let rec iter : type a. a Ctypes.typ -> _ =
       let open Ctypes_static in
       function
@@ -474,11 +475,12 @@ module Extract = struct
       | Struct _ -> `Struct
       | Union x when x.ufields = [] -> `Union_empty
       | Union _ -> `Union
-      | View {ty; _} -> (
+      | View {ty; format_typ = Some _; _} -> (
         match iter ty with
         | `Struct_empty -> `Typedef_struct_empty
         | `Union_empty -> `Typedef_union_empty
         | x -> x )
+      | View {ty; _} -> iter ty
       | Pointer _ -> assert false
       | Funptr _ -> assert false
       | Array _ -> assert false
@@ -489,7 +491,7 @@ module Extract = struct
       | Abstract _ -> assert false
     in
     let x = iter stru in
-    ( match iter stru with
+    ( match x with
     | `Typedef_struct_empty | `Typedef_union_empty ->
       let t, ass =
         if x = `Typedef_struct_empty then ("struct", "PPXC_ASSERT_STRUCT")
@@ -547,19 +549,20 @@ module Extract = struct
 DISABLE_CONST_WARNINGS_PUSH()
 %s;
 void %s (%s) {
-    /* just to trigger errors and warnings */
+  /* just to trigger errors and warnings */
 #if defined(PPXC_HAS_TYPEOF) && !defined(__cplusplus)
-    __typeof__(%s->%s) ppx__var;
-    memcpy((void*)&ppx__var, &(%s->%s), sizeof(ppx__var));
-    (void) (&ppx__var == &%s); /* field %s in %s incompatible? */
+  __typeof__(%s->%s) ppx__var;
+  memcpy((void*)&ppx__var, &(%s->%s), sizeof(ppx__var));
+  (void) (&ppx__var == &%s); /* field %s in %s incompatible? */
 #else
-   memcpy(&%s,&(%s->%s),sizeof(%s));
+  memcpy(&%s,&(%s->%s),sizeof(%s));
 #endif
 }
 DISABLE_CONST_WARNINGS_POP()
 |}
         var2_typed fun_name param_typed param field_name param field_name var2
-        field_name ctyp var2 param field_name var2
+        (U.no_c_comments field_name)
+        (U.no_c_comments ctyp) var2 param field_name var2
     in
     let e = U.error_exn "field %s in %s not available?" field_name ctyp in
     C_content.add_extract_header txt loc e ;
@@ -570,14 +573,15 @@ DISABLE_CONST_WARNINGS_POP()
     in
     let info_str = Printf.sprintf "field %s in %s" field_name ctyp in
     Const.add ~info_str ~bit32:true ~no_expr:true ~disable_checks:true id loc
-      Ctypes.camlint to_extract
+      Ctypes.camlint to_extract ;
+    Ctypes.field stru field_name field_type
 
   let size_align id_loc_size id_loc_align ~no_expr ctyp =
     let id_size, loc_size = U.from_id_loc_param id_loc_size in
     let id_align, loc_align = U.from_id_loc_param id_loc_align in
     let size_str = Printf.sprintf "sizeof(%s)" ctyp in
     let struct_name = U.safe_cname ~prefix:"extract_struct" in
-    let cloc = Std.Util.cloc_comment loc_size in
+    let cloc = U.cloc_comment loc_size in
     let txt =
       Printf.sprintf "%s\nstruct %s {char c; %s x;};\n" cloc struct_name ctyp
     in
@@ -591,6 +595,7 @@ DISABLE_CONST_WARNINGS_POP()
     struct_name
 
   let seal id_loc_size id_loc_align stru =
+    Ctypes.seal stru ;
     let ctyp = Gen_c.string_of_typ_exn stru in
     ignore (size_align id_loc_size id_loc_align ~no_expr:false ctyp : string)
 
@@ -632,11 +637,12 @@ DISABLE_CONST_WARNINGS_POP()
       | true -> enum_name
     in
     let evar = U.safe_cname ~prefix:enum_name in
-    let cloc = Std.Util.cloc_comment enum_loc in
+    let cloc = U.cloc_comment enum_loc in
     let txt =
       Printf.sprintf
         "%s\n%s %s; /* type %s defined? */\n"
-        cloc type_str evar enum_name
+        cloc type_str evar
+        (U.no_c_comments enum_name)
     in
     let exn = U.error_exn ~loc:enum_loc "type %s not defined?" enum_name in
     C_content.add_extract_header txt enum_loc exn ;
@@ -646,7 +652,7 @@ DISABLE_CONST_WARNINGS_POP()
         let cname = c.ee_cname in
         let evar1 = U.safe_cname ~prefix:cname in
         let evar2 = U.safe_cname ~prefix:("char_" ^ cname) in
-        let cloc = Std.Util.cloc_comment c.ee_loc in
+        let cloc = U.cloc_comment c.ee_loc in
         let txt =
           Printf.sprintf
             {|
@@ -654,7 +660,7 @@ DISABLE_CONST_WARNINGS_POP()
 %s %s = %s; /* trigger errors */
 char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
 |}
-            cloc type_str evar1 cname evar2 cname cname
+            cloc type_str evar1 cname evar2 cname (U.no_c_comments cname)
         in
         let exn = U.error_exn "enum %s not defined?" cname in
         C_content.add_extract_header txt c.ee_loc exn ;
@@ -796,7 +802,7 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
     let id, loc = U.from_id_loc_param id_loc in
     let stru = U.safe_cname ~prefix:ctyp in
     let expl = U.safe_cname ~prefix:ctyp in
-    let cloc = Std.Util.cloc_comment loc in
+    let cloc = U.cloc_comment loc in
     let txt =
       Printf.sprintf
         {|%s
@@ -841,7 +847,7 @@ struct %s {char c; %s x;};
 
   let common_abstract ~size ~align ~no_expr ctyp =
     let _, loc = U.from_id_loc_param size in
-    let cloc = Std.Util.cloc_comment loc in
+    let cloc = U.cloc_comment loc in
     let var = U.safe_cname ~prefix:ctyp in
     let txt = Printf.sprintf "%s\n%s %s;\n" cloc ctyp var in
     let exn = U.error_exn "%s not defined?" ctyp in
@@ -956,41 +962,11 @@ module Build = struct
         Gen_c.gen_fun ctypes_fn ~locs ~stubname ~cfunc:c_name
           ~release_runtime_lock ~noalloc ~return_errno
       else
-        let names =
-          if List.exists el ~f:(fun (x, _) -> x = Asttypes.Nolabel) then
-            let is_void : type a. a Ctypes.fn -> bool = function
-              | Ctypes_static.Function (a, _) -> Gen_c.is_void a
-              | Ctypes_static.Returns _ -> false
-            in
-            if List.length el = 1 && is_void ctypes_fn then ["$dummy$"]
-            else U.error "inline code requires named parameters"
-          else
-            let names =
-              List.map el
-                ~f:
-                  Asttypes.(
-                    fun (x, _) ->
-                      match x with
-                      | Nolabel | Optional _ -> U.error "label required"
-                      | Labelled s -> s)
-            in
-            let names' = CCList.uniq ~eq:CCString.equal names in
-            if List.length names' <> List.length names then
-              U.error "labels must be unique" ;
-            names'
-        in
-        let names =
-          List.mapi names ~f:(fun i a ->
-              let s =
-                Printf.sprintf "ppxc__var%d_%s" i (U.safe_ascii_only a)
-              in
-              (a, s))
-        in
         let c_body = c_name in
         let prim_name = U.safe_ascii_only prim_name in
         let c_name = U.safe_cname ~prefix:("i" ^ prim_name) in
         let body =
-          Gen_c.build_inline_fun ~locs ctypes_fn ~c_name ~c_body ~noalloc names
+          Gen_c.build_inline_fun ~locs ctypes_fn ~c_name ~c_body ~noalloc el
         in
         C_content.add_function id_stri_expr body ;
         let stubname = U.safe_cname ~prefix:("f" ^ prim_name) in
@@ -1021,8 +997,8 @@ module Build = struct
       | Some x -> x
       | None -> U.error "can't determine type of enum %s" name
     in
-    let float_flag_bit = 15
     (* constants from ctypes_primitives.h *)
+    let float_flag_bit = 15
     and unsigned_flag_bit = 14 in
     let is_float = res land (1 lsl float_flag_bit) <> 0 in
     let is_unsigned = res land (1 lsl unsigned_flag_bit) <> 0 in
@@ -1049,7 +1025,7 @@ module Build = struct
     let unboxed_ints =
       type_unsigned = false
       && Ocaml_config.word_size () = 64
-      && !Options.toolchain = None
+      && Options.toolchain_used () = false
       && Ctypes.alignment Ctypes.int32_t = Ctypes.alignment Ctypes.int
       && Ctypes.sizeof Ctypes.int32_t = Ctypes.sizeof Ctypes.int
     in
@@ -1115,7 +1091,7 @@ module Build = struct
           let tup = Ast_helper.Exp.tuple [tup; ac] in
           Ast_helper.Exp.construct (U.mk_lid "::") (Some tup))
     in
-    let name = Std.Util.str_expr enum_name in
+    let name = U.str_expr enum_name in
     let typedef =
       match enum_is_typedef with
       | true -> [%expr true]
@@ -1170,7 +1146,7 @@ module Build = struct
     let s : Created_types.t = Marshal.from_string s 0 in
     Created_types.add_type t s
 
-  let field id_loc stru field_name _field_type =
+  let field id_loc stru field_name field_type =
     let id, _ = U.from_id_loc_param id_loc in
     let r =
       match extract_single_int id int_of_string with
@@ -1183,7 +1159,9 @@ module Build = struct
     if !Options.mode <> Options.Emulate && r land (1 lsl 29) = 0 then
       U.error "field %s in %s has the wrong size or type" field_name
         (Ctypes.string_of_typ stru) ;
-    Hashtbl.replace G.htl_expr id (U.int_expr offset)
+    Hashtbl.replace G.htl_expr id (U.int_expr offset) ;
+    Trace.trace field_type ;
+    Ppx_cstubs_internals.add_field stru field_name offset field_type
 
   let help_opaq_int =
     let open Ast_helper in
@@ -1479,6 +1457,16 @@ module Build = struct
                           ?strict ctyp ) :
                     Anysigned_result ) )
 
+  let g_size_align ~size ~align name =
+    let id_s, _ = U.from_id_loc_param size in
+    let id_a, _ = U.from_id_loc_param align in
+    let f id =
+      match extract_single_int id int_of_string with
+      | Some x -> x
+      | None -> U.error "can't find info about %s" name
+    in
+    (f id_s, f id_a)
+
   let opaque =
     let module Const_orig = Const in
     let open Ast_helper in
@@ -1489,19 +1477,13 @@ module Build = struct
         in
         let uniq_ref_id = o_uniq_ref_id in
         let binding_name = o_binding_name in
-        let id_size, _ = U.from_id_loc_param size in
-        let id_align, _ = U.from_id_loc_param align in
         let id_typ, _ = U.from_id_loc_param typ in
-        let f id trans =
-          match extract_single_int id trans with
-          | Some x -> x
-          | None -> U.error "can't find info about %s" ctyp
-        in
-        let size = if emu then 1 else f id_size int_of_string in
-        let alignment = if emu then 1 else f id_align int_of_string in
         let r =
           if emu then Unsigned.UInt64.zero
-          else f id_typ Unsigned.UInt64.of_string
+          else
+            match extract_single_int id_typ Unsigned.UInt64.of_string with
+            | Some x -> x
+            | None -> U.error "can't find info about %s" ctyp
         in
         let g manifest expr =
           let loc_binding_name = U.mk_loc binding_name in
@@ -1510,7 +1492,7 @@ module Build = struct
           let stris = [Str.type_ Asttypes.Recursive [t]] in
           let sigs = [Sig.type_ Asttypes.Recursive [t_abstr]] in
           help_opaq_int ~sigs ~stris ~uniq_ref_id ~binding_name ~expr
-          |> Hashtbl.replace G.htl_stri id_size
+          |> Hashtbl.replace G.htl_stri (fst (U.from_id_loc_param size))
         in
         let f (type a) (ctypes_t : a Ctypes.typ) expr s_typ :
             (module Opaque_result) =
@@ -1608,6 +1590,7 @@ module Build = struct
           end ) )
         else
           let manifest = [%type: [`a] Ctypes.abstract] in
+          let size, alignment = g_size_align ~size ~align ctyp in
           let expr =
             [%expr
               Ctypes_static.Abstract
@@ -1626,7 +1609,13 @@ module Build = struct
           end )
         : (module Opaque_result) )
 
-  let abstract name = Ctypes.abstract ~size:1 ~alignment:1 ~name
+  let abstract ~size ~align name =
+    let size, alignment = g_size_align ~size ~align name in
+    Ctypes.abstract ~size ~alignment ~name
+
+  let seal size align stru =
+    let size, align = g_size_align ~size ~align "struct/union" in
+    Ppx_cstubs_internals.seal stru ~size ~align
 
   let trace_custom t =
     Trace.trace t ;
@@ -1730,8 +1719,6 @@ module Ctypes_make = struct
   module Ctypes (T_env : Target_env) = struct
     include Ctypes_static
 
-    let ppxc__private_seal = Ctypes.seal
-
     let typ_of_bigarray_kind = Ctypes.typ_of_bigarray_kind
 
     let string_opt = Ctypes.string_opt
@@ -1802,7 +1789,7 @@ module Ctypes_make = struct
     let addr = Ctypes.addr
 
     let unavailable s =
-      Std.Util.error "function %s is not available during code generation" s
+      U.error "function %s is not available during code generation" s
 
     let ( !@ ) = Ctypes.( !@ )
 
@@ -1881,11 +1868,6 @@ module Ctypes_make = struct
     let alignment _ = unavailable "alignment"
 
     let sizeof _ = unavailable "sizeof"
-
-    let ppxc__private_field a s t =
-      (* Trace.trace a; *)
-      Trace.trace t ;
-      Ctypes.field a s t
 
     let ppxc__private_ocaml_typ typ =
       let s : [`priv] Ctypes_static.structure Ctypes.typ =

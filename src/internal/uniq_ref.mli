@@ -26,7 +26,12 @@ type make_result =
   ; topmod_ref : structure_item
   ; main_ref : expression }
 
-val make : string list -> string -> expression -> make_result
+val make :
+     ?main_ref_attrs:attribute list
+  -> string list
+  -> string
+  -> expression
+  -> make_result
 
 val replace_expr : expression -> expression
 

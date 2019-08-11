@@ -32,6 +32,8 @@ external identity : 'a -> 'a = "%identity"
 
 module Util = struct
   open Mparsetree.Ast_cur
+  module Lo = Location
+  module Le = Lexing
 
   let with_loc loc f =
     let old_loc = !Ast_helper.default_loc in
@@ -39,22 +41,20 @@ module Util = struct
     finally ~h:(fun () -> Ast_helper.default_loc := old_loc) f
 
   let error ?(loc = !Ast_helper.default_loc) fmt =
-    Format.ksprintf
-      (fun s -> raise (Location.Error (Location.error ~loc s)))
-      fmt
+    Format.ksprintf (fun s -> raise (Lo.Error (Lo.error ~loc s))) fmt
 
   let error_exn ?(loc = !Ast_helper.default_loc) fmt =
-    Format.ksprintf (fun s -> Location.Error (Location.error ~loc s)) fmt
+    Format.ksprintf (fun s -> Lo.Error (Lo.error ~loc s)) fmt
 
   let str_expr ?loc s = Ast_helper.(Exp.constant ?loc (Const.string s))
 
   let int_expr ?loc ?attrs i =
     Ast_helper.(Exp.constant ?loc ?attrs (Const.int i))
 
-  let mk_loc s = Location.mkloc s !Ast_helper.default_loc
+  let mk_loc s = Lo.mkloc s !Ast_helper.default_loc
 
   let mk_lid ?(loc = !Ast_helper.default_loc) s =
-    Location.mkloc (Longident.parse s) loc
+    Lo.mkloc (Longident.parse s) loc
 
   let mk_pat s = Ast_helper.Pat.var (mk_loc s)
 
@@ -77,8 +77,6 @@ module Util = struct
       s
 
   let unsuffixed_file_name () =
-    let module Lo = Location in
-    let module Le = Lexing in
     let loc = !Ast_helper.default_loc in
     let name = Filename.basename loc.Lo.loc_start.Le.pos_fname in
     match CCString.split_on_char '.' name with
@@ -88,8 +86,6 @@ module Util = struct
   let safe_cname =
     let i = ref (-1) in
     fun ~prefix ->
-      let module Lo = Location in
-      let module Le = Lexing in
       let loc = !Ast_helper.default_loc in
       let name = unsuffixed_file_name () in
       let s = safe_ascii_only prefix in
@@ -113,7 +109,7 @@ module Util = struct
         | Some s -> (safe_ascii_only_ml s, "_")
       in
       let loc = !Ast_helper.default_loc in
-      let line = loc.Location.loc_start.Lexing.pos_lnum in
+      let line = loc.Lo.loc_start.Le.pos_lnum in
       incr i ;
       let nowarn = if nowarn then "_" else "" in
       let f = if capitalize then 'P' else 'p' in
@@ -157,16 +153,16 @@ module Util = struct
   let no_warn_unused name expr =
     no_warn_unused_post406 name expr |> no_warn_unused_pre406
 
+  let no_c_comments s =
+    CCString.replace ~which:`All ~sub:"/*" ~by:"/ *" s
+    |> CCString.replace ~which:`All ~sub:"*/" ~by:"* /"
+
   let cloc_comment loc =
     let b = Buffer.create 128 in
     let fmt = Format.formatter_of_buffer b in
-    Location.print_loc fmt loc ;
+    Lo.print_loc fmt loc ;
     Format.pp_print_flush fmt () ;
-    let s =
-      Buffer.contents b
-      |> CCString.replace ~which:`All ~sub:"/*" ~by:"/ *"
-      |> CCString.replace ~which:`All ~sub:"*/" ~by:"* /"
-    in
+    let s = Buffer.contents b |> no_c_comments in
     String.concat " " ["/*"; s; "*/"]
 
   let sig_from_mod_type =
@@ -176,6 +172,8 @@ module Util = struct
       | Pstr_modtype {pmtd_type = Some {pmty_desc = Pmty_signature s; _}; _} ->
         s
       | _ -> assert false
+
+  let named_stri n expr = [%stri let [%p mk_pat n] = [%e expr]]
 end
 
 module Result = struct
@@ -186,12 +184,15 @@ end
 
 module Various = struct
   let use_threads () =
-    let pkgs =
-      match Findlib.package_deep_ancestors ["byte"] !Options.findlib_pkgs with
-      | exception Fl_package_base.No_such_package _ -> !Options.findlib_pkgs
-      | d -> d
-    in
-    List.exists
-      (function "threads" | "threads.posix" -> true | _ -> false)
-      pkgs
+    match !Options.findlib_pkgs with
+    | [] -> false
+    | f_pkgs ->
+      let pkgs =
+        match Findlib.package_deep_ancestors ["byte"] f_pkgs with
+        | exception Fl_package_base.No_such_package _ -> f_pkgs
+        | d -> d
+      in
+      List.exists
+        (function "threads" | "threads.posix" -> true | _ -> false)
+        pkgs
 end

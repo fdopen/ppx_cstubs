@@ -156,25 +156,22 @@ exception Eunderflow
 exception Eoverflow
 
 let gen t str =
+  let w32 = Ocaml_config.word_size () = 32 in
   let camlint_max =
-    if Ocaml_config.word_size () = 64 then
-      Big_int.big_int_of_int64 4611686018427387903L
-    else Big_int.big_int_of_int 1073741823
+    if w32 then Big_int.big_int_of_int 1073741823
+    else Big_int.big_int_of_int64 4611686018427387903L
   in
   let camlint_min =
-    if Ocaml_config.word_size () = 64 then
-      Big_int.big_int_of_int64 (-4611686018427387904L)
-    else Big_int.big_int_of_int (-1073741824)
+    if w32 then Big_int.big_int_of_int (-1073741824)
+    else Big_int.big_int_of_int64 (-4611686018427387904L)
   in
   let intnative_max =
-    if Ocaml_config.word_size () = 64 then
-      Big_int.big_int_of_int64 9223372036854775807L
-    else Big_int.big_int_of_int32 2147483647l
+    if w32 then Big_int.big_int_of_int32 2147483647l
+    else Big_int.big_int_of_int64 9223372036854775807L
   in
   let intnative_min =
-    if Ocaml_config.word_size () = 64 then
-      Big_int.big_int_of_int64 (-9223372036854775808L)
-    else Big_int.big_int_of_int32 (-2147483648l)
+    if w32 then Big_int.big_int_of_int32 (-2147483648l)
+    else Big_int.big_int_of_int64 (-9223372036854775808L)
   in
   let ( < ) a b = Big_int.compare_big_int a b < 0 in
   let ( <= ) a b = Big_int.compare_big_int a b <= 0 in
@@ -183,6 +180,7 @@ let gen t str =
   let ( = ) a b = Big_int.compare_big_int a b = 0 in
   let xint r = X.int (Big_int.int_of_big_int r) in
   let xint64 r = X.int64 (Big_int.int64_of_big_int r) in
+  let xnative r = X.nativeint (Big_int.nativeint_of_big_int r) in
   let xstr r = Big_int.string_of_big_int r |> X.string in
   let check_limits r min max =
     if r < min then raise_notrace Eunderflow ;
@@ -218,18 +216,24 @@ let gen t str =
   | Extr_sint ->
     if r >= camlint_min && r <= camlint_max then
       [%expr Signed.SInt.of_int [%e xint r]]
+    else if w32 && r >= intnative_min && r <= intnative_max then
+      [%expr Signed.SInt.of_nativeint [%e xnative r]]
     else if r >= int64_min && r <= int64_max then
       [%expr Signed.SInt.of_int64 [%e xint64 r]]
     else [%expr Signed.SInt.of_string [%e xstr r]]
   | Extr_long ->
     if r >= camlint_min && r <= camlint_max then
       [%expr Signed.Long.of_int [%e xint r]]
+    else if w32 && r >= intnative_min && r <= intnative_max then
+      [%expr Signed.Long.of_nativeint [%e xnative r]]
     else if r >= int64_min && r <= int64_max then
       [%expr Signed.Long.of_int64 [%e xint64 r]]
     else [%expr Signed.Long.of_string [%e xstr r]]
   | Extr_llong ->
     if r >= camlint_min && r <= camlint_max then
       [%expr Signed.LLong.of_int [%e xint r]]
+    else if w32 && r >= intnative_min && r <= intnative_max then
+      [%expr Signed.LLong.of_nativeint [%e xnative r]]
     else if r >= int64_min && r <= int64_max then
       [%expr Signed.LLong.of_int64 [%e xint64 r]]
     else [%expr Signed.LLong.of_string [%e xstr r]]
@@ -238,7 +242,7 @@ let gen t str =
     Big_int.int32_of_big_int r |> X.int32
   | Extr_nativeint ->
     check_limits r intnative_min intnative_max ;
-    Big_int.nativeint_of_big_int r |> X.nativeint
+    xnative r
   | Extr_int64_t ->
     check_limits r int64_min int64_max ;
     xint64 r

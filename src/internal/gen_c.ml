@@ -17,7 +17,9 @@
  *)
 
 open Ctypes
+open Mparsetree.Ast_cur
 module List = CCListLabels
+module U = Std.Util
 
 let error = Std.Util.error
 
@@ -500,7 +502,7 @@ let with_loc locs f =
   let loc, locs =
     match locs with [] -> (!Ast_helper.default_loc, []) | hd :: tl -> (hd, tl)
   in
-  Std.Util.with_loc loc @@ fun () -> f locs
+  U.with_loc loc @@ fun () -> f locs
 
 let extract =
   let open Ctypes_static in
@@ -589,7 +591,7 @@ let funptr_transform =
       | View {format_typ = Some _; _} -> a
       | View ({ty; _} as x) -> View {x with ty = iter2 ty}
       | Funptr _ ->
-        let name = Std.Util.safe_cname ~prefix:"typedef" in
+        let name = U.safe_cname ~prefix:"typedef" in
         let t = string_of_typ_exn ~name a in
         let t = Printf.sprintf "typedef %s;\n" t in
         res := t :: !res ;
@@ -804,7 +806,7 @@ let gen_value a ~stubname ~value =
   (* It is safe for noalloc usage, as long as the user doesn't pass a function
      call or similar to it. If he passes a macro, he deserves all errors that
      might occur :) *)
-  let noalloc = Std.Util.safe_ascii_only value = value in
+  let noalloc = U.safe_ascii_only value = value in
   gen_common a ~locs:[] ~stubname ~return_errno:false
     ~cfunc_value:(`Value value) ~release_runtime_lock:false ~noalloc
 
@@ -832,10 +834,9 @@ module Inline = struct
     | Textend -> accu
     | Variable _ | Literal _ -> tokens (x :: accu) lexbuf
 
-  let replace_vars names s =
+  let replace_vars htl_names s =
     let l = tokens [] (Lexing.from_string s) in
     let htl_names_used = Hashtbl.create 10 in
-    let htl_names = CCHashtbl.Poly.of_list names in
     let f acc elem =
       match elem with
       | Literal s -> s :: acc
@@ -855,7 +856,7 @@ module Inline = struct
     (s, Hashtbl.length htl_names <> Hashtbl.length htl_names_used)
 
   let rec extract :
-      type a. a Ctypes.fn -> 'b -> string * (bool * (string -> string)) list =
+      type a. a Ctypes.fn -> 'b -> string * (string -> string) list =
     let open Ctypes_static in
     fun t locs ->
       with_loc locs
@@ -863,41 +864,63 @@ module Inline = struct
       match t with
       | Returns a -> (string_of_typ_exn a, [])
       | Function (a, b) ->
-        let is_void = is_void a in
         let f s = string_of_typ_exn ~name:s a in
         let r, l = extract b locs in
-        (r, (is_void, f) :: l)
+        (r, f :: l)
 end
 
-let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc l =
+let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc el =
+  let el_len = List.length el in
+  let htl_names = Hashtbl.create el_len in
+  let fun_is_void = ref false in
+  let l =
+    List.mapi el ~f:(fun i (label, _) ->
+        let r =
+          match label with
+          | Asttypes.Nolabel ->
+            let is_void_fn : type a. a Ctypes.fn -> bool = function
+              | Ctypes_static.Function (a, _) -> is_void a
+              | Ctypes_static.Returns _ -> false
+            in
+            if el_len = 1 && is_void_fn fn then (
+              fun_is_void := true ;
+              "$dummy$" )
+            else U.error "inline code requires named parameters"
+          | Asttypes.Optional _ -> assert false
+          | Asttypes.Labelled s -> s
+        in
+        if Hashtbl.mem htl_names r then U.error "labels must be unique" ;
+        let s = Printf.sprintf "ppxc__var%d_%s" i (U.safe_ascii_only r) in
+        Hashtbl.replace htl_names r s ;
+        s)
+  in
   let fn, lt = funptr_transform fn in
   if noalloc = false then
     check_no_ocaml fn []
       "passing OCaml values to inline code is only supported for noalloc functions" ;
+  if
+    CCString.for_all (function ' ' | '\n' | '\t' -> false | _ -> true) c_body
+  then
+    (* avoid muddling `external foo : ...` and `external%c foo : ... ` *)
+    error "function code doesn't look like inline code" ;
   let ret_type, param_i = Inline.extract fn locs in
   let buf =
     Buffer.create (256 + String.length c_body + String.length c_name)
   in
   List.iter lt ~f:(Buffer.add_string buf) ;
   Printf.bprintf buf "static %s %s(" ret_type c_name ;
-  List.iteri2 param_i l ~f:(fun i (is_void, f) (_, n) ->
+  List.iteri2 param_i l ~f:(fun i f n ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      if is_void then Buffer.add_string buf "void"
+      if !fun_is_void then Buffer.add_string buf "void"
       else Buffer.add_string buf @@ f n) ;
   Buffer.add_string buf "){\n" ;
   let ls, unused_vars =
-    try Inline.replace_vars l c_body
+    try Inline.replace_vars htl_names c_body
     with Inline_lexer.Bad_expander ->
       error "not escaped '$' in inline source code"
   in
-  let is_void = List.exists ~f:fst param_i in
-  if unused_vars && is_void = false then
+  if unused_vars && !fun_is_void = false then
     error "not all labelled parameters have been used" ;
-  if
-    CCString.for_all (function ' ' | '\n' | '\t' -> false | _ -> true) c_body
-  then
-    (* avoid muddling `external foo : ...` and `external%c foo : ... ` *)
-    error "function code doesn't look like inline code" ;
   List.iter ls ~f:(Buffer.add_string buf) ;
   Buffer.add_string buf "\n}\n" ;
   Buffer.contents buf
@@ -942,11 +965,11 @@ let gen_callback_fun fn mof =
   let init_fun = mof.M.cb_init_fun in
   let acquire_runtime = mof.M.cb_acquire_runtime in
   let thread_registration = mof.M.cb_thread_registration in
-  let callback_name = Std.Util.safe_cname ~prefix:bind_name in
+  let callback_name = U.safe_cname ~prefix:bind_name in
   let fn, l_typedefs = funptr_transform fn in
   let params, ret, typed_fun_name = Callback.extract fn callback_name in
   let params_length = List.length params in
-  let global_callback_var = Std.Util.safe_cname ~prefix:("var " ^ bind_name) in
+  let global_callback_var = U.safe_cname ~prefix:("var " ^ bind_name) in
   if params_length > 1 && List.exists ~f:(fun s -> s.r_typ = Rvoid) params then
     error
       "you can't pass void as parameter to a function with two or more parameters" ;
