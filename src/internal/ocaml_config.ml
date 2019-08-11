@@ -48,7 +48,7 @@ let config =
               | Some (a, b) ->
                 let a = String.trim a
                 and b = String.trim b in
-                if a = "" || b = "" then None else Some (a, b) )
+                if a = "" || b = "" then None else Some (a, b))
        |> StringMap.of_list
      in
      if r = StringMap.empty then

@@ -95,7 +95,7 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
       close_pipe_ne p_stdout_read ;
       close_pipe_ne p_stdout_write ;
       close_pipe_ne p_stderr_write ;
-      close_pipe_ne p_stderr_read )
+      close_pipe_ne p_stderr_read)
   @@ fun () ->
   let () =
     let comm p fd =

@@ -27,7 +27,8 @@ let rec seal : type a. a Ctypes_static.typ -> size:int -> align:int -> unit =
   | View {ty; _} -> seal ty ~size ~align
   | _ -> raise (Unsupported "Sealing a non-structured type")
 
-let rec add_field : type t a.
+let rec add_field :
+    type t a.
        t Ctypes_static.typ
     -> string
     -> int
@@ -50,7 +51,8 @@ let rec add_field : type t a.
 
 external identity : 'a -> 'a = "%identity"
 
-let build_enum : type a b.
+let build_enum :
+    type a b.
        string
     -> a Ctypes.typ
     -> typedef:bool
@@ -111,7 +113,8 @@ let build_enum : type a b.
   and format_typ k fmt = Format.fprintf fmt "%s%t" pname k in
   Ctypes_static.view ~format_typ ~read ~write typ
 
-let build_enum_bitmask : type a b.
+let build_enum_bitmask :
+    type a b.
        string
     -> a Ctypes.typ
     -> typedef:bool
@@ -388,8 +391,7 @@ module Signed = struct
                        | 4 when Ctypes.sizeof Ctypes.int = 4 ->
                          if Sys.word_size = 64 then (module Int32)
                          else (module Signed.Int)
-                       | _ -> failwith "invalid size of short"
-                     : Short )
+                       | _ -> failwith "invalid size of short" : Short )
 
   module Schar = Int8
 end
@@ -434,8 +436,7 @@ module Callback = struct
       type real = a
 
       let real = fn
-    end
-    : Info
+    end : Info
       with type real = a )
 end
 

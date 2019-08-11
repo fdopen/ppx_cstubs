@@ -114,10 +114,11 @@ module C_content = struct
   let add_function_place id = entries := Replace_text id :: !entries
 
   let get_extract_source () =
-    List.fold_left ~init:[] !entries ~f:(fun a -> function
+    List.fold_left ~init:[] !entries ~f:(fun a ->
+      function
       | Header (h, _) | Extract_text (h, _, _, _) | Extract_header (h, _, _) ->
         h :: a
-      | Replace_text _ -> a )
+      | Replace_text _ -> a)
     |> String.concat "\n"
 
   let get_source () =
@@ -131,7 +132,7 @@ module C_content = struct
           in
           (succ cnt, s :: ac)
         | Header (s, _) -> (cnt, s :: ac)
-        | Extract_header _ | Extract_text _ -> cnt_ac )
+        | Extract_header _ | Extract_text _ -> cnt_ac)
     in
     if Hashtbl.length htl_id_text <> cnt then
       U.error "fatal: source code incomplete" ;
@@ -236,11 +237,12 @@ module Const = struct
        compilation is slow. Therefore I first try to find the error in
        other source parts that have been created for this purpose *)
     let l =
-      List.fold_left !C_content.entries ~init:[] ~f:(fun ac -> function
+      List.fold_left !C_content.entries ~init:[] ~f:(fun ac ->
+        function
         | C_content.Header (s, l) -> (s, `Header l) :: ac
         | C_content.Extract_header (s, l, e) -> (s, `Eheader (l, e)) :: ac
         | C_content.Extract_text _ -> ac
-        | C_content.Replace_text _ -> ac )
+        | C_content.Replace_text _ -> ac)
     in
     let l_s = List.map l ~f:fst in
     let len = List.length l in
@@ -248,11 +250,12 @@ module Const = struct
     if n < len then fail ~emsg l n
     else
       let l =
-        List.fold_left !C_content.entries ~init:[] ~f:(fun ac -> function
+        List.fold_left !C_content.entries ~init:[] ~f:(fun ac ->
+          function
           | C_content.Header (s, l) -> (s, `Header l) :: ac
           | C_content.Extract_header (s, l, e) -> (s, `Eheader (l, e)) :: ac
           | C_content.Extract_text (s, l, e, _) -> (s, `Eheader (l, e)) :: ac
-          | C_content.Replace_text _ -> ac )
+          | C_content.Replace_text _ -> ac)
       in
       let l_s = List.map l ~f:fst in
       let len = List.length l in
@@ -266,7 +269,7 @@ module Const = struct
       let extract =
         List.exists !C_content.entries ~f:(function
           | Header _ | Extract_header _ | Replace_text _ -> false
-          | Extract_text _ -> true )
+          | Extract_text _ -> true)
       in
       if extract then
         let source = C_content.get_extract_source () in
@@ -276,7 +279,7 @@ module Const = struct
           if Buffer.length ebuf > 0 then Buffer.output_buffer stderr ebuf ;
           List.iter (List.rev !C_content.entries) ~f:(function
             | Header _ | Extract_header _ | Replace_text _ -> ()
-            | Extract_text (_, _, _, f) -> f obj )
+            | Extract_text (_, _, _, f) -> f obj)
         | Error _ -> find_failing ebuf )
 
   let extract_single_einfo id =
@@ -376,7 +379,8 @@ module Trace = struct
       let h l =
         let cur = Obj.magic cur in
         let r =
-          List.find_map l ~f:(fun (x, id) -> if x == cur then Some id else None)
+          List.find_map l ~f:(fun (x, id) ->
+              if x == cur then Some id else None)
         in
         match r with None -> () | Some id -> Hashtbl.replace G.htl_used id ()
       in
@@ -660,7 +664,7 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
         let info_str = "type of " ^ c.ee_cname in
         Printf.sprintf "PPXC_ENUM_MEMBER_CHECK(%s,%s)" cname type_str
         |> Const.add ~bit32:true ~no_expr:true ~disable_checks:true ~info_str
-             c.ee_type_check c.ee_loc Ctypes.camlint ) ;
+             c.ee_type_check c.ee_loc Ctypes.camlint) ;
     let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ type_str ^ ")" in
     let eid = get_enum_id enum_type_id in
     Const.add ~bit32:true ~no_expr:true ~disable_checks:true ~info_str eid
@@ -980,7 +984,7 @@ module Build = struct
               let s =
                 Printf.sprintf "ppxc__var%d_%s" i (U.safe_ascii_only a)
               in
-              (a, s) )
+              (a, s))
         in
         let c_body = c_name in
         let prim_name = U.safe_ascii_only prim_name in
@@ -1005,7 +1009,7 @@ module Build = struct
             | Labelled s ->
               let l = String.length s in
               if l > 0 && s.[l - 1] = '_' then (Nolabel, y) else xy
-            | Nolabel | Optional _ -> xy )
+            | Nolabel | Optional _ -> xy)
     in
     let res = Gen_ml.external' ~mod_path ctypes_fn ocaml_name el ret c in
     Hashtbl.replace G.htl_stri id_external res.Gen_ml.extern ;
@@ -1109,7 +1113,7 @@ module Build = struct
           | Some t -> ignore (f t : Marshal_types.expr) ) ;
           let tup = Ast_helper.Exp.tuple [c.ee_expr; integer] in
           let tup = Ast_helper.Exp.tuple [tup; ac] in
-          Ast_helper.Exp.construct (U.mk_lid "::") (Some tup) )
+          Ast_helper.Exp.construct (U.mk_lid "::") (Some tup))
     in
     let name = Std.Util.str_expr enum_name in
     let typedef =
@@ -1205,8 +1209,8 @@ module Build = struct
       [%stri
         include (
           struct
-              [%%s List.rev stris]
-            end :
+            [%%s List.rev stris]
+          end :
             sig
               [%%s List.rev sigs]
             end )]
@@ -1243,11 +1247,10 @@ module Build = struct
         U.sig_from_mod_type
           [%stri
             module type x = sig
-              include
-                sig
-                  [@@@ocaml.warning "-32"]
+              include sig
+                [@@@ocaml.warning "-32"]
 
-                  val min_int : t
+                val min_int : t
               end
             end]
       in
@@ -1299,8 +1302,7 @@ module Build = struct
         include (val m)
 
         let t = Ctypes.typedef t ctyp
-      end
-      : Signed_result )
+      end : Signed_result )
     in
     let f : _ -> (module Signed_result) * Parsetree.expression * string =
       function
@@ -1396,8 +1398,7 @@ module Build = struct
         let min_int = zero
 
         let t = Ctypes.typedef t ctyp
-      end
-      : Anysigned_result )
+      end : Anysigned_result )
     in
     let f = function
       | `Uint8 ->
@@ -1465,8 +1466,7 @@ module Build = struct
 
   let uint_alias id_loc ~mod_name ?strict ctyp =
     ( module ( val uint_alias_real ~sig_typ:`Unsigned id_loc ~mod_name ?strict
-                     ctyp )
-    : Unsigned_result )
+                     ctyp ) : Unsigned_result )
 
   let aint_alias id_loc ~mod_name ?strict ctyp : (module Anysigned_result) =
     let id, _ = U.from_id_loc_param id_loc in
@@ -1475,8 +1475,9 @@ module Build = struct
       uint_alias_real ~sig_typ:`Any_unsigned id_loc ~mod_name ?strict ctyp
     else
       ( module (
-        (val int_alias_real ~sig_typ:`Any_signed id_loc ~mod_name ?strict ctyp) :
-          Anysigned_result ) )
+                  ( val int_alias_real ~sig_typ:`Any_signed id_loc ~mod_name
+                          ?strict ctyp ) :
+                    Anysigned_result ) )
 
   let opaque =
     let module Const_orig = Const in

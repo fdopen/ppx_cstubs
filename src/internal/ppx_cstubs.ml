@@ -63,7 +63,7 @@ module Extract = struct
           else
             match t with
             | PStr [] -> true
-            | _ -> error ~loc:x.loc "surprising content in %s" name )
+            | _ -> error ~loc:x.loc "surprising content in %s" name)
     in
     (at, if not at then attr else remove_attrib name attr)
 
@@ -224,7 +224,7 @@ module Extract = struct
                         , [] )
                   ; _ } ] ->
               Some x
-            | _ -> error ~loc:x.loc "unsupported expression in cname" )
+            | _ -> error ~loc:x.loc "unsupported expression in cname")
     in
     match res with None -> (def, l) | Some x -> (x, remove_attrib "cname" l)
 
@@ -239,8 +239,7 @@ module Extract = struct
                       Pstr_eval (({pexp_desc = Pexp_fun _; _} as e), [])
                   ; _ } ] ->
               Some e
-            | _ -> error ~loc:x.loc "unsupported expression in %s" unexpected
-      )
+            | _ -> error ~loc:x.loc "unsupported expression in %s" unexpected)
     in
     match res with
     | None -> (None, l)
@@ -1024,7 +1023,7 @@ module H = struct
           let nac = Exp.fun_ l None (Pat.any ()) ac in
           if ac == script then
             Exp.constraint_ nac @@ Typ.arrow l (Typ.var "a") (Typ.var "b")
-          else nac )
+          else nac)
     in
     let script = [%stri let [%p U.mk_pat name] = [%e script]] in
     Top.add_extract script ;
@@ -1038,7 +1037,7 @@ module H = struct
   let foreign ?prefix l =
     let find_first_unlabelled l =
       List.find_mapi l ~f:(fun i el ->
-          match el with Nolabel, _ -> Some (i, el) | _ -> None )
+          match el with Nolabel, _ -> Some (i, el) | _ -> None)
     in
     let typ_expr =
       match List.rev l |> find_first_unlabelled with
@@ -1050,7 +1049,7 @@ module H = struct
       let t =
         List.find_map l ~f:(function
           | Asttypes.Nolabel, e -> Extract.constant_string e
-          | _ -> None )
+          | _ -> None)
       in
       match t with
       | None -> U.safe_mlname ?prefix ()
@@ -1226,7 +1225,7 @@ module H = struct
                 let e = Exp.constraint_ e t in
                 let x = U.named_stri field_name e in
                 Hashtbl.add htl_tdl_entries tdl_entry_id x ) ;
-              n )
+              n)
         in
         ignore (seal [(Nolabel, struct_expr)] : Parsetree.expression) ;
         let create_view =
@@ -1264,7 +1263,7 @@ module H = struct
                   let f = U.mk_ident fname in
                   [%expr
                     let () = Ctypes.setf ppxc__res [%e f] [%e v] in
-                    [%e ac]] )
+                    [%e ac]])
             in
             let write =
               [%expr
@@ -1277,7 +1276,7 @@ module H = struct
                 (List.map sl ~f:(fun el ->
                      let l = U.mk_lid el.field_name in
                      let e = Exp.ident l in
-                     (l, e) ))
+                     (l, e)))
                 None
             in
             let expr =
@@ -1286,7 +1285,7 @@ module H = struct
                   let f = U.mk_ident fname in
                   [%expr
                     let [%p p] = Ctypes.getf ppxc__param [%e f] in
-                    [%e ac]] )
+                    [%e ac]])
             in
             let read = [%expr fun ppxc__param -> [%e expr]] in
             [%expr
@@ -1336,7 +1335,7 @@ module H = struct
                       Exp.construct (U.mk_lid cur.cdecl.pcd_name.txt) None }
                 in
                 let tup = Exp.tuple [c.ee_expr; l1] in
-                (Exp.construct (U.mk_lid "::") (Some tup), c :: l2) )
+                (Exp.construct (U.mk_lid "::") (Some tup), c :: l2))
           in
           let id, id_bitmask, enum_type_id =
             match enum_type with
@@ -1492,14 +1491,15 @@ module H = struct
         && List.for_all tl ~f:(function Enum _ -> false | Struct _ -> true)
       then error "struct entry marked as bitmask" ;
       let names =
-        List.fold_left ~init:[] tl ~f:(fun ac -> function
+        List.fold_left ~init:[] tl ~f:(fun ac ->
+          function
           | Struct {sname = s; sl; _} ->
             check_reserved_type s ;
             List.fold_left ~init:(s :: ac) sl ~f:(fun ac el ->
-                el.field_name :: ac )
+                el.field_name :: ac)
           | Enum {ename = s; _} ->
             check_reserved_type s ;
-            s :: ac )
+            s :: ac)
       in
       let names' = CCList.uniq ~eq:CCString.equal names in
       if List.length names <> List.length names' then
@@ -1544,10 +1544,11 @@ module H = struct
             | (Enum_both | Enum_normal | Enum_bitmask), (Some _ | None) -> ()
             ) ;
             Enum res
-          | Struct _ as x -> x )
+          | Struct _ as x -> x)
       in
       let cnt_structs, cnt_records =
-        List.fold_left tl ~init:(0, 0) ~f:(fun ((cns, cnr) as ac) -> function
+        List.fold_left tl ~init:(0, 0) ~f:(fun ((cns, cnr) as ac) ->
+          function
           | Enum _ -> ac
           | Struct s ->
             let cns = succ cns in
@@ -1556,7 +1557,7 @@ module H = struct
               | Struct_normal | Union -> cnr
               | Struct_both | Struct_record -> succ cnr
             in
-            (cns, cnr) )
+            (cns, cnr))
       in
       if
         cnt_structs > 1
@@ -1874,7 +1875,7 @@ let remove_empty str =
       ; _ }
       when txt == Attributes.remove_string ->
       false
-    | _ -> true )
+    | _ -> true)
 
 let mark_empty a =
   if a.pvb_attributes <> [] || a.pvb_pat.ppat_attributes <> [] then a
@@ -1903,7 +1904,7 @@ let add_tdl_entries str =
          | exception Failure _ ->
            error ~loc:pstr_loc "fatal: type info not found"
          | x -> List.rev x )
-       | x -> [x] )
+       | x -> [x])
 
 let rec unbox_box_constr e f =
   match e.pexp_desc with
@@ -1942,7 +1943,7 @@ let external' ~is_inline loc strpri =
         | x -> error ~loc:s.loc "unsupported attribute %s" x
       in
       if reuse_attrib = false && y <> PStr [] then
-        error ~loc:s.loc "unknown content in attribute %s" s.txt ) ;
+        error ~loc:s.loc "unknown content in attribute %s" s.txt) ;
   let attrs = List.rev !attrs in
   let release_runtime_lock = !release_runtime_lock in
   let noalloc = !noalloc in
@@ -2045,7 +2046,7 @@ let mapper _config _cookies =
           | "thread_registration" -> thread_registration := true
           | x -> error ~loc:s.loc "unsupported attribute %s" x ) ;
           if y <> PStr [] then
-            error ~loc:s.loc "unknown content in attribute %s" s.txt ) ;
+            error ~loc:s.loc "unknown content in attribute %s" s.txt) ;
       let typ_pat =
         match pat.ppat_desc with Ppat_constraint (_, t) -> Some t | _ -> None
       in
@@ -2238,7 +2239,7 @@ let mapper _config _cookies =
             Scripts_structure.open_module x.pmb_name.txt ;
             let r = default_mapper.module_binding mapper x in
             Scripts_structure.close_module pstr_loc ;
-            r )
+            r)
       in
       {pstr_desc = Pstr_recmodule l'; pstr_loc}
     | stri -> default_mapper.structure_item mapper stri
@@ -2250,7 +2251,7 @@ let mapper _config _cookies =
             , (_ :: _ as l) )
       ; _ }
       when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_expr_string ) -> (
+               x.txt == Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
       with Not_found -> error "fatal error: external not found" )
     | { pstr_desc =
@@ -2263,7 +2264,7 @@ let mapper _config _cookies =
                   ; _ } as pvb ) ] )
       ; _ } as stri
       when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string ) ->
+               x.txt == Attributes.replace_attr_string) ->
       mark_if_used mapper stri pvb pexp
     | { pstr_desc =
           Pstr_value
@@ -2279,12 +2280,12 @@ let mapper _config _cookies =
                   ; _ } as pvb ) ] )
       ; _ } as stri
       when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string ) ->
+               x.txt == Attributes.replace_attr_string) ->
       mark_if_used ~pexp_outer:(pexp_outer, ct) mapper stri pvb pexp
     | { pstr_desc = Pstr_module ({pmb_attributes = _ :: _ as l; _} as w2)
       ; pstr_loc = loc } as w1
       when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string ) ->
+               x.txt == Attributes.replace_attr_string) ->
       let pmb_attributes, id = get_usage_id_from_attribs_exn l in
       let pstr_desc = Pstr_module {w2 with pmb_attributes} in
       let w1 = {w1 with pstr_desc} in
@@ -2362,7 +2363,7 @@ let mapper _config _cookies =
       ; pexp_attributes = _ :: _ as attribs
       ; _ }
       when List.exists attribs ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_expr_string ) -> (
+               x.txt == Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_expr (int_of_string s)
       with Not_found -> error "fatal: constant not found" )
     | pexp -> default_mapper.expr mapper pexp
@@ -2387,7 +2388,7 @@ let mapper _config _cookies =
                         , _ )
                   ; _ } ] ->
               Some s
-            | _ -> fail () )
+            | _ -> fail ())
     in
     match id with
     | None -> fail ()
@@ -2401,7 +2402,7 @@ let mapper _config _cookies =
       match Uniq_ref.replace_typ ptyp with
       | {ptyp_desc = Ptyp_any; ptyp_attributes = _ :: _ as attribs; _}
         when List.exists attribs ~f:(fun (x, _) ->
-                 x.txt == Attributes.replace_typ_string ) ->
+                 x.txt == Attributes.replace_typ_string) ->
         from_htl Script_result.htl_type Attributes.replace_typ_string attribs
       | x -> default_mapper.typ mapper x
   in

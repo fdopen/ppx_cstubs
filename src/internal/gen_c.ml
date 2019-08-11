@@ -74,7 +74,8 @@ type ret =
            passing unboxed values *)
   }
 
-let ret_info_prim : type a.
+let ret_info_prim :
+    type a.
        a Ctypes_primitive_types.prim
     -> all_float:bool
     -> ocaml_ret_var:string
@@ -229,7 +230,8 @@ let ret_info_prim : type a.
     | Complex64 -> inj_noalloc_impossible ()
     | Complexld -> inj_noalloc_impossible ()
 
-let rec ret_info : type a.
+let rec ret_info :
+    type a.
        a typ
     -> all_float:bool
     -> user_noalloc:bool
@@ -312,7 +314,8 @@ type param =
            passing unboxed values *)
   }
 
-let pinfo_prim : type a.
+let pinfo_prim :
+    type a.
        a Ctypes_primitive_types.prim
     -> ctype:string
     -> c_var:string
@@ -440,7 +443,8 @@ let pinfo_prim : type a.
     | Complex64 -> standard ()
     | Complexld -> standard ()
 
-let rec pinfo : type a b.
+let rec pinfo :
+    type a b.
        a typ
     -> b typ
     -> user_noalloc:bool
@@ -469,25 +473,25 @@ let rec pinfo : type a b.
           let cast_name = string_of_typ_exn (ptr orig) in
           Printf.sprintf "%s = *(%s)(CTYPES_ADDR_OF_FATPTR(%s));"
             (string_of_typ_exn ~name:c_var orig)
-            cast_name ocaml_param )
+            cast_name ocaml_param)
     in
     let f ?noalloc_possible s =
       standard ?noalloc_possible (fun () ->
           Printf.sprintf "%s = %s(%s);"
             (string_of_typ_exn ~name:c_var orig)
-            s ocaml_param )
+            s ocaml_param)
     in
     let str () = f "CTYPES_PTR_OF_OCAML_STRING" in
     let hptr noalloc_possible =
       standard ~noalloc_possible (fun () ->
           Printf.sprintf "%s = PPX_CSTUBS_ADDR_OF_FATPTR(%s,%s);"
             (string_of_typ_exn ~name:c_var orig)
-            (string_of_typ_exn orig) ocaml_param )
+            (string_of_typ_exn orig) ocaml_param)
     in
     match p with
     | C.Void ->
       standard ~runtime_protect:false ~is_void:true (fun () ->
-          Printf.sprintf "(void)%s;" ocaml_param )
+          Printf.sprintf "(void)%s;" ocaml_param)
     | C.Primitive x ->
       let ct = string_of_typ_exn p in
       pinfo_prim ~all_float ~ctype:ct x ~c_var ~ocaml_param
@@ -497,7 +501,7 @@ let rec pinfo : type a b.
     | C.Abstract _ -> stru ()
     | C.View {C.format_typ = Some ft; _} when ft == Evil_hack.format_typ ->
       standard ~noalloc_possible:user_noalloc ~runtime_protect:false (fun () ->
-          Printf.sprintf "value %s = %s;" c_var ocaml_param )
+          Printf.sprintf "value %s = %s;" c_var ocaml_param)
     | C.View {C.ty; _} ->
       (* TODO: if there is a view of a view and both define format_typ, which
          one should be used? *)
@@ -526,8 +530,8 @@ let extract =
       incr i ;
       res
     in
-    let rec extract : type a.
-        a Ctypes.fn -> Location.t list -> ret * param list =
+    let rec extract :
+        type a. a Ctypes.fn -> Location.t list -> ret * param list =
      fun t locs ->
       with_loc locs
       @@ fun locs ->
@@ -672,7 +676,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i p ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      Buffer.add_string buf p.native_param_type ) ;
+      Buffer.add_string buf p.native_param_type) ;
   Buffer.add_string buf ");\n" ;
   (* byte prototype *)
   if gen_byte_version then
@@ -682,7 +686,7 @@ extern "C" {
       Printf.bprintf buf "value %s(" cname_byte ;
       List.iteri params ~f:(fun i _ ->
           if i <> 0 then Buffer.add_string buf ", " ;
-          Buffer.add_string buf "value" ) ;
+          Buffer.add_string buf "value") ;
       Buffer.add_string buf ");\n" ) ;
   Printf.bprintf buf {|#ifdef __cplusplus
 }
@@ -693,7 +697,7 @@ extern "C" {
   Printf.bprintf buf "%s %s(" native_ret_type cname_main ;
   List.iteri params ~f:(fun i x ->
       if i <> 0 then Buffer.add_string buf ", " ;
-      Printf.bprintf buf "%s %s" x.native_param_type x.ocaml_param ) ;
+      Printf.bprintf buf "%s %s" x.native_param_type x.ocaml_param) ;
   Buffer.add_string buf ")  {\n" ;
   let params_with_protection =
     if
@@ -703,7 +707,7 @@ extern "C" {
     then []
     else
       List.filter_map params ~f:(fun x ->
-          if x.runtime_protect = false then None else Some x.ocaml_param )
+          if x.runtime_protect = false then None else Some x.ocaml_param)
   in
   ( match params_with_protection with
   | [] -> ()
@@ -731,7 +735,7 @@ extern "C" {
   List.iter params ~f:(fun x ->
       Buffer.add_string buf "  " ;
       Buffer.add_string buf @@ x.prj_noalloc () ;
-      Buffer.add_char buf '\n' ) ;
+      Buffer.add_char buf '\n') ;
   (* declare variables for result *)
   if ret.r_typ <> Rvoid then (
     Printf.bprintf buf "  %s %s;\n" native_ret_type ret.ocaml_ret_var ;
@@ -747,7 +751,7 @@ extern "C" {
     Buffer.add_char buf '(' ;
     List.iteri params ~f:(fun i x ->
         if i <> 0 then Buffer.add_string buf ", " ;
-        if x.typ <> Rvoid then Buffer.add_string buf x.c_var ) ;
+        if x.typ <> Rvoid then Buffer.add_string buf x.c_var) ;
     Buffer.add_string buf ");\n"
   | `Value v -> Printf.bprintf buf "&%s;\n" v ) ;
   if release_runtime_lock then
@@ -787,7 +791,7 @@ extern "C" {
             if params_length < 6 then Printf.sprintf "a%d" i
             else Printf.sprintf "a[%d]" i
           in
-          x.prj_byte_noalloc t )
+          x.prj_byte_noalloc t)
     in
     let t = String.concat ", " l in
     let t = String.concat "" ["("; cname_main; "("; t; ")"; ")"] in
@@ -866,8 +870,8 @@ module Inline = struct
     let s = List.fold_left ~init:[] l ~f in
     (s, Hashtbl.length htl_names <> Hashtbl.length htl_names_used)
 
-  let rec extract : type a.
-      a Ctypes.fn -> 'b -> string * (bool * (string -> string)) list =
+  let rec extract :
+      type a. a Ctypes.fn -> 'b -> string * (bool * (string -> string)) list =
     let open Ctypes_static in
     fun t locs ->
       with_loc locs
@@ -895,7 +899,7 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc l =
   List.iteri2 param_i l ~f:(fun i (is_void, f) (_, n) ->
       if i <> 0 then Buffer.add_string buf ", " ;
       if is_void then Buffer.add_string buf "void"
-      else Buffer.add_string buf @@ f n ) ;
+      else Buffer.add_string buf @@ f n) ;
   Buffer.add_string buf "){\n" ;
   let ls, unused_vars =
     try Inline.replace_vars l c_body
@@ -984,7 +988,7 @@ extern int ( *ctypes_thread_register)(void);
     List.iteri params ~f:(fun i s ->
         if i <> 0 then Buffer.add_string buf ", " ;
         if s.r_typ <> Rvoid then Buffer.add_string buf @@ s.decl_rvar ()
-        else Buffer.add_string buf "void" ) ;
+        else Buffer.add_string buf "void") ;
     Buffer.add_char buf ')' ;
     if i = 0 then Buffer.add_string buf ";\n\n"
     else Buffer.add_string buf " {\n"
@@ -1000,7 +1004,7 @@ extern int ( *ctypes_thread_register)(void);
     Buffer.add_string buf "  CAMLparam0();\n" ;
     Printf.bprintf buf "  CAMLlocalN(ppxc__buf, %d);\n" params_length ;
     List.iteri params ~f:(fun i s ->
-        Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc () ) ;
+        Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc ()) ;
     Buffer.add_string buf "  CAMLdrop;\n" ;
     Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, ppxc__buf);\n"
       ret.ocaml_param global_callback_var params_length )
@@ -1038,8 +1042,7 @@ extern int ( *ctypes_thread_register)(void);
       List.iteri params ~f:(fun i s ->
           if s.inj_always_noalloc = false then
             Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i s.ocaml_ret_var
-          else Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc ()
-      ) ;
+          else Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc ()) ;
       Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, ppxc__buf);\n"
         ret.ocaml_param global_callback_var params_length )
     else (

@@ -295,7 +295,8 @@ let gen_ext =
   let module U = Std.Util in
   let module C = Ctypes_static in
   fun t res expr ->
-    let rec iter : type a.
+    let rec iter :
+        type a.
            bool
         -> a Ctypes_static.typ
         -> Parsetree.expression * Parsetree.pattern option =

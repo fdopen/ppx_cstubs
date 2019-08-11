@@ -49,8 +49,8 @@ let mk_typ ?attrs ?(l = []) s =
 
 let managed_buffer () = mk_typ "Cstubs_internals.managed_buffer"
 
-let prim_supports_attr : type a.
-    a Ctypes_primitive_types.prim -> cinfo:Gen_c.info -> bool =
+let prim_supports_attr :
+    type a. a Ctypes_primitive_types.prim -> cinfo:Gen_c.info -> bool =
   let open Ctypes_primitive_types in
   fun t ~cinfo ->
     match Ctypes_primitive_types.ml_prim t with
@@ -78,7 +78,8 @@ let prim_supports_attr : type a.
     | ML_ldouble -> false
     | ML_complexld -> false
 
-let ident_of_ml_prim : type a.
+let ident_of_ml_prim :
+    type a.
     no_attr:bool -> a Ctypes_primitive_types.ml_prim -> Parsetree.core_type =
   let open Ctypes_primitive_types in
   fun ~no_attr t ->
@@ -219,7 +220,8 @@ let ml_typ_of_arg_typ ~mod_path ~cinfo t =
   in
   iter false t
 
-let rec ml_typ_of_return_typ : type a.
+let rec ml_typ_of_return_typ :
+    type a.
     a typ -> inside_view:bool -> cinfo:Gen_c.info -> Parsetree.core_type =
   let open Ctypes_static in
   let mk_ptr cinfo =
@@ -264,8 +266,8 @@ let rec ml_typ_of_return_typ : type a.
 let ml_typ_of_return_typ t ~cinfo =
   ml_typ_of_return_typ t ~inside_view:false ~cinfo
 
-let pat_expand_prim : type a.
-    a Ctypes_primitive_types.prim -> Parsetree.pattern =
+let pat_expand_prim :
+    type a. a Ctypes_primitive_types.prim -> Parsetree.pattern =
   let open Ctypes_primitive_types in
   function
   | Char -> [%pat? Ctypes_primitive_types.Char]
@@ -351,8 +353,8 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
     in
     Some f
   in
-  let rec iter : type a.
-      a typ -> ?type_expr:Parsetree.expression -> bool -> X.t =
+  let rec iter :
+      type a. a typ -> ?type_expr:Parsetree.expression -> bool -> X.t =
     let open Ctypes_static in
     fun t ?type_expr inside_view ->
       match t with
@@ -402,7 +404,8 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
       | Array _ -> error t
       | Bigarray _ -> error t
   (* various dirty tricks to reduce the lines of boilerplate code *)
-  and inline_view : type a b.
+  and inline_view :
+      type a b.
       a typ -> b typ -> ?type_expr:Parsetree.expression -> bool -> X.t option =
    fun tparent tchild ?type_expr inside_view ->
     if inside_view then None
@@ -435,7 +438,8 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support %s as return values" x
   in
-  let rec iter : type a.
+  let rec iter :
+      type a.
          ?type_expr:Parsetree.expression
       -> a typ
       -> bool
@@ -522,7 +526,8 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
     | OCaml _ -> error t
     | Array _ -> error t
     | Bigarray _ -> error t
-  and inline_view : type a b.
+  and inline_view :
+      type a b.
          ?type_expr:Parsetree.expression
       -> a typ
       -> b typ
@@ -613,7 +618,7 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
 let build_fun param_infos ret_info ~ext_fun =
   let is_simple_fun =
     List.for_all param_infos ~f:(fun x ->
-        x.match_pat = None && x.param_trans = None )
+        x.match_pat = None && x.param_trans = None)
     && ret_info.rmatch_pat = None
     && ret_info.res_trans = None
   in
@@ -624,7 +629,7 @@ let build_fun param_infos ret_info ~ext_fun =
           ( a.label
           , match a.param_trans with
             | Some f -> f a.fun_expr
-            | None -> a.fun_expr ) )
+            | None -> a.fun_expr ))
     in
     let fbody = Exp.apply ext_fun l in
     let fbody =
@@ -632,7 +637,7 @@ let build_fun param_infos ret_info ~ext_fun =
     in
     Some
       (ListLabels.fold_right ~init:fbody param_infos ~f:(fun a ac ->
-           Exp.fun_ a.label None a.fun_pat ac ))
+           Exp.fun_ a.label None a.fun_pat ac))
 
 let poly_prefix pos = "ppxc__t_" ^ string_of_int pos
 
@@ -674,7 +679,7 @@ let build_ignore_expr (el, params) (retexpr, ret_info) =
   let i, e =
     ListLabels.fold_left2 ~init:(0, None) el params ~f:(fun (i, ac) (_, e) a ->
         let ac = f ac i e a.match_pat a.annot_needed a.constr_ptype in
-        (succ i, ac) )
+        (succ i, ac))
   in
   let e =
     f e i retexpr ret_info.rmatch_pat ret_info.rannot_needed
@@ -698,7 +703,7 @@ let build_parallel_pattern (el, param_infos) (retexpr, ret_info) func =
         incr cnt ;
         match a.match_pat with
         | None -> None
-        | Some s -> Some (ctypes_typ_constr expr i a.constr_ptype, s) )
+        | Some s -> Some (ctypes_typ_constr expr i a.constr_ptype, s))
     |> CCList.filter_map Std.identity
   in
   let l =
@@ -748,7 +753,8 @@ let is_inline_ocaml_type : type a. a Ctypes.typ -> bool =
 
 let collect_info fn ~mod_path cinfo lexpr =
   let param_name = create_param_name () in
-  let rec iter : type a.
+  let rec iter :
+      type a.
          a Ctypes.fn
       -> Parsetree.expression list
       -> param_info list
@@ -835,7 +841,7 @@ let build_fun_constraint params ~return_errno =
       params
       ~f:(fun p (i, last) ->
         let label = if with_label then p.label else Asttypes.Nolabel in
-        (pred i, Typ.arrow label (var i) last) )
+        (pred i, Typ.arrow label (var i) last))
     |> snd
   in
   let vl = var length in
@@ -973,7 +979,7 @@ type cb_ret_info =
 let build_cb_fun param_infos ret_info ~user_fun =
   let is_simple_fun =
     List.for_all param_infos ~f:(fun x ->
-        x.cb_match_pat = None && x.cb_param_trans = None )
+        x.cb_match_pat = None && x.cb_param_trans = None)
     && ret_info.cb_rmatch_pat = None
     && ret_info.cb_res_trans = None
   in
@@ -984,7 +990,7 @@ let build_cb_fun param_infos ret_info ~user_fun =
           ( Asttypes.Nolabel
           , match a.cb_param_trans with
             | Some f -> f a.cb_fun_expr
-            | None -> a.cb_fun_expr ) )
+            | None -> a.cb_fun_expr ))
     in
     let fbody = Exp.apply user_fun l in
     let fbody =
@@ -992,11 +998,12 @@ let build_cb_fun param_infos ret_info ~user_fun =
     in
     Some
       (ListLabels.fold_right ~init:fbody param_infos ~f:(fun a ac ->
-           Exp.fun_ Asttypes.Nolabel None a.cb_fun_pat ac ))
+           Exp.fun_ Asttypes.Nolabel None a.cb_fun_pat ac))
 
 let collect_info_cb fn =
   let param_name = create_param_name () in
-  let rec iter : type a.
+  let rec iter :
+      type a.
       a Ctypes.fn -> cb_param_info list -> cb_param_info list * cb_ret_info =
    fun fn accu ->
     match fn with
@@ -1040,7 +1047,7 @@ let ocaml_funptr mof callback_fn =
       [%stri
         module type X = sig
           include module type of struct
-              let r = [%e e] (Obj.magic 0n)
+            let r = [%e e] (Obj.magic 0n)
           end
         end]
   in
@@ -1053,7 +1060,7 @@ let ocaml_funptr mof callback_fn =
     in
     let typ =
       ListLabels.fold_right param_infos ~init:(Typ.any ()) ~f:(fun _ acc ->
-          Typ.arrow Asttypes.Nolabel (Typ.any ()) acc )
+          Typ.arrow Asttypes.Nolabel (Typ.any ()) acc)
     in
     let typ = Typ.arrow Asttypes.Nolabel typ pointer in
     let prim_name = U.safe_mlname () in
@@ -1098,7 +1105,7 @@ let gen_record_stris ~mod_path ~type_name l =
     List.mapi l ~f:(fun i _ ->
         let n = U.mk_loc ("x" ^ string_of_int i) in
         let t = Type.mk ~kind:Ptype_abstract n in
-        Sig.type_ Asttypes.Recursive [t] )
+        Sig.type_ Asttypes.Recursive [t])
   in
   let typ = Mty.signature types in
   let sig_name = U.safe_mlname ~capitalize:true ~prefix:"S_" () in
@@ -1108,7 +1115,7 @@ let gen_record_stris ~mod_path ~type_name l =
     List.mapi l ~f:(fun i (name, loc, _) ->
         let t = U.mk_typc ("M.x" ^ string_of_int i) in
         let n = Location.mkloc name loc in
-        Type.field n t )
+        Type.field n t)
   in
   let n = U.mk_loc type_name in
   let typ' = Type.mk ~kind:(Ptype_record fields) n in
@@ -1124,7 +1131,7 @@ let gen_record_stris ~mod_path ~type_name l =
     List.mapi l ~f:(fun i _ ->
         let i = string_of_int i in
         let n = U.mk_lid ("x" ^ i) in
-        ((n, Typ.var ("t" ^ i)), (n, U.mk_typc ("t" ^ i))) )
+        ((n, Typ.var ("t" ^ i)), (n, U.mk_typc ("t" ^ i))))
     |> List.split
   in
   let ppat = Typ.package sig_lid pl1 in
@@ -1140,7 +1147,7 @@ let gen_record_stris ~mod_path ~type_name l =
         let var = U.mk_typc ("t" ^ si) in
         let t = U.mk_typc ~l:[var] "Ctypes.typ" in
         let t_expr = Typ.arrow Asttypes.Nolabel t last_expr in
-        (pred i, t_pat, t_expr) )
+        (pred i, t_pat, t_expr))
   in
   assert (x = -1) ;
   let types =
@@ -1150,19 +1157,19 @@ let gen_record_stris ~mod_path ~type_name l =
         let i = string_of_int i in
         let manifest = U.mk_typc ("t" ^ i) in
         let t = Type.mk ~manifest ~kind:Ptype_abstract (U.mk_loc ("x" ^ i)) in
-        Str.type_ Asttypes.Recursive [t] )
+        Str.type_ Asttypes.Recursive [t])
   in
   let pmod = Mod.structure types in
   let init = Exp.pack pmod in
   let init =
     ListLabels.fold_right ~init l ~f:(fun _ ac ->
-        Exp.fun_ Asttypes.Nolabel None (Pat.any ()) ac )
+        Exp.fun_ Asttypes.Nolabel None (Pat.any ()) ac)
   in
   let init = Exp.constraint_ init constr_expr in
   let x, expr =
     ListLabels.fold_right ~init:(pl_len, init) l ~f:(fun _ (i, last) ->
         let n = U.mk_loc ("t" ^ string_of_int i) in
-        (pred i, Exp.newtype n last) )
+        (pred i, Exp.newtype n last))
   in
   assert (x = -1) ;
   let sl = List.mapi l ~f:(fun i _ -> U.mk_loc ("t" ^ string_of_int i)) in

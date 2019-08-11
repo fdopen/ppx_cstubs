@@ -95,7 +95,7 @@ let get_remove_string_exn name attr =
                 ; _ } ] ->
             res := Some s ;
             false
-          | _ -> failwith "surprising content in attribute" )
+          | _ -> failwith "surprising content in attribute")
   in
   match !res with
   | None -> failwith "invalid parsetree generated"
@@ -115,7 +115,7 @@ let is_uniq_type orig =
             && ( (CCString.prefix ~pre sref && CCString.suffix ~suf sref)
                || ( CCString.prefix ~pre:sref_pre orig
                   && CCString.suffix ~suf:sref_suf orig ) )
-          then raise_notrace M.F )
+          then raise_notrace M.F)
         htl_ocaml_types ;
       true
     with M.F -> false )

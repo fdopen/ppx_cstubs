@@ -83,7 +83,7 @@ let cpp_main () =
         , Arg.String
             (fun s ->
               anon_is_target := true ;
-              set_output_by_suffix s )
+              set_output_by_suffix s)
         , "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes."
         )
       ; ( "-cflag"
@@ -93,7 +93,7 @@ let cpp_main () =
         , arg_string (fun s ->
               include_dirs := s :: !include_dirs ;
               oflags := s :: "-I" :: !oflags ;
-              anon_is_target := false )
+              anon_is_target := false)
         , "<dir>     Add <dir> to the list of include directories" )
       ; ( "-pkg"
         , arg_string (fun s -> findlib_pkgs := s :: !findlib_pkgs)
@@ -131,7 +131,7 @@ let cpp_main () =
             if Sys.file_exists a then (
               cma_files := a :: !cma_files ;
               true )
-            else false )
+            else false)
       in
       if c = false then Printf.sprintf "%S doesn't exist\n" a |> error_exit
   in
@@ -149,7 +149,7 @@ let cpp_main () =
         set_output_by_suffix a )
       else (
         if !source <> None then raise (Arg.Bad a) ;
-        source := Some a ) )
+        source := Some a ))
     usage ;
   let source =
     match !source with

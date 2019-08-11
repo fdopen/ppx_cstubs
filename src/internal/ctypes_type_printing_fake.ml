@@ -17,7 +17,8 @@ type format_context =
   | `array
   | `nonarray ]
 
-let rec format_typ' : type a.
+let rec format_typ' :
+    type a.
        a typ
     -> (format_context -> Format.formatter -> unit)
     -> format_context
@@ -60,7 +61,7 @@ let rec format_typ' : type a.
         (fun context fmt ->
           match context with
           | `array -> fprintf fmt "(*%t)" (k `nonarray)
-          | _ -> fprintf fmt "*%t" (k `nonarray) )
+          | _ -> fprintf fmt "*%t" (k `nonarray))
         `nonarray fmt
     | Funptr fn ->
       format_fn' fn (fun fmt -> Format.fprintf fmt "(*%t)" (k `nonarray)) fmt
@@ -80,7 +81,7 @@ and format_fields : type a. a boxed_field list -> Format.formatter -> unit =
     (fun _i (BoxedField {ftype = t; fname; _}) ->
       fprintf fmt "@[" ;
       format_typ' t (fun _ fmt -> fprintf fmt " %s" fname) `nonarray fmt ;
-      fprintf fmt "@];@;" )
+      fprintf fmt "@];@;")
     fields
 
 and format_parameter_list parameters k fmt =
@@ -90,7 +91,7 @@ and format_parameter_list parameters k fmt =
     List.iteri
       (fun i (BoxedType t) ->
         if i <> 0 then Format.fprintf fmt "@], @[" ;
-        format_typ' t (fun _ _ -> ()) `nonarray fmt )
+        format_typ' t (fun _ _ -> ()) `nonarray fmt)
       parameters ;
   Format.fprintf fmt "@]@])"
 
