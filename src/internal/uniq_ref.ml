@@ -58,7 +58,10 @@ type make_result =
   ; topmod_ref : structure_item
   ; main_ref : expression }
 
-let attr ~attr ~cont = [(U.mk_loc attr, PStr [[%stri [%e U.str_expr cont]]])]
+let attr ~attr ~cont =
+  let x = U.mk_loc attr in
+  let pl = PStr [[%stri [%e U.str_expr cont]]] in
+  [Ast_helper.Attr.mk x pl]
 
 let vb ~attrs n expr = Str.value Nonrecursive [Vb.mk ~attrs (U.mk_pat n) expr]
 
@@ -84,10 +87,10 @@ let make mod_path short_name expr =
 let get_remove_string_exn name attr =
   let res = ref None in
   let attribs =
-    List.filter attr ~f:(fun (x, t) ->
-        if x.txt != name then true
+    List.filter attr ~f:(fun x ->
+        if x.attr_name.txt != name then true
         else
-          match t with
+          match x.attr_payload with
           | PStr
               [ { pstr_desc =
                     Pstr_eval
@@ -137,7 +140,8 @@ let get_final_name t = if is_uniq t.sref then t.short_name else t.uniq_name
 let replace_expr = function
   | {pexp_desc = Pexp_ident _ as orig; pexp_attributes = _ :: _ as attribs; _}
     as expr
-    when List.exists attribs ~f:(fun (x, _) -> x.txt == a_reference_string) ->
+    when List.exists attribs ~f:(fun x ->
+             x.attr_name.txt == a_reference_string) ->
     let s, pexp_attributes =
       get_remove_string_exn a_reference_string attribs
     in
@@ -155,7 +159,7 @@ let replace_stri = function
         Pstr_value
           (Nonrecursive, [({pvb_attributes = _ :: _ as attribs; _} as a)])
     ; _ } as stri ->
-    if List.exists attribs ~f:(fun (x, _) -> x.txt == a_orig_name) then
+    if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_orig_name) then
       let s, pvb_attributes = get_remove_string_exn a_orig_name attribs in
       let pvb_pat =
         match is_uniq s with
@@ -164,7 +168,8 @@ let replace_stri = function
       in
       let a = {a with pvb_attributes; pvb_pat} in
       {stri with pstr_desc = Pstr_value (Nonrecursive, [a])}
-    else if List.exists attribs ~f:(fun (x, _) -> x.txt == a_inmod_ref) then
+    else if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_inmod_ref)
+    then
       let s, pvb_attributes = get_remove_string_exn a_inmod_ref attribs in
       if is_uniq s then U.empty_stri ()
       else
@@ -175,7 +180,7 @@ let replace_stri = function
   | { pstr_desc =
         Pstr_type (rec', [({ptype_attributes = _ :: _ as attribs; _} as a)])
     ; _ } as stri
-    when List.exists attribs ~f:(fun (x, _) -> x.txt == a_inmod_ref) ->
+    when List.exists attribs ~f:(fun x -> x.attr_name.txt == a_inmod_ref) ->
     let s, ptype_attributes = get_remove_string_exn a_inmod_ref attribs in
     if is_uniq_type s then U.empty_stri ()
     else
@@ -220,7 +225,8 @@ let replace_typ = function
   | { ptyp_desc = Ptyp_constr (_, lorig) as orig
     ; ptyp_attributes = _ :: _ as attribs
     ; _ } as typ
-    when List.exists attribs ~f:(fun (x, _) -> x.txt == a_reference_string) ->
+    when List.exists attribs ~f:(fun x ->
+             x.attr_name.txt == a_reference_string) ->
     let s, ptyp_attributes =
       get_remove_string_exn a_reference_string attribs
     in

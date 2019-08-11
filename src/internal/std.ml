@@ -129,8 +129,9 @@ module Util = struct
   let marshal_to_str_expr a = str_expr (Marshal.to_string a [])
 
   let ocaml_warning s =
-    let s = str_expr s in
-    (mk_loc "ocaml.warning", Parsetree.PStr [[%stri [%e s]]])
+    let x = mk_loc "ocaml.warning" in
+    let pl = Parsetree.PStr [[%stri [%e str_expr s]]] in
+    Ast_helper.Attr.mk x pl
 
   let no_warn_unused_pre406 =
     let open Ast_helper in

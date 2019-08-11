@@ -38,7 +38,9 @@ let create_param_name () =
     incr i ;
     s
 
-let mk_attrs = function None -> [] | Some s -> [(U.mk_loc s, PStr [])]
+let mk_attrs = function
+  | None -> []
+  | Some s -> [Attr.mk (U.mk_loc s) (PStr [])]
 
 let mk_ex ?attrs s = Exp.ident ~attrs:(mk_attrs attrs) (U.mk_lid s)
 
@@ -114,7 +116,7 @@ let ident_of_ml_prim :
     | ML_complexld -> mk_typ "ComplexL.t"
 
 let mk_struct_typ s =
-  let v = Rtag (U.mk_loc s, [], true, []) in
+  let v = Rf.tag (U.mk_loc s) true [] in
   let v = Typ.variant [v] Asttypes.Closed None in
   mk_typ ~l:[Typ.any (); v] "Ctypes.structured"
 
@@ -608,7 +610,7 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
     else
       match cinfo.Gen_c.noalloc with
       | false -> []
-      | true -> [(U.mk_loc "noalloc", PStr [])]
+      | true -> [Attr.mk (U.mk_loc "noalloc") (PStr [])]
   in
   let p = Val.mk ~attrs ~prim name t in
   Str.primitive p

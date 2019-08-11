@@ -20,15 +20,15 @@ open Mparsetree.Ast_cur
 
 val replace_expr_string : string
 
-val replace_expr_attrib : string Location.loc * Parsetree.payload
+val replace_expr_attrib : Parsetree.attribute
 
 val tdl_string : string
 
-val tdl_attrib : string Location.loc * Parsetree.payload
+val tdl_attrib : Parsetree.attribute
 
 val remove_string : string
 
-val remove_attrib : string Location.loc * Parsetree.payload
+val remove_attrib : Parsetree.attribute
 
 val replace_attr_string : string
 

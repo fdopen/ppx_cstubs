@@ -18,7 +18,8 @@
 
 let h s =
   let x = Location.mkloc s Location.none in
-  (x, Mparsetree.Ast_cur.Parsetree.PStr [])
+  let pl = Mparsetree.Ast_cur.Parsetree.PStr [] in
+  Mparsetree.Ast_cur.Ast_helper.Attr.mk x pl
 
 let replace_expr_string = "ppxc__replace_expr"
 

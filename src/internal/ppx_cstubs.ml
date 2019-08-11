@@ -50,20 +50,21 @@ module Extract = struct
 
   let check_no_attribs = function
     | [] -> ()
-    | (a, _) :: _ -> error ~loc:a.loc "unsupported attribute: %S" a.txt
+    | a :: _ ->
+      error ~loc:a.attr_loc "unsupported attribute: %S" a.attr_name.txt
 
   let check_no_attribs_t t = check_no_attribs t.ptyp_attributes
 
-  let remove_attrib str l = List.filter l ~f:(fun (x, _) -> x.txt <> str)
+  let remove_attrib str l = List.filter l ~f:(fun x -> x.attr_name.txt <> str)
 
   let get_remove name attr =
     let at =
-      List.exists attr ~f:(fun (x, t) ->
-          if x.txt <> name then false
+      List.exists attr ~f:(fun x ->
+          if x.attr_name.txt <> name then false
           else
-            match t with
+            match x.attr_payload with
             | PStr [] -> true
-            | _ -> error ~loc:x.loc "surprising content in %s" name)
+            | _ -> error ~loc:x.attr_loc "surprising content in %s" name)
     in
     (at, if not at then attr else remove_attrib name attr)
 
@@ -213,10 +214,10 @@ module Extract = struct
 
   let get_cname ~def l =
     let res =
-      List.find_map l ~f:(fun (x, t) ->
-          if x.txt <> "cname" then None
+      List.find_map l ~f:(fun x ->
+          if x.attr_name.txt <> "cname" then None
           else
-            match t with
+            match x.attr_payload with
             | PStr
                 [ { pstr_desc =
                       Pstr_eval
@@ -224,22 +225,23 @@ module Extract = struct
                         , [] )
                   ; _ } ] ->
               Some x
-            | _ -> error ~loc:x.loc "unsupported expression in cname")
+            | _ -> error ~loc:x.attr_loc "unsupported expression in cname")
     in
     match res with None -> (def, l) | Some x -> (x, remove_attrib "cname" l)
 
   let get_unexpected unexpected l =
     let res =
-      List.find_map l ~f:(fun (x, t) ->
-          if x.txt <> unexpected then None
+      List.find_map l ~f:(fun x ->
+          if x.attr_name.txt <> unexpected then None
           else
-            match t with
+            match x.attr_payload with
             | PStr
                 [ { pstr_desc =
                       Pstr_eval (({pexp_desc = Pexp_fun _; _} as e), [])
                   ; _ } ] ->
               Some e
-            | _ -> error ~loc:x.loc "unsupported expression in %s" unexpected)
+            | _ ->
+              error ~loc:x.attr_loc "unsupported expression in %s" unexpected)
     in
     match res with
     | None -> (None, l)
@@ -634,7 +636,7 @@ module Id : sig
 
   val get : ?loc:Mparsetree.Ast_cur.Ast_helper.loc -> unit -> t
 
-  val get_usage_id : unit -> expression * (label loc * payload) list
+  val get_usage_id : unit -> expression * attributes
 
   val get_tdl_entries_id : unit -> int * structure_item
 
@@ -673,7 +675,7 @@ end = struct
     let st = [%stri [%e script_param]] in
     let attrs =
       let x = U.mk_loc attr_string in
-      [(x, PStr [st])]
+      [Attr.mk x (PStr [st])]
     in
     (script_param, attrs)
 
@@ -1120,8 +1122,9 @@ module H = struct
       | true ->
         let id = U.int_expr (Id.get_typ_id ()) in
         let attrs =
-          [ ( U.mk_loc Attributes.replace_typ_string
-            , Parsetree.PStr [[%stri [%e id]]] ) ]
+          [ Attr.mk
+              (U.mk_loc Attributes.replace_typ_string)
+              (Parsetree.PStr [[%stri [%e id]]]) ]
         in
         let t = Typ.any ~attrs () in
         (Some id, Exp.constraint_ expr t)
@@ -1826,11 +1829,16 @@ let convert_ctypes_exeptions f =
   | Ctypes_static.IncompleteType -> error "Incomplete Type"
 
 let get_usage_id_from_attribs_exn attr =
-  let _, pl =
-    List.find attr ~f:(fun (x, _) -> x.txt == Attributes.replace_attr_string)
+  let pl =
+    let s =
+      List.find attr ~f:(fun x ->
+          x.attr_name.txt == Attributes.replace_attr_string)
+    in
+    s.attr_payload
   in
   let attr =
-    List.filter attr ~f:(fun (x, _) -> x.txt != Attributes.replace_attr_string)
+    List.filter attr ~f:(fun x ->
+        x.attr_name.txt != Attributes.replace_attr_string)
   in
   let id =
     match pl with
@@ -1870,10 +1878,8 @@ let mark_if_used ?pexp_outer mapper stri pvb pexp =
 
 let remove_empty str =
   List.filter str ~f:(function
-    | { pstr_desc =
-          Pstr_value (Nonrecursive, [{pvb_attributes = [({txt; _}, _)]; _}])
-      ; _ }
-      when txt == Attributes.remove_string ->
+    | {pstr_desc = Pstr_value (Nonrecursive, [{pvb_attributes = [x]; _}]); _}
+      when x.attr_name.txt == Attributes.remove_string ->
       false
     | _ -> true)
 
@@ -1898,8 +1904,8 @@ let add_tdl_entries str =
                ({pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}, l)
          ; pstr_loc
          ; _ }
-         when List.exists l ~f:(fun (x, _) -> x.txt == Attributes.tdl_string)
-         -> (
+         when List.exists l ~f:(fun x ->
+                  x.attr_name.txt == Attributes.tdl_string) -> (
          match Hashtbl.find_all htl_tdl_entries @@ int_of_string s with
          | exception Failure _ ->
            error ~loc:pstr_loc "fatal: type info not found"
@@ -1920,9 +1926,9 @@ let external' ~is_inline loc strpri =
   let return_errno = ref false in
   let remove_labels = ref false in
   let attrs = ref [] in
-  List.iter strpri.pval_attributes ~f:(fun (s, y) ->
+  List.iter strpri.pval_attributes ~f:(fun x ->
       let reuse_attrib =
-        match s.txt with
+        match x.attr_name.txt with
         (* TODO: what else? *)
         | "release_runtime_lock" ->
           release_runtime_lock := true ;
@@ -1938,12 +1944,12 @@ let external' ~is_inline loc strpri =
           false
         | "ocaml.warnerror" | "ocaml.deprecated" | "ocaml.warning"
          |"warnerror" | "deprecated" | "warning" ->
-          attrs := (s, y) :: !attrs ;
+          attrs := x :: !attrs ;
           true
-        | x -> error ~loc:s.loc "unsupported attribute %s" x
+        | y -> error ~loc:x.attr_loc "unsupported attribute %s" y
       in
-      if reuse_attrib = false && y <> PStr [] then
-        error ~loc:s.loc "unknown content in attribute %s" s.txt) ;
+      if reuse_attrib = false && x.attr_payload <> PStr [] then
+        error ~loc:x.attr_loc "unknown content in attribute %s" x.attr_name.txt) ;
   let attrs = List.rev !attrs in
   let release_runtime_lock = !release_runtime_lock in
   let noalloc = !noalloc in
@@ -2040,13 +2046,14 @@ let mapper _config _cookies =
       let exp = p.pvb_expr in
       let thread_registration = ref false in
       let acquire_runtime = ref false in
-      List.iter p.pvb_attributes ~f:(fun (s, y) ->
-          ( match s.txt with
+      List.iter p.pvb_attributes ~f:(fun x ->
+          ( match x.attr_name.txt with
           | "acquire_runtime_lock" -> acquire_runtime := true
           | "thread_registration" -> thread_registration := true
-          | x -> error ~loc:s.loc "unsupported attribute %s" x ) ;
-          if y <> PStr [] then
-            error ~loc:s.loc "unknown content in attribute %s" s.txt) ;
+          | y -> error ~loc:x.attr_loc "unsupported attribute %s" y ) ;
+          if x.attr_payload <> PStr [] then
+            error ~loc:x.attr_loc "unknown content in attribute %s"
+              x.attr_name.txt) ;
       let typ_pat =
         match pat.ppat_desc with Ppat_constraint (_, t) -> Some t | _ -> None
       in
@@ -2250,8 +2257,8 @@ let mapper _config _cookies =
             ( {pexp_desc = Pexp_constant (Pconst_integer (s, None)); _}
             , (_ :: _ as l) )
       ; _ }
-      when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_expr_string) -> (
+      when List.exists l ~f:(fun x ->
+               x.attr_name.txt == Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
       with Not_found -> error "fatal error: external not found" )
     | { pstr_desc =
@@ -2263,8 +2270,8 @@ let mapper _config _cookies =
                       ; _ } as pexp
                   ; _ } as pvb ) ] )
       ; _ } as stri
-      when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string) ->
+      when List.exists l ~f:(fun x ->
+               x.attr_name.txt == Attributes.replace_attr_string) ->
       mark_if_used mapper stri pvb pexp
     | { pstr_desc =
           Pstr_value
@@ -2279,13 +2286,13 @@ let mapper _config _cookies =
                       ; _ } as pexp_outer
                   ; _ } as pvb ) ] )
       ; _ } as stri
-      when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string) ->
+      when List.exists l ~f:(fun x ->
+               x.attr_name.txt == Attributes.replace_attr_string) ->
       mark_if_used ~pexp_outer:(pexp_outer, ct) mapper stri pvb pexp
     | { pstr_desc = Pstr_module ({pmb_attributes = _ :: _ as l; _} as w2)
       ; pstr_loc = loc } as w1
-      when List.exists l ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_attr_string) ->
+      when List.exists l ~f:(fun x ->
+               x.attr_name.txt == Attributes.replace_attr_string) ->
       let pmb_attributes, id = get_usage_id_from_attribs_exn l in
       let pstr_desc = Pstr_module {w2 with pmb_attributes} in
       let w1 = {w1 with pstr_desc} in
@@ -2362,8 +2369,8 @@ let mapper _config _cookies =
     | { pexp_desc = Pexp_constant (Pconst_integer (s, None))
       ; pexp_attributes = _ :: _ as attribs
       ; _ }
-      when List.exists attribs ~f:(fun (x, _) ->
-               x.txt == Attributes.replace_expr_string) -> (
+      when List.exists attribs ~f:(fun x ->
+               x.attr_name.txt == Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_expr (int_of_string s)
       with Not_found -> error "fatal: constant not found" )
     | pexp -> default_mapper.expr mapper pexp
@@ -2377,10 +2384,10 @@ let mapper _config _cookies =
   let from_htl htl name attribs =
     let fail () = failwith "invalid parsetree generated (typ replacement)" in
     let id =
-      List.find_map attribs ~f:(fun (x, t) ->
-          if x.txt != name then None
+      List.find_map attribs ~f:(fun x ->
+          if x.attr_name.txt != name then None
           else
-            match t with
+            match x.attr_payload with
             | PStr
                 [ { pstr_desc =
                       Pstr_eval
@@ -2401,8 +2408,8 @@ let mapper _config _cookies =
     else
       match Uniq_ref.replace_typ ptyp with
       | {ptyp_desc = Ptyp_any; ptyp_attributes = _ :: _ as attribs; _}
-        when List.exists attribs ~f:(fun (x, _) ->
-                 x.txt == Attributes.replace_typ_string) ->
+        when List.exists attribs ~f:(fun x ->
+                 x.attr_name.txt == Attributes.replace_typ_string) ->
         from_htl Script_result.htl_type Attributes.replace_typ_string attribs
       | x -> default_mapper.typ mapper x
   in
