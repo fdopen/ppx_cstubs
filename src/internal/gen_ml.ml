@@ -575,7 +575,6 @@ type param_info =
   ; (* if the parameter needs to be tranformed first .. *)
     param_trans : (expression -> expression) option
   ; label : Asttypes.arg_label
-  ; is_inline_ocaml_type : bool
   ; annot_needed : bool
   ; (* do I need to repeat the Ctype.typ to type the generated function *)
     constr_ptype : core_type (* x y z Ctypes.typ expanded as far as possible *)
@@ -585,7 +584,6 @@ type ret_info =
   { rext_ptype : core_type
   ; rmatch_pat : pattern option
   ; res_trans : (expression -> expression) option
-  ; ris_inline_ocaml_type : bool
   ; rannot_needed : bool
   ; rconstr_ptype : core_type }
 
@@ -747,12 +745,6 @@ let build_pattern fn_expr patterns ~func =
   | None -> None
   | Some pat -> Some (match_nw fn_expr (Exp.case pat func))
 
-let is_inline_ocaml_type : type a. a Ctypes.typ -> bool =
-  let open Ctypes_static in
-  function
-  | View {format_typ = Some f; _} when f == Evil_hack.format_typ -> true
-  | _ -> false
-
 let collect_info fn ~mod_path cinfo lexpr =
   let param_name = create_param_name () in
   let rec iter :
@@ -771,7 +763,6 @@ let collect_info fn ~mod_path cinfo lexpr =
     @@ fun () ->
     match fn with
     | CS.Returns t ->
-      let ris_inline_ocaml_type = is_inline_ocaml_type t in
       let rext_ptype = ml_typ_of_return_typ t ~cinfo in
       let rext_ptype =
         match cinfo.Gen_c.return_errno with
@@ -801,12 +792,7 @@ let collect_info fn ~mod_path cinfo lexpr =
       (* ?? *)
       let rconstr_ptype = constraint_of_typ ~mod_path t in
       ( List.rev accu
-      , { rext_ptype
-        ; rmatch_pat
-        ; rannot_needed
-        ; res_trans
-        ; ris_inline_ocaml_type
-        ; rconstr_ptype } )
+      , {rext_ptype; rmatch_pat; rannot_needed; res_trans; rconstr_ptype} )
     | CS.Function (a, b) ->
       let fun_expr, fun_pat = mk_ex_pat @@ param_name () in
       let match_pat, param_trans =
@@ -814,7 +800,6 @@ let collect_info fn ~mod_path cinfo lexpr =
       in
       let type_info, ext_ptype = ml_typ_of_arg_typ a ~cinfo ~mod_path in
       let label = Asttypes.Nolabel in
-      let is_inline_ocaml_type = is_inline_ocaml_type a in
       let annot_needed = type_info <> `Complete in
       let constr_ptype = constraint_of_typ ~mod_path a in
       let i =
@@ -825,8 +810,7 @@ let collect_info fn ~mod_path cinfo lexpr =
         ; constr_ptype
         ; match_pat
         ; param_trans
-        ; label
-        ; is_inline_ocaml_type }
+        ; label }
       in
       iter b lexpr' (i :: accu)
   in
