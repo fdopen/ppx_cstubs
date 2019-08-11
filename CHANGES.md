@@ -1,3 +1,11 @@
+0.2.1 (12/08/2019)
+------------------
+
+- support OCaml 4.09.0+beta1
+
+- bump internally used AST version from 4.06 to 4.08
+
+
 0.2.0 (13/07/2019)
 ------------------
 
