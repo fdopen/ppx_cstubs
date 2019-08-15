@@ -332,7 +332,10 @@ module Signed = struct
 
     external to_int : t -> t = "%identity"
 
-    let of_string = int_of_string
+    let of_string x =
+      let r = int_of_string x in
+      if r < min_int || r > max_int then failwith "int_of_string" ;
+      r
 
     let to_string = string_of_int
 
@@ -354,7 +357,7 @@ module Signed = struct
 
     let of_nativeint x = of_int (Nativeint.to_int x)
 
-    let abs = abs
+    let abs x = of_int (abs x)
 
     let neg x = of_int (-x)
 
