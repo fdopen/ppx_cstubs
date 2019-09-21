@@ -289,13 +289,13 @@ module Signed = struct
 
     let div x y = of_int (x / y)
 
-    let rem x y = of_int (x mod y)
+    let rem x y = x mod y
 
-    let logand x y = of_int (x land y)
+    let logand x y = x land y
 
-    let logor x y = of_int (x lor y)
+    let logor x y = x lor y
 
-    let logxor x y = of_int (x lxor y)
+    let logxor x y = x lxor y
 
     let shift_left x y = of_int (x lsl y)
 
@@ -326,7 +326,7 @@ module Signed = struct
       let ( lsr ) = shift_right_logical
     end
 
-    let lognot x = of_int (lnot x)
+    let lognot x = lnot x
 
     let compare = compare
 
@@ -369,7 +369,7 @@ module Signed = struct
 
     let equal (x : t) (y : t) = x = y
 
-    let pp fmt x = Format.fprintf fmt "%d" x
+    let pp = Signed.Int.pp
   end
 
   module Int8 = Short_int (struct
