@@ -27,6 +27,7 @@ let flib_protect f a =
 let init =
   lazy
     ( if !Options.nopervasives then Clflags.nopervasives := true ;
+      Toploop.set_paths ();
       toplevel_env := Compmisc.initial_env () ;
       Topfind.log := ignore ;
       let l = [ "integers"; "ctypes"; "ppx_cstubs" ; "ppx_cstubs.internal" ] in
