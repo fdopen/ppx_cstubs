@@ -429,6 +429,7 @@ type id = int
 type intern =
   | String
   | Integer of id
+  | Integer_no_type of id
   | Unchecked_integer
 
 type extract_info = {
@@ -438,25 +439,35 @@ type extract_info = {
 
 let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
-let prepare_extract_int ?(bit32 = false) ?(disable_checks = false) ~ctype ~expr
-    ~loc () =
+let prepare_extract_int ?(bit32 = false) ~loc check expr =
   let com_loc = Std.Util.cloc_comment loc in
   let s_check =
-    if disable_checks then ""
-    else
-      let var1 = Std.Util.safe_cname ~prefix:"type_defined" in
-      let var2 = Std.Util.safe_cname ~prefix:"extract_is_constexpr" in
+    match check with
+    | `Disable -> ""
+    | `Any_int | `Int_type _ ->
+      let assign =
+        match check with
+        | `Any_int -> ""
+        | `Int_type ctype ->
+          let var = Std.Util.safe_cname ~prefix:"type_defined" in
+          Printf.sprintf "\n%s %s = %s;" ctype var expr
+        | `Disable -> assert false
+      in
+      let var = Std.Util.safe_cname ~prefix:"extract_is_constexpr" in
       Printf.sprintf
         {|
-%s
-%s %s = %s;
+%s%s
 char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
 |}
-        com_loc ctype var1 expr var2 expr
+        com_loc assign var expr
         (Std.Util.no_c_comments expr)
   in
-  let stringify = if bit32 then "PPXC__SNSTR" else "PPXC__NSTR" in
-  let gen prepend info =
+  let gen ~check_extract prepend info =
+    let stringify =
+      if check_extract then "PPXC__SUD01"
+      else if bit32 then "PPXC__SNSTR"
+      else "PPXC__NSTR"
+    in
     let id = cnt () in
     let ar = int_to_char_array id in
     let s =
@@ -474,10 +485,11 @@ DISABLE_LIMIT_WARNINGS_POP()
     in
     (id, s)
   in
-  let id, res_str1 = gen "" expr in
+  let id, res_str1 = gen ~check_extract:false "" expr in
   let res, src2 =
-    if disable_checks = true then ({ id; intern = Unchecked_integer }, res_str1)
-    else
+    match check with
+    | `Disable -> ({ id; intern = Unchecked_integer }, res_str1)
+    | x -> (
       let s_int = Printf.sprintf "( PPXC_IS_INTEGER_DEF_TRUE(%s) )" expr in
       let int_size = if bit32 then "32" else "64" in
       let s_min =
@@ -486,25 +498,36 @@ DISABLE_LIMIT_WARNINGS_POP()
       let s_max =
         Printf.sprintf "( (%s) <= 0 || (%s) <= UINT%s_MAX )" expr expr int_size
       in
-      let s_user_min =
-        Printf.sprintf "( (%s) >= 0 || (%s) >= (PPXC_MIN_TYPE(%s)) )" expr expr
-          ctype
+      let cstr =
+        Printf.sprintf
+          "(((unsigned)(%s)) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u))"
+          s_int s_min s_max
       in
-      let s_user_max =
-        Printf.sprintf "( (%s) <= 0 || (%s) <= (PPXC_MAX_TYPE(%s)) )" expr expr
-          ctype
-      in
-      let id_x, str =
-        gen res_str1
-        @@ Printf.sprintf
-             "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
-             s_int s_min s_max s_user_min s_user_max
-      in
-      ({ id; intern = Integer id_x }, str)
+      match x with
+      | `Any_int ->
+        let id_x, str = gen ~check_extract:true res_str1 cstr in
+        ({ id; intern = Integer_no_type id_x }, str)
+      | `Int_type ctype ->
+        let s_user_min =
+          Printf.sprintf "( (%s) >= 0 || (%s) >= (PPXC_MIN_TYPE(%s)) )" expr
+            expr ctype
+        in
+        let s_user_max =
+          Printf.sprintf "( (%s) <= 0 || (%s) <= (PPXC_MAX_TYPE(%s)) )" expr
+            expr ctype
+        in
+        let id_x, str =
+          gen ~check_extract:true res_str1
+          @@ Printf.sprintf
+               "( %s | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
+               cstr s_user_min s_user_max
+        in
+        ({ id; intern = Integer id_x }, str)
+      | `Disable -> assert false )
   in
   (res, s_check, src2)
 
-let prepare_extract_string ~expr ~loc () =
+let prepare_extract_string ~loc expr =
   let cnt = cnt () in
   let com_loc = Std.Util.cloc_comment loc in
   let var = Std.Util.safe_cname ~prefix:"extract_is_string" in
@@ -528,6 +551,11 @@ type obj = (int, string) Hashtbl.t
 
 let compile ~ebuf c_prog =
   let ocaml_flags = !Options.ocaml_flags in
+  let dir =
+    match !Options.ml_input_file with
+    | None -> failwith "ml_input_file not set"
+    | Some s -> Filename.dirname s
+  in
   let pre_suf =
     match Std.Util.unsuffixed_file_name () with "" -> "" | x -> x ^ "_"
   in
@@ -547,11 +575,6 @@ let compile ~ebuf c_prog =
     match Ocaml_config.system () |> CCString.lowercase_ascii with
     | "win32" | "win64" -> [ "-Fo:" ^ obj ]
     | _ -> [ "-o"; obj ]
-  in
-  let dir =
-    match !Options.ml_input_file with
-    | None -> failwith "ml_input_file not set"
-    | Some s -> Filename.dirname s
   in
   let c_flags = "-I" :: dir :: c_flags in
   let c_flags = !Options.c_flags @ c_flags in
@@ -666,7 +689,7 @@ let extract info htl =
   match info.intern with
   | String -> Ok res
   | Unchecked_integer -> Ok (normalise_int res)
-  | Integer x ->
+  | Integer x | Integer_no_type x ->
     let res = normalise_int res in
     let int' =
       match int_of_string @@ extract_single x with
@@ -677,6 +700,10 @@ let extract info htl =
     if int' land (1 lsl 0) = 0 then er Not_an_integer;
     if int' land (1 lsl 1) = 0 then er (Underflow res);
     if int' land (1 lsl 2) = 0 then er (Overflow res);
-    if int' land (1 lsl 3) = 0 then er (Underflow res);
-    if int' land (1 lsl 4) = 0 then er (Overflow res);
+    ( match info.intern with
+    | Integer _ ->
+      if int' land (1 lsl 3) = 0 then er (Underflow res);
+      if int' land (1 lsl 4) = 0 then er (Overflow res)
+    | Integer_no_type _ -> ()
+    | String | Unchecked_integer -> assert false );
     Ok res

@@ -22,17 +22,14 @@ val prologue : string
 
 val prepare_extract_int :
   ?bit32:bool ->
-  ?disable_checks:bool ->
-  ctype:string ->
-  expr:string ->
   loc:Mparsetree.Ast_cur.Ast_helper.loc ->
-  unit ->
+  [ `Disable | `Any_int | `Int_type of string ] ->
+  string ->
   extract_info * string * string
 
 val prepare_extract_string :
-  expr:string ->
   loc:Mparsetree.Ast_cur.Ast_helper.loc ->
-  unit ->
+  string ->
   extract_info * string * string
 
 type obj

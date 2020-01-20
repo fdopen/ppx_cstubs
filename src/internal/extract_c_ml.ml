@@ -204,7 +204,9 @@ let gen t str =
   in
   let r = Big_int.big_int_of_string str in
   match t.info with
-  | Extr_char -> Char.chr ((Big_int.int_of_big_int r + 256) mod 256) |> X.char
+  | Extr_char ->
+    check_limits r int8_min uint8_max;
+    Char.chr ((Big_int.int_of_big_int r + 256) mod 256) |> X.char
   | Extr_schar -> normal_int r int8_min int8_max
   | Extr_short -> Big_int.int_of_big_int r |> X.int
   | Extr_int -> normal_int r camlint_min camlint_max

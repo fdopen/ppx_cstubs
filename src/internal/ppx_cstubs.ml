@@ -686,6 +686,8 @@ end = struct
 end
 
 module Top = struct
+  module Structure_extract_phase0 = Ppx_mod_top_common ()
+
   module Structure_extract = Ppx_mod_top_common ()
 
   module Structure_build_external = Ppx_mod_top_common ()
@@ -704,8 +706,11 @@ module Top = struct
 
   let add_extract = add_help Structure_extract.add_entry
 
+  let add_extract_phase0 = add_help Structure_extract_phase0.add_entry
+
   let run () =
-    let c_const_entries = Structure_extract.get_entries () in
+    let extract_phase0_entries = Structure_extract_phase0.get_entries () in
+    let extract_entries = Structure_extract.get_entries () in
     let build_entries = Structure_build_external.get_entries () in
     let ctypes =
       let ws = Ocaml_config.word_size () in
@@ -725,6 +730,14 @@ module Top = struct
     let expr =
       [%expr
         let module M : sig end = struct
+          [@@@ocaml.warning "-60"]
+
+          let () =
+            let module Extract_phase0 : sig end = struct
+              [%%s extract_phase0_entries]
+            end in
+            ()
+
           open! Ppxc__script.Run_environment [@@ocaml.warning "-33-66"]
 
           [%%s [ ctypes ]]
@@ -733,7 +746,7 @@ module Top = struct
 
           let () =
             let module Extract_c_consts : sig end = struct
-              [%%s c_const_entries]
+              [%%s extract_entries]
             end in
             ()
 
@@ -812,6 +825,33 @@ module H = struct
       Ppx_mod.add_named ~name_check:false name id.Id.expr
     | l -> error_msg "constant" l
 
+  let bound_constant name = function
+    | [ (Nolabel, str_expr); (Nolabel, type_expr) ] ->
+      ( match Extract.constant_string str_expr with
+      | Some _ -> ()
+      | None ->
+        U.error ~loc:str_expr.pexp_loc
+          "'let%%c ... = constant' requires a string literal" );
+      let id = Id.get () in
+      Top.add_extract_phase0
+        [%stri
+          let () =
+            let (ppxc__s : string) = [%e str_expr] in
+            Ppxc__script.Extract_phase0.bound_constant [%e id.Id.script_param]
+              ppxc__s];
+      let tx = U.marshal_to_str_expr type_expr in
+      let f f =
+        [%stri
+          let [%p U.mk_pat name] =
+            let (ppxc__s : string) = [%e str_expr]
+            and (ppxc__t : _ Ctypes.typ) = [%e type_expr] in
+            [%e f] [%e id.Id.script_param] ppxc__s [%e tx] ppxc__t]
+      in
+      Top.add_extract @@ f [%expr Ppxc__script.Extract.bound_constant];
+      Top.add_build_external @@ f [%expr Ppxc__script.Build.bound_constant];
+      Ppx_mod.add_named ~name_check:true name id.Id.expr
+    | l -> error_msg "constant" l
+
   let marshal_expr (e : Marshal_types.expr) = U.marshal_to_str_expr e
 
   let register_fun id =
@@ -846,10 +886,12 @@ module H = struct
     | [ (Nolabel, x) ] ->
       ( match Extract.constant_string x with
       | Some _ -> ()
-      | None -> (
-        match x.pexp_desc with
-        | Pexp_ident _ -> ()
-        | _ -> error "'header' requires a string constant" ) );
+      | None -> error "'header' requires a string literal" );
+      Top.add_extract_phase0
+        [%stri
+          let () =
+            let ppxc__1 : string = [%e x] in
+            Ppxc__script.Extract_phase0.header ppxc__1];
       Top.add_extract
         [%stri
           let () =
@@ -1554,6 +1596,27 @@ module H = struct
     let open Ast_helper in
     fun ~mod_name ~func_name l ->
       let id = Id.get () in
+      let str_expr =
+        (* optional parameter ?strict *)
+        let x =
+          List.find_map l ~f:(function
+            | Nolabel, str_expr -> (
+              match Extract.constant_string str_expr with
+              | Some _ -> Some str_expr
+              | None ->
+                U.error ~loc:str_expr.pexp_loc "%s requires a string literal"
+                  func_name )
+            | (Labelled _ | Optional _), _ -> None)
+        in
+        match x with
+        | Some s -> s
+        | None -> U.error "%s requires a string literal" func_name
+      in
+      Top.add_extract_phase0
+        [%stri
+          let () =
+            Ppxc__script.Extract_phase0.int_alias [%e id.Id.script_param]
+              [%e str_expr]];
       let func_name = func_name ^ "_alias" in
       let mod_name_expr = U.str_expr mod_name in
       let lmod_name = U.mk_loc mod_name in
@@ -2140,6 +2203,7 @@ let mapper _config _cookies =
           if s = "opaque" then ret.return (H.opaque name at l)
           else ret.return (H.abstract name at l)
         | "@->" -> H.fn name exp
+        | "constant" -> H.bound_constant name l
         | _ when is_constant -> H.pexp_const name exp
         | _ -> H.typ name exp
       in

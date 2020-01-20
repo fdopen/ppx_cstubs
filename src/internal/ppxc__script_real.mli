@@ -542,8 +542,18 @@ module type Anysigned_result = sig
   val t : t Ctypes.typ
 end
 
+module Extract_phase0 : sig
+  val bound_constant : string -> string -> unit
+
+  val header : string -> unit
+
+  val int_alias : string -> string -> unit
+end
+
 module Extract : sig
   val constant : string -> string -> string -> 'a Ctypes.typ -> unit
+
+  val bound_constant : string -> string -> string -> 'a Ctypes.typ -> 'a
 
   val register_fun_place : string -> unit
 
@@ -611,6 +621,8 @@ module Build : sig
   val reg_trace : ?no_dup:bool -> int -> 'a Ctypes.typ -> 'a Ctypes.typ
 
   val constant : string -> string -> string -> 'a Ctypes.typ -> unit
+
+  val bound_constant : string -> string -> string -> 'a Ctypes.typ -> 'a
 
   val foreign_value :
     string ->
