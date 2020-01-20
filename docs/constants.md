@@ -31,5 +31,33 @@ different platform before you release it 😉. If you don't care about
 overflows, you can just cast the value to the appropriate type: `[%c
 constant "(int)BAR" int]`.
 
-Values of any other type can be imported at runtime with `[%c
-foreign_value ... ]`.
+Values of any other type can be imported at runtime with [`[%c foreign_value ...]`](./foreign_value.md).
+
+## Let-bound Constants
+
+Sometimes it is necessary to use constants already for defining ctypes expression, e.g.
+
+```c
+struct ms {
+    int x;
+    char y[YLENGTH];
+};
+```
+
+Therefore, another syntax is also supported:
+
+```ocaml
+let%c _YLENGTH = constant "YLENGTH" camlint
+let%c char_y_ar = array _YLENGTH char
+type%c ms = {
+  x : int;
+  y : char_y_ar;
+}
+```
+
+There are however several disadvantages associated with this syntax:
+* it only works for integers and not for string literals
+* When you are cross-compiling, you can only extract integers that are
+  representable in the build and target platform. Normally only the
+  target platform matters
+* code generation is slower and the error messages are less accurate

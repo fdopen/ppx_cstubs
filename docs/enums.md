@@ -27,7 +27,7 @@ In the above case an ordinary OCaml sum type named `day` will be created
 as well as a value `day` of type `day Ctypes.typ`.
 
 
-In some cases further annotations are required due to the different
+In some cases, further annotations are required due to the different
 syntax rules of OCaml and C:
 
 ```c

@@ -65,13 +65,10 @@ let f t = Signed.add (Signed_t.of_int (-42)) t
 `module Signed_t = [%c int "foo"]` creates an module `Signed_t` with
 the signature of
 [Signed.S](https://github.com/ocamllabs/ocaml-integers/blob/41846f424b13af552200939228492d29bd06a495/src/signed.mli#L10),
-but also include an additional value `t` of type `t
-Ctypes.typ`. `Signed_t.t` can be used inside external declarations and
-similar locations, the other values of the module are however abstract
-during code generation.
+and also include an additional value `t` of type `t Ctypes.typ` that
+can be used inside `external` declarations.
 
-`[%c uint "foo"]` will create an analogous
-module with a signature of
+`[%c uint "foo"]` will create an analogous module with a signature of
 [Unsigned.S](https://github.com/ocamllabs/ocaml-integers/blob/41846f424b13af552200939228492d29bd06a495/src/unsigned.mli#L10).
 
 `[%c aint "foo"]` will also be of type `Unsigned.S`, but with an

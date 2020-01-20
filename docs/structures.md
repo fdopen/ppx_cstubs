@@ -105,7 +105,7 @@ let {x,y} = !@(coerce (ptr point) (ptr point_record) t)
 
 ## Unions
 
-Unions can declared in a similar way:
+Unions can be declared in a similar way:
 
 ```c
 typedef union {

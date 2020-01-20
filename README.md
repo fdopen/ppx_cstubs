@@ -39,6 +39,11 @@ ppx_cstubs myfile.c.ml -o-c myfile_stubs.c -o-ml myfile.ml
 ```
 
 
+## user guide
+
+There is now also [user guide](https://fdopen.github.io/ppx_cstubs/) (work in progress).
+
+
 ## inline code
 
 As a slight extension of the scheme above, you can also label your
