@@ -16,6 +16,6 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-module Ast_cur = Migrate_parsetree.Ast_408
+module Ast_cur = Migrate_parsetree.Ast_409
 
-let ast_version = Migrate_parsetree.Versions.ocaml_408
+let ast_version = Migrate_parsetree.Versions.ocaml_409
