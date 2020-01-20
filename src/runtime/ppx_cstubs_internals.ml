@@ -369,7 +369,7 @@ module Signed = struct
 
     let equal (x : t) (y : t) = x = y
 
-    let pp = Signed.Int.pp
+    let pp fmt n = Format.fprintf fmt "%d" n
   end
 
   module Int8 = Short_int (struct
