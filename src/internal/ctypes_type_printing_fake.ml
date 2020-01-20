@@ -15,15 +15,16 @@ open Ctypes_static
 type format_context =
   [ `toplevel
   | `array
-  | `nonarray ]
+  | `nonarray
+  ]
 
 let rec format_typ' :
     type a.
-       a typ
-    -> (format_context -> Format.formatter -> unit)
-    -> format_context
-    -> Format.formatter
-    -> unit =
+    a typ ->
+    (format_context -> Format.formatter -> unit) ->
+    format_context ->
+    Format.formatter ->
+    unit =
   let fprintf = Format.fprintf in
   fun t k context fmt ->
     match t with
@@ -31,29 +32,29 @@ let rec format_typ' :
     | Primitive _ ->
       let name = Ctypes.string_of_typ t in
       fprintf fmt "%s%t" name (k `nonarray)
-    | View {format_typ = Some format; _} -> format (k `nonarray) fmt
-    | View {ty; _} -> format_typ' ty k context fmt
-    | Abstract {aname; _} -> fprintf fmt "%s%t" aname (k `nonarray)
-    | Struct {tag = ""; fields; _} ->
-      fprintf fmt "struct {@;<1 2>@[" ;
-      format_fields fields fmt ;
+    | View { format_typ = Some format; _ } -> format (k `nonarray) fmt
+    | View { ty; _ } -> format_typ' ty k context fmt
+    | Abstract { aname; _ } -> fprintf fmt "%s%t" aname (k `nonarray)
+    | Struct { tag = ""; fields; _ } ->
+      fprintf fmt "struct {@;<1 2>@[";
+      format_fields fields fmt;
       fprintf fmt "@]@;}%t" (k `nonarray)
-    | Struct {tag; spec; fields} -> (
+    | Struct { tag; spec; fields } -> (
       match (spec, context) with
       | Complete _, `toplevel ->
-        fprintf fmt "struct %s {@;<1 2>@[" tag ;
-        format_fields fields fmt ;
+        fprintf fmt "struct %s {@;<1 2>@[" tag;
+        format_fields fields fmt;
         fprintf fmt "@]@;}%t" (k `nonarray)
       | _ -> fprintf fmt "struct %s%t" tag (k `nonarray) )
-    | Union {utag = ""; ufields; _} ->
-      fprintf fmt "union {@;<1 2>@[" ;
-      format_fields ufields fmt ;
+    | Union { utag = ""; ufields; _ } ->
+      fprintf fmt "union {@;<1 2>@[";
+      format_fields ufields fmt;
       fprintf fmt "@]@;}%t" (k `nonarray)
-    | Union {utag; uspec; ufields} -> (
+    | Union { utag; uspec; ufields } -> (
       match (uspec, context) with
       | Some _, `toplevel ->
-        fprintf fmt "union %s {@;<1 2>@[" utag ;
-        format_fields ufields fmt ;
+        fprintf fmt "union %s {@;<1 2>@[" utag;
+        format_fields ufields fmt;
         fprintf fmt "@]@;}%t" (k `nonarray)
       | _ -> fprintf fmt "union %s%t" utag (k `nonarray) )
     | Pointer ty ->
@@ -78,21 +79,21 @@ and format_fields : type a. a boxed_field list -> Format.formatter -> unit =
  fun fields fmt ->
   let open Format in
   List.iteri
-    (fun _i (BoxedField {ftype = t; fname; _}) ->
-      fprintf fmt "@[" ;
-      format_typ' t (fun _ fmt -> fprintf fmt " %s" fname) `nonarray fmt ;
+    (fun _i (BoxedField { ftype = t; fname; _ }) ->
+      fprintf fmt "@[";
+      format_typ' t (fun _ fmt -> fprintf fmt " %s" fname) `nonarray fmt;
       fprintf fmt "@];@;")
     fields
 
 and format_parameter_list parameters k fmt =
-  Format.fprintf fmt "%t(@[@[" k ;
+  Format.fprintf fmt "%t(@[@[" k;
   if parameters = [] then Format.fprintf fmt "void"
   else
     List.iteri
       (fun i (BoxedType t) ->
-        if i <> 0 then Format.fprintf fmt "@], @[" ;
+        if i <> 0 then Format.fprintf fmt "@], @[";
         format_typ' t (fun _ _ -> ()) `nonarray fmt)
-      parameters ;
+      parameters;
   Format.fprintf fmt "@]@])"
 
 and format_fn' :
@@ -115,8 +116,8 @@ let format_name ?name fmt =
 
 let format_typ : ?name:string -> Format.formatter -> 'a typ -> unit =
  fun ?name fmt typ ->
-  Format.fprintf fmt "@[" ;
-  format_typ' typ (fun _context -> format_name ?name) `nonarray fmt ;
+  Format.fprintf fmt "@[";
+  format_typ' typ (fun _context -> format_name ?name) `nonarray fmt;
   Format.fprintf fmt "@]"
 
 let string_of_typ ?name ty = Format.asprintf "%a" (format_typ ?name) ty

@@ -21,7 +21,7 @@ module StringMap = CCMap.Make (CCString)
 let config =
   lazy
     (let buffer = Buffer.create 2048 in
-     let args = ["c"; "-config"] in
+     let args = [ "c"; "-config" ] in
      let args =
        match !Options.toolchain with
        | None -> args
@@ -38,7 +38,7 @@ let config =
      | 0 -> ()
      | x ->
        Printf.sprintf "`ocamlfind ocamlc -config` failed with %d" x |> failwith
-     ) ;
+     );
      let r =
        Buffer.contents buffer
        |> CCString.split_on_char '\n'
@@ -52,7 +52,7 @@ let config =
        |> StringMap.of_list
      in
      if r = StringMap.empty then
-       failwith "invalid output of `ocamlfind ocamlc -config" ;
+       failwith "invalid output of `ocamlfind ocamlc -config";
      r)
 
 let ext_obj =
@@ -75,7 +75,7 @@ let version =
       match StringMap.find "version" (Lazy.force config) with
       | exception Not_found ->
         if runtime_version >= (4, 3, 0) then
-          failwith "`ocamlc -config` doesn't contain 'version'" ;
+          failwith "`ocamlc -config` doesn't contain 'version'";
         runtime_version
       | x -> (
         try Scanf.sscanf x "%u.%u.%u" (fun a b c -> (a, b, c))
@@ -97,8 +97,7 @@ let word_size =
           failwith "word_size in `ocamlc -config` is not a number"
         | (32 | 64) as x -> x
         | x ->
-          Printf.sprintf "unusual word_size (%d) reported by `ocamlc -config`"
-            x
+          Printf.sprintf "unusual word_size (%d) reported by `ocamlc -config`" x
           |> failwith ) )
 
 let system =
@@ -106,15 +105,14 @@ let system =
     ( if Options.(!mode = Emulate) then "linux"
     else
       match StringMap.find "system" (Lazy.force config) with
-      | exception Not_found ->
-        failwith "`ocamlc -config` doesn't report system"
+      | exception Not_found -> failwith "`ocamlc -config` doesn't report system"
       | x -> x )
 
 let init () =
   (* trigger fatal errors *)
-  ignore (Lazy.force word_size : int) ;
-  ignore (Lazy.force ext_obj : string) ;
-  ignore (Lazy.force version : int * int * int) ;
+  ignore (Lazy.force word_size : int);
+  ignore (Lazy.force ext_obj : string);
+  ignore (Lazy.force version : int * int * int);
   ignore (Lazy.force system : string)
 
 let word_size () = Lazy.force word_size

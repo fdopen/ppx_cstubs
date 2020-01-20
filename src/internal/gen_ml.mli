@@ -19,34 +19,35 @@
 open Mparsetree.Ast_cur
 open Parsetree
 
-type result =
-  { extern : structure_item
-  ; intern : structure_item }
+type result = {
+  extern : structure_item;
+  intern : structure_item;
+}
 
 val external' :
-     'a Ctypes.fn
-  -> mod_path:string list
-  -> string
-  -> (Asttypes.arg_label * expression) list
-  -> expression
-  -> Gen_c.info
-  -> result
+  'a Ctypes.fn ->
+  mod_path:string list ->
+  string ->
+  (Asttypes.arg_label * expression) list ->
+  expression ->
+  Gen_c.info ->
+  result
 
 val foreign :
-     'a Ctypes.fn
-  -> mod_path:string list
-  -> string
-  -> Gen_c.info
-  -> expression
-  -> result
+  'a Ctypes.fn ->
+  mod_path:string list ->
+  string ->
+  Gen_c.info ->
+  expression ->
+  result
 
 val foreign_value :
-     'a Ctypes.fn
-  -> mod_path:string list
-  -> string
-  -> expression
-  -> Gen_c.info
-  -> result
+  'a Ctypes.fn ->
+  mod_path:string list ->
+  string ->
+  expression ->
+  Gen_c.info ->
+  result
 
 val constraint_of_typ : mod_path:string list -> 'a Ctypes.typ -> core_type
 
@@ -55,16 +56,17 @@ val ocaml_funptr : Marshal_types.ocaml_funptr -> 'a Ctypes.fn -> unit
 (* move me somewhere else ... *)
 val stdlib_fun : string -> expression
 
-type record_stris =
-  { r_modul : structure_item
-  ; r_include_top : structure_item
-  ; r_include_bottom : structure_item }
+type record_stris = {
+  r_modul : structure_item;
+  r_include_top : structure_item;
+  r_include_bottom : structure_item;
+}
 
 val gen_record_stris :
-     mod_path:string list
-  -> type_name:string
-  -> (string * Mparsetree.Ast_cur.Ast_helper.loc * expression) list
-  -> record_stris
+  mod_path:string list ->
+  type_name:string ->
+  (string * Mparsetree.Ast_cur.Ast_helper.loc * expression) list ->
+  record_stris
 
 val pat_expand_prim : 'a Ctypes_primitive_types.prim -> pattern
 

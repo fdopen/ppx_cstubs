@@ -52,30 +52,32 @@ let htl_ctypes = Hashtbl.create 64
 
 let htl_ocaml_types = Hashtbl.create 32
 
-type t =
-  { mod_path : string list
-  ; uniq_name : string
-  ; short_name : string
-  ; sref : string }
+type t = {
+  mod_path : string list;
+  uniq_name : string;
+  short_name : string;
+  sref : string;
+}
 
-type make_result =
-  { id : t
-  ; topmod_vb : structure_item
-  ; topmod_ref : structure_item
-  ; main_ref : expression }
+type make_result = {
+  id : t;
+  topmod_vb : structure_item;
+  topmod_ref : structure_item;
+  main_ref : expression;
+}
 
 let attr ~attr ~cont =
   let x = U.mk_loc attr in
-  let pl = PStr [[%stri [%e U.str_expr cont]]] in
-  [Ast_helper.Attr.mk x pl]
+  let pl = PStr [ [%stri [%e U.str_expr cont]] ] in
+  [ Ast_helper.Attr.mk x pl ]
 
-let vb ~attrs n expr = Str.value Nonrecursive [Vb.mk ~attrs (U.mk_pat n) expr]
+let vb ~attrs n expr = Str.value Nonrecursive [ Vb.mk ~attrs (U.mk_pat n) expr ]
 
 let make ?main_ref_attrs mod_path short_name expr =
   let uniq_name = U.safe_mlname ~prefix:short_name () in
-  let sref = String.concat "." (mod_path @ [short_name]) in
-  Hashtbl.add htl_ctypes sref () ;
-  let id = {mod_path; uniq_name; short_name; sref} in
+  let sref = String.concat "." (mod_path @ [ short_name ]) in
+  Hashtbl.add htl_ctypes sref ();
+  let id = { mod_path; uniq_name; short_name; sref } in
   let attrs = attr ~cont:sref ~attr:a_inmod_ref in
   let attrs =
     if Ocaml_config.version () < (4, 6, 0) then attrs
@@ -84,14 +86,12 @@ let make ?main_ref_attrs mod_path short_name expr =
   let topmod_ref = vb ~attrs short_name (U.mk_ident uniq_name) in
   let cont = sref ^ "|" ^ sref in
   let attrs = attr ~cont ~attr:a_reference_string in
-  let attrs =
-    match main_ref_attrs with None -> attrs | Some x -> x @ attrs
-  in
-  let n = String.concat "." (mod_path @ [uniq_name]) in
+  let attrs = match main_ref_attrs with None -> attrs | Some x -> x @ attrs in
+  let n = String.concat "." (mod_path @ [ uniq_name ]) in
   let main_ref = Exp.ident ~attrs (U.mk_lid n) in
   let attrs = attr ~cont:sref ~attr:a_orig_name in
   let topmod_vb = vb ~attrs uniq_name expr in
-  {id; topmod_vb; topmod_ref; main_ref}
+  { id; topmod_vb; topmod_ref; main_ref }
 
 let get_remove_string_exn name attr =
   let res = ref None in
@@ -101,11 +101,16 @@ let get_remove_string_exn name attr =
         else
           match x.attr_payload with
           | PStr
-              [ { pstr_desc =
+              [
+                {
+                  pstr_desc =
                     Pstr_eval
-                      ({pexp_desc = Pexp_constant (Pconst_string (s, _)); _}, _)
-                ; _ } ] ->
-            res := Some s ;
+                      ( { pexp_desc = Pexp_constant (Pconst_string (s, _)); _ },
+                        _ );
+                  _;
+                };
+              ] ->
+            res := Some s;
             false
           | _ -> failwith "surprising content in attribute")
   in
@@ -115,7 +120,7 @@ let get_remove_string_exn name attr =
 
 let is_uniq_ocaml_type orig =
   match Hashtbl.find_all htl_ocaml_types orig with
-  | [(pre, suf)] -> (
+  | [ (pre, suf) ] -> (
     let module M = struct
       exception F
     end in
@@ -128,7 +133,7 @@ let is_uniq_ocaml_type orig =
                || ( CCString.prefix ~pre:sref_pre orig
                   && CCString.suffix ~suf:sref_suf orig ) )
           then raise_notrace M.F)
-        htl_ocaml_types ;
+        htl_ocaml_types;
       true
     with M.F -> false )
   | [] -> failwith "invalid parsetree generated"
@@ -140,7 +145,7 @@ let is_uniq_ctype orig =
      It's therefore enough, if they are unique inside the current module.
   *)
   match Hashtbl.find_all htl_ctypes orig with
-  | [_] -> true
+  | [ _ ] -> true
   | [] -> failwith "invalid parsetree generated"
   | _ -> false
 
@@ -148,27 +153,27 @@ let get_final_name t =
   if is_uniq_ctype t.sref then t.short_name else t.uniq_name
 
 let replace_expr = function
-  | {pexp_desc = Pexp_ident _ as orig; pexp_attributes = _ :: _ as attribs; _}
+  | { pexp_desc = Pexp_ident _ as orig; pexp_attributes = _ :: _ as attribs; _ }
     as expr
-    when List.exists attribs ~f:(fun x ->
-             x.attr_name.txt == a_reference_string) ->
-    let s, pexp_attributes =
-      get_remove_string_exn a_reference_string attribs
-    in
+    when List.exists attribs ~f:(fun x -> x.attr_name.txt == a_reference_string)
+    ->
+    let s, pexp_attributes = get_remove_string_exn a_reference_string attribs in
     let id_ref, single_ref = CCString.Split.left_exn ~by:"|" s in
     let pexp_desc =
       match is_uniq_ctype id_ref with
       | false -> orig
       | true -> Pexp_ident (U.mk_lid single_ref)
     in
-    {expr with pexp_desc; pexp_attributes}
+    { expr with pexp_desc; pexp_attributes }
   | expr -> expr
 
 let replace_stri = function
-  | { pstr_desc =
+  | {
+      pstr_desc =
         Pstr_value
-          (Nonrecursive, [({pvb_attributes = _ :: _ as attribs; _} as a)])
-    ; _ } as stri ->
+          (Nonrecursive, [ ({ pvb_attributes = _ :: _ as attribs; _ } as a) ]);
+      _;
+    } as stri ->
     if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_orig_name) then
       let s, pvb_attributes = get_remove_string_exn a_orig_name attribs in
       let pvb_pat =
@@ -176,26 +181,28 @@ let replace_stri = function
         | false -> a.pvb_pat
         | true -> CCString.Split.right_exn ~by:"." s |> snd |> U.mk_pat
       in
-      let a = {a with pvb_attributes; pvb_pat} in
-      {stri with pstr_desc = Pstr_value (Nonrecursive, [a])}
+      let a = { a with pvb_attributes; pvb_pat } in
+      { stri with pstr_desc = Pstr_value (Nonrecursive, [ a ]) }
     else if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_inmod_ref)
     then
       let s, pvb_attributes = get_remove_string_exn a_inmod_ref attribs in
       if is_uniq_ctype s then U.empty_stri ()
       else
-        let a = {a with pvb_attributes} in
-        let stri = {stri with pstr_desc = Pstr_value (Nonrecursive, [a])} in
+        let a = { a with pvb_attributes } in
+        let stri = { stri with pstr_desc = Pstr_value (Nonrecursive, [ a ]) } in
         U.no_warn_unused_pre406 stri
     else stri
-  | { pstr_desc =
-        Pstr_type (rec', [({ptype_attributes = _ :: _ as attribs; _} as a)])
-    ; _ } as stri
+  | {
+      pstr_desc =
+        Pstr_type (rec', [ ({ ptype_attributes = _ :: _ as attribs; _ } as a) ]);
+      _;
+    } as stri
     when List.exists attribs ~f:(fun x -> x.attr_name.txt == a_inmod_ref) ->
     let s, ptype_attributes = get_remove_string_exn a_inmod_ref attribs in
     if is_uniq_ocaml_type s then U.empty_stri ()
     else
-      let a = {a with ptype_attributes} in
-      {stri with pstr_desc = Pstr_type (rec', [a])}
+      let a = { a with ptype_attributes } in
+      { stri with pstr_desc = Pstr_type (rec', [ a ]) }
   | stri -> stri
 
 let rec get_parents ~ref_p ~cur_p =
@@ -209,17 +216,17 @@ type ocaml_t = t
 
 let make_type_alias ?tdl_attrs mod_path short_name =
   let uniq_name = U.safe_mlname ~nowarn:true ~prefix:short_name () in
-  let sref = String.concat "." (mod_path @ [short_name]) in
+  let sref = String.concat "." (mod_path @ [ short_name ]) in
   let prefix = String.concat "." mod_path ^ "." in
   let suffix = "." ^ short_name in
-  Hashtbl.add htl_ocaml_types sref (prefix, suffix) ;
-  let id = {mod_path; uniq_name; short_name; sref} in
+  Hashtbl.add htl_ocaml_types sref (prefix, suffix);
+  let id = { mod_path; uniq_name; short_name; sref } in
   let attrs = attr ~cont:sref ~attr:a_inmod_ref in
   let attrs = match tdl_attrs with None -> attrs | Some x -> x @ attrs in
   let manifest = U.mk_typc short_name in
   let lid = U.mk_loc uniq_name in
   let t = Type.mk ~attrs ~kind:Ptype_abstract lid ~manifest in
-  (Str.type_ Recursive [t], id)
+  (Str.type_ Recursive [ t ], id)
 
 let create_type_ref_final ?(l = []) id mod_path =
   let paths = get_parents ~ref_p:id.mod_path ~cur_p:mod_path in
@@ -231,18 +238,18 @@ let create_type_ref_final ?(l = []) id mod_path =
     then id.uniq_name
     else id.short_name
   in
-  let ref' = String.concat "." (paths @ [name]) in
+  let ref' = String.concat "." (paths @ [ name ]) in
   U.mk_typc ~l ref'
 
 let replace_typ = function
-  | { ptyp_desc = Ptyp_constr (_, lorig) as orig
-    ; ptyp_attributes = _ :: _ as attribs
-    ; _ } as typ
-    when List.exists attribs ~f:(fun x ->
-             x.attr_name.txt == a_reference_string) ->
-    let s, ptyp_attributes =
-      get_remove_string_exn a_reference_string attribs
-    in
+  | {
+      ptyp_desc = Ptyp_constr (_, lorig) as orig;
+      ptyp_attributes = _ :: _ as attribs;
+      _;
+    } as typ
+    when List.exists attribs ~f:(fun x -> x.attr_name.txt == a_reference_string)
+    ->
+    let s, ptyp_attributes = get_remove_string_exn a_reference_string attribs in
     let id_ref, single_ref = CCString.Split.left_exn ~by:"|" s in
     let ptyp_desc =
       (* types are uniq inside a module *)
@@ -250,9 +257,9 @@ let replace_typ = function
         Ptyp_constr (U.mk_lid single_ref, lorig)
       else orig
     in
-    {typ with ptyp_desc; ptyp_attributes}
+    { typ with ptyp_desc; ptyp_attributes }
   | typ -> typ
 
 let clear () =
-  Hashtbl.clear htl_ocaml_types ;
+  Hashtbl.clear htl_ocaml_types;
   Hashtbl.clear htl_ctypes

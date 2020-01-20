@@ -20,18 +20,19 @@ open Mparsetree.Ast_cur.Parsetree
 
 type t
 
-type make_result =
-  { id : t
-  ; topmod_vb : structure_item
-  ; topmod_ref : structure_item
-  ; main_ref : expression }
+type make_result = {
+  id : t;
+  topmod_vb : structure_item;
+  topmod_ref : structure_item;
+  main_ref : expression;
+}
 
 val make :
-     ?main_ref_attrs:attribute list
-  -> string list
-  -> string
-  -> expression
-  -> make_result
+  ?main_ref_attrs:attribute list ->
+  string list ->
+  string ->
+  expression ->
+  make_result
 
 val replace_expr : expression -> expression
 
@@ -42,10 +43,7 @@ val get_final_name : t -> string
 type ocaml_t
 
 val make_type_alias :
-     ?tdl_attrs:attribute list
-  -> string list
-  -> string
-  -> structure_item * ocaml_t
+  ?tdl_attrs:attribute list -> string list -> string -> structure_item * ocaml_t
 
 val create_type_ref_final :
   ?l:core_type list -> ocaml_t -> string list -> core_type

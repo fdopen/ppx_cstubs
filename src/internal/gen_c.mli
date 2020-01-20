@@ -16,36 +16,37 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-type info =
-  { stub_source : string
-  ; stub_name : string
-  ; stub_name_byte : string option
-  ; noalloc : bool
-  ; float : bool
-  ; return_errno : bool }
+type info = {
+  stub_source : string;
+  stub_name : string;
+  stub_name_byte : string option;
+  noalloc : bool;
+  float : bool;
+  return_errno : bool;
+}
 
 val gen_fun :
-     'a Ctypes.fn
-  -> locs:Location.t list
-  -> stubname:string
-  -> cfunc:string
-  -> release_runtime_lock:bool
-  -> noalloc:bool
-  -> return_errno:bool
-  -> info
+  'a Ctypes.fn ->
+  locs:Location.t list ->
+  stubname:string ->
+  cfunc:string ->
+  release_runtime_lock:bool ->
+  noalloc:bool ->
+  return_errno:bool ->
+  info
 
 val gen_value : 'a Ctypes.fn -> stubname:string -> value:string -> info
 
 val string_of_typ_exn : ?name:string -> 'a Ctypes.typ -> string
 
 val build_inline_fun :
-     'a Ctypes.fn
-  -> c_name:string
-  -> c_body:string
-  -> locs:Location.t list
-  -> noalloc:bool
-  -> (Mparsetree.Ast_cur.Asttypes.arg_label * Marshal_types.expr) list
-  -> string
+  'a Ctypes.fn ->
+  c_name:string ->
+  c_body:string ->
+  locs:Location.t list ->
+  noalloc:bool ->
+  (Mparsetree.Ast_cur.Asttypes.arg_label * Marshal_types.expr) list ->
+  string
 
 val gen_callback_fun : 'a Ctypes.fn -> Marshal_types.ocaml_funptr -> string
 

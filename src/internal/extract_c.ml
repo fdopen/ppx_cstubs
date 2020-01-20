@@ -415,13 +415,13 @@ let cnt =
   let i = ref 0 in
   fun () ->
     let res = !i in
-    incr i ;
+    incr i;
     res
 
 let int_to_char_array i =
   let s = string_of_int i in
   let b = Buffer.create (String.length s * 4) in
-  String.iter (fun c -> Printf.bprintf b "'%c'," c) s ;
+  String.iter (fun c -> Printf.bprintf b "'%c'," c) s;
   Buffer.contents b
 
 type id = int
@@ -431,9 +431,10 @@ type intern =
   | Integer of id
   | Unchecked_integer
 
-type extract_info =
-  { id : id
-  ; intern : intern }
+type extract_info = {
+  id : id;
+  intern : intern;
+}
 
 let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
@@ -475,7 +476,7 @@ DISABLE_LIMIT_WARNINGS_POP()
   in
   let id, res_str1 = gen "" expr in
   let res, src2 =
-    if disable_checks = true then ({id; intern = Unchecked_integer}, res_str1)
+    if disable_checks = true then ({ id; intern = Unchecked_integer }, res_str1)
     else
       let s_int = Printf.sprintf "( PPXC_IS_INTEGER_DEF_TRUE(%s) )" expr in
       let int_size = if bit32 then "32" else "64" in
@@ -499,7 +500,7 @@ DISABLE_LIMIT_WARNINGS_POP()
              "( (((unsigned)(%s)) << 0u) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u) | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
              s_int s_min s_max s_user_min s_user_max
       in
-      ({id; intern = Integer id_x}, str)
+      ({ id; intern = Integer id_x }, str)
   in
   (res, s_check, src2)
 
@@ -521,7 +522,7 @@ char *ppx_c_extract_char_string%d = (char*)"PPXC_CONST_NR_%d|" %s "|%d_RN_TSNOC_
      |}
       cnt cnt expr cnt
   in
-  ({id = cnt; intern = String}, src1, src2)
+  ({ id = cnt; intern = String }, src1, src2)
 
 type obj = (int, string) Hashtbl.t
 
@@ -534,8 +535,8 @@ let compile ~ebuf c_prog =
   let cfln = Filename.temp_file pre ".c" in
   finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln)
   @@ fun () ->
-  CCIO.with_out ?mode:None ~flags:[Open_creat; Open_trunc; Open_binary] cfln
-    (fun ch -> output_string ch c_prog) ;
+  CCIO.with_out ?mode:None ~flags:[ Open_creat; Open_trunc; Open_binary ] cfln
+    (fun ch -> output_string ch c_prog);
   let obj = Filename.chop_suffix cfln ".c" ^ Ocaml_config.ext_obj () in
   let c_flags =
     (* that's a suboptimal solution. `ocamlc -c foo.c -o foo.o` doesn't work:
@@ -544,8 +545,8 @@ let compile ~ebuf c_prog =
        flags and similar options are affected, if I change the current working
        directory ... *)
     match Ocaml_config.system () |> CCString.lowercase_ascii with
-    | "win32" | "win64" -> ["-Fo:" ^ obj]
-    | _ -> ["-o"; obj]
+    | "win32" | "win64" -> [ "-Fo:" ^ obj ]
+    | _ -> [ "-o"; obj ]
   in
   let dir =
     match !Options.ml_input_file with
@@ -554,13 +555,13 @@ let compile ~ebuf c_prog =
   in
   let c_flags = "-I" :: dir :: c_flags in
   let c_flags = !Options.c_flags @ c_flags in
-  let args = List.map c_flags ~f:(fun c -> ["-ccopt"; c]) |> List.flatten in
+  let args = List.map c_flags ~f:(fun c -> [ "-ccopt"; c ]) |> List.flatten in
   let args' =
-    List.map !Options.findlib_pkgs ~f:(fun c -> ["-package"; c])
+    List.map !Options.findlib_pkgs ~f:(fun c -> [ "-package"; c ])
     |> List.flatten
   in
   let args = args' @ args in
-  let args = if !Options.verbosity > 2 then args @ ["-verbose"] else args in
+  let args = if !Options.verbosity > 2 then args @ [ "-verbose" ] else args in
   let args = ocaml_flags @ args in
   let args =
     match Std.Various.use_threads () with
@@ -581,7 +582,7 @@ let compile ~ebuf c_prog =
   let prog = Options.ocamlfind in
   finally ~h:(fun () -> if not !Options.keep_tmp then remove_file obj)
   @@ fun () ->
-  if !Options.verbosity > 1 then Run.cmd_to_string prog args |> prerr_endline ;
+  if !Options.verbosity > 1 then Run.cmd_to_string prog args |> prerr_endline;
   match Run.run prog args ~stdout ~stderr:(`Buffer ebuf) with
   | exception Unix.Unix_error (e, s, _) ->
     let cmd = Run.cmd_to_string prog args in
@@ -589,15 +590,14 @@ let compile ~ebuf c_prog =
       (Printf.sprintf "Process creation \"%s\" failed with %s (%S)" cmd
          (Unix.error_message e) s)
   | 0 ->
-    CCIO.with_in ?mode:None ~flags:[Open_binary] obj
-    @@ fun ch ->
+    CCIO.with_in ?mode:None ~flags:[ Open_binary ] obj @@ fun ch ->
     let s = CCIO.read_all ch in
     if s = "" then Error "`ocamlfind ocamlc -c` created an empty obj file"
     else Ok s
   | ec -> Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
 
 let rex =
-  Re.Perl.re ~opts:[`Ungreedy; `Dotall]
+  Re.Perl.re ~opts:[ `Ungreedy; `Dotall ]
     "PPXC_CONST_NR_([0-9]+)\\|(.*)\\|([0-9]+)_RN_TSNOC_CXPP\000"
   |> Re.compile
 
@@ -617,7 +617,7 @@ let compile ~ebuf c_prog =
               let id2 = Re.Group.get g 3 in
               if id1 = id2 then (
                 let str = Re.Group.get g 2 in
-                Hashtbl.add htl (int_of_string id1) str ;
+                Hashtbl.add htl (int_of_string id1) str;
                 Re.Group.stop g 0 )
               else succ i
             with Not_found | Failure _ -> succ i
@@ -641,7 +641,7 @@ let normalise_int str =
     let start =
       match str.[0] with
       | '-' as c ->
-        Buffer.add_char b c ;
+        Buffer.add_char b c;
         1
       | _ -> 0
     in
@@ -652,12 +652,11 @@ let normalise_int str =
         | '0' -> iter (succ i)
         | _ -> Buffer.add_substring b str i (len - i)
     in
-    iter start ;
+    iter start;
     Buffer.contents b
 
 let extract info htl =
-  with_return
-  @@ fun r ->
+  with_return @@ fun r ->
   let extract_single id =
     match Hashtbl.find htl id with
     | exception Not_found -> r.return (Error Info_not_found)
@@ -675,9 +674,9 @@ let extract info htl =
       | x -> x
     in
     let er er = r.return (Error er) in
-    if int' land (1 lsl 0) = 0 then er Not_an_integer ;
-    if int' land (1 lsl 1) = 0 then er (Underflow res) ;
-    if int' land (1 lsl 2) = 0 then er (Overflow res) ;
-    if int' land (1 lsl 3) = 0 then er (Underflow res) ;
-    if int' land (1 lsl 4) = 0 then er (Overflow res) ;
+    if int' land (1 lsl 0) = 0 then er Not_an_integer;
+    if int' land (1 lsl 1) = 0 then er (Underflow res);
+    if int' land (1 lsl 2) = 0 then er (Overflow res);
+    if int' land (1 lsl 3) = 0 then er (Underflow res);
+    if int' land (1 lsl 4) = 0 then er (Overflow res);
     Ok res

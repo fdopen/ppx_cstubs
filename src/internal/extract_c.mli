@@ -21,19 +21,19 @@ type extract_info
 val prologue : string
 
 val prepare_extract_int :
-     ?bit32:bool
-  -> ?disable_checks:bool
-  -> ctype:string
-  -> expr:string
-  -> loc:Mparsetree.Ast_cur.Ast_helper.loc
-  -> unit
-  -> extract_info * string * string
+  ?bit32:bool ->
+  ?disable_checks:bool ->
+  ctype:string ->
+  expr:string ->
+  loc:Mparsetree.Ast_cur.Ast_helper.loc ->
+  unit ->
+  extract_info * string * string
 
 val prepare_extract_string :
-     expr:string
-  -> loc:Mparsetree.Ast_cur.Ast_helper.loc
-  -> unit
-  -> extract_info * string * string
+  expr:string ->
+  loc:Mparsetree.Ast_cur.Ast_helper.loc ->
+  unit ->
+  extract_info * string * string
 
 type obj
 

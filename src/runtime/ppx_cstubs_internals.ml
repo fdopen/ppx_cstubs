@@ -16,36 +16,36 @@ open Ctypes_static
 let rec seal : type a. a Ctypes_static.typ -> size:int -> align:int -> unit =
  fun t ~size ~align ->
   match t with
-  | Struct ({spec = Incomplete _; _} as s) ->
-    s.fields <- List.rev s.fields ;
-    s.spec <- Complete {size; align}
-  | Union ({uspec = None; _} as u) ->
-    u.ufields <- List.rev u.ufields ;
-    u.uspec <- Some {size; align}
-  | Struct {tag; _} -> raise (ModifyingSealedType tag)
-  | Union {utag; _} -> raise (ModifyingSealedType utag)
-  | View {ty; _} -> seal ty ~size ~align
+  | Struct ({ spec = Incomplete _; _ } as s) ->
+    s.fields <- List.rev s.fields;
+    s.spec <- Complete { size; align }
+  | Union ({ uspec = None; _ } as u) ->
+    u.ufields <- List.rev u.ufields;
+    u.uspec <- Some { size; align }
+  | Struct { tag; _ } -> raise (ModifyingSealedType tag)
+  | Union { utag; _ } -> raise (ModifyingSealedType utag)
+  | View { ty; _ } -> seal ty ~size ~align
   | _ -> raise (Unsupported "Sealing a non-structured type")
 
 let rec add_field :
     type t a.
-       t Ctypes_static.typ
-    -> string
-    -> int
-    -> a Ctypes_static.typ
-    -> (a, t) Ctypes_static.field =
+    t Ctypes_static.typ ->
+    string ->
+    int ->
+    a Ctypes_static.typ ->
+    (a, t) Ctypes_static.field =
  fun t fname foffset ftype ->
   match t with
   | Struct s ->
-    let r = {fname; foffset; ftype} in
-    s.fields <- BoxedField r :: s.fields ;
+    let r = { fname; foffset; ftype } in
+    s.fields <- BoxedField r :: s.fields;
     r
   | Union u ->
-    let r = {fname; foffset; ftype} in
-    u.ufields <- BoxedField r :: u.ufields ;
+    let r = { fname; foffset; ftype } in
+    u.ufields <- BoxedField r :: u.ufields;
     r
-  | View {ty; _} ->
-    let ({fname = _; _} as r) = add_field ty fname foffset ftype in
+  | View { ty; _ } ->
+    let ({ fname = _; _ } as r) = add_field ty fname foffset ftype in
     r
   | _ -> failwith ("Unexpected field " ^ fname)
 
@@ -53,12 +53,12 @@ external identity : 'a -> 'a = "%identity"
 
 let build_enum :
     type a b.
-       string
-    -> a Ctypes.typ
-    -> typedef:bool
-    -> ?unexpected:(int64 -> b)
-    -> (b * a) list
-    -> b Ctypes.typ =
+    string ->
+    a Ctypes.typ ->
+    typedef:bool ->
+    ?unexpected:(int64 -> b) ->
+    (b * a) list ->
+    b Ctypes.typ =
  fun name typ ~typedef ?unexpected alist ->
   let fail t =
     Printf.ksprintf failwith "Invalid enum type %s" (Ctypes.string_of_typ t)
@@ -115,12 +115,12 @@ let build_enum :
 
 let build_enum_bitmask :
     type a b.
-       string
-    -> a Ctypes.typ
-    -> typedef:bool
-    -> ?unexpected:(b list -> int64 -> b list)
-    -> (b * a) list
-    -> b list Ctypes.typ =
+    string ->
+    a Ctypes.typ ->
+    typedef:bool ->
+    ?unexpected:(b list -> int64 -> b list) ->
+    (b * a) list ->
+    b list Ctypes.typ =
  fun name typ ~typedef ?unexpected alist ->
   let fail t =
     Printf.ksprintf failwith "Invalid enum type %s" (Ctypes.string_of_typ t)
@@ -334,7 +334,7 @@ module Signed = struct
 
     let of_string x =
       let r = int_of_string x in
-      if r < min_int || r > max_int then failwith "int_of_string" ;
+      if r < min_int || r > max_int then failwith "int_of_string";
       r
 
     let to_string = string_of_int
@@ -447,10 +447,10 @@ module Shadow = struct
   let rec passable : type a. a typ -> bool = function
     | Void -> true
     | Primitive _ -> true
-    | Struct {spec = Incomplete _; _} -> raise IncompleteType
-    | Struct {spec = Complete _; _} -> true
-    | Union {uspec = None; _} -> raise IncompleteType
-    | Union {uspec = Some _; _} -> true
+    | Struct { spec = Incomplete _; _ } -> raise IncompleteType
+    | Struct { spec = Complete _; _ } -> true
+    | Union { uspec = None; _ } -> raise IncompleteType
+    | Union { uspec = Some _; _ } -> true
     | Array _ -> false
     | Bigarray _ -> false
     | Pointer _ -> true
@@ -459,7 +459,7 @@ module Shadow = struct
      disabled upstream. They are handled like structs and unions *)
     | Abstract _ -> true
     | OCaml _ -> true
-    | View {ty; _} -> passable ty
+    | View { ty; _ } -> passable ty
 
   let ( @-> ) a b =
     if not (passable a) then raise (Unsupported "Unsupported argument type")

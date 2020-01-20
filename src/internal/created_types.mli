@@ -16,15 +16,17 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-type structured =
-  { s_type_id : Uniq_ref.ocaml_t
-  ; s_is_union : bool }
+type structured = {
+  s_type_id : Uniq_ref.ocaml_t;
+  s_is_union : bool;
+}
 
-type view_enum =
-  { ve_type_id : Uniq_ref.ocaml_t
-  ; ve_is_list : bool }
+type view_enum = {
+  ve_type_id : Uniq_ref.ocaml_t;
+  ve_is_list : bool;
+}
 
-type view_abstract = {via_type_id : Uniq_ref.ocaml_t}
+type view_abstract = { via_type_id : Uniq_ref.ocaml_t }
 
 type t =
   | Structured of structured
@@ -41,13 +43,14 @@ val clear : unit -> unit
 val add_type : 'a Ctypes.typ -> t -> unit
 
 val get_core_type :
-     'a Ctypes.typ
-  -> string list
-  -> [> `Complete of Mparsetree.Ast_cur.Parsetree.core_type
-     | `Funptr of
-          Mparsetree.Ast_cur.Parsetree.core_type
-       -> Mparsetree.Ast_cur.Parsetree.core_type
-     | `Unknown ]
+  'a Ctypes.typ ->
+  string list ->
+  [> `Complete of Mparsetree.Ast_cur.Parsetree.core_type
+  | `Funptr of
+    Mparsetree.Ast_cur.Parsetree.core_type ->
+    Mparsetree.Ast_cur.Parsetree.core_type
+  | `Unknown
+  ]
 
 val is_typedef_struct : 'a Ctypes.typ -> bool
 

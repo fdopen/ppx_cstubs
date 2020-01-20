@@ -20,15 +20,17 @@ open Mparsetree.Ast_cur
 module List = CCListLabels
 module U = Std.Util
 
-type structured =
-  { s_type_id : Uniq_ref.ocaml_t
-  ; s_is_union : bool }
+type structured = {
+  s_type_id : Uniq_ref.ocaml_t;
+  s_is_union : bool;
+}
 
-type view_enum =
-  { ve_type_id : Uniq_ref.ocaml_t
-  ; ve_is_list : bool }
+type view_enum = {
+  ve_type_id : Uniq_ref.ocaml_t;
+  ve_is_list : bool;
+}
 
-type view_abstract = {via_type_id : Uniq_ref.ocaml_t}
+type view_abstract = { via_type_id : Uniq_ref.ocaml_t }
 
 type t =
   | Structured of structured
@@ -61,31 +63,31 @@ let find : 'a Ctypes.typ -> t option =
     v_types
 
 let get_core_type mp = function
-  | View_typedef_structured {s_type_id; s_is_union}
-   |Structured {s_type_id; s_is_union} ->
+  | View_typedef_structured { s_type_id; s_is_union }
+  | Structured { s_type_id; s_is_union } ->
     let constr = Uniq_ref.create_type_ref_final s_type_id mp in
     let s =
       match s_is_union with
       | false -> "Ctypes.structure"
       | true -> "Ctypes.union"
     in
-    `Complete (U.mk_typc ~l:[constr] s)
-  | View_enum {ve_is_list; ve_type_id} -> (
+    `Complete (U.mk_typc ~l:[ constr ] s)
+  | View_enum { ve_is_list; ve_type_id } -> (
     let constr = Uniq_ref.create_type_ref_final ve_type_id mp in
     match ve_is_list with
     | false -> `Complete constr
-    | true -> `Complete (U.mk_typc ~l:[constr] "list") )
-  | View_structured {via_type_id}
-   |Opaque {via_type_id}
-   |View_int_alias {via_type_id} ->
+    | true -> `Complete (U.mk_typc ~l:[ constr ] "list") )
+  | View_structured { via_type_id }
+  | Opaque { via_type_id }
+  | View_int_alias { via_type_id } ->
     `Complete (Uniq_ref.create_type_ref_final via_type_id mp)
-  | Abstract {via_type_id} ->
+  | Abstract { via_type_id } ->
     let constr = Uniq_ref.create_type_ref_final via_type_id mp in
-    `Complete (U.mk_typc ~l:[constr] "Ctypes.abstract")
-  | Funptr {via_type_id} ->
+    `Complete (U.mk_typc ~l:[ constr ] "Ctypes.abstract")
+  | Funptr { via_type_id } ->
     let f t =
-      let constr = Uniq_ref.create_type_ref_final ~l:[t] via_type_id mp in
-      Ast_helper.Typ.constr (U.mk_lid "Ctypes.static_funptr") [constr]
+      let constr = Uniq_ref.create_type_ref_final ~l:[ t ] via_type_id mp in
+      Ast_helper.Typ.constr (U.mk_lid "Ctypes.static_funptr") [ constr ]
     in
     `Funptr f
 
@@ -99,7 +101,7 @@ let is_typedef_struct t =
     match t with
     | View_typedef_structured _ -> true
     | View_structured _ | View_enum _ | Structured _ | View_int_alias _
-     |Opaque _ | Abstract _ | Funptr _ ->
+    | Opaque _ | Abstract _ | Funptr _ ->
       false )
 
 let add_custom ~old ~new' =

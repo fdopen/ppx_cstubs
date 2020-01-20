@@ -16,7 +16,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-let ocaml_flags_default = ["-package"; "ctypes"]
+let ocaml_flags_default = [ "-package"; "ctypes" ]
 
 let keep_tmp = ref false
 
@@ -61,16 +61,16 @@ let toolchain_used () =
     | _ -> true
 
 let reset () =
-  keep_tmp := false ;
-  nopervasives := false ;
-  verbosity := 1 ;
-  c_flags := [] ;
-  ocaml_flags := ocaml_flags_default ;
-  c_output_file := None ;
-  ml_input_file := None ;
-  ml_output_file := None ;
-  toolchain := None ;
-  findlib_pkgs := [] ;
-  cma_files := [] ;
-  mode := Regular ;
+  keep_tmp := false;
+  nopervasives := false;
+  verbosity := 1;
+  c_flags := [];
+  ocaml_flags := ocaml_flags_default;
+  c_output_file := None;
+  ml_input_file := None;
+  ml_output_file := None;
+  toolchain := None;
+  findlib_pkgs := [];
+  cma_files := [];
+  mode := Regular;
   cc := None

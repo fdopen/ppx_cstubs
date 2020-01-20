@@ -18,9 +18,10 @@
 
 type extr_info
 
-type info =
-  { ctype : string
-  ; info : extr_info }
+type info = {
+  ctype : string;
+  info : extr_info;
+}
 
 type result =
   | Expr of Mparsetree.Ast_cur.Parsetree.expression
@@ -32,7 +33,7 @@ val prepare : 'a Ctypes_static.typ -> info option
 val gen : info -> string -> result
 
 val gen_ext :
-     'a Ctypes_static.typ
-  -> string
-  -> Mparsetree.Ast_cur.Parsetree.expression
-  -> result option
+  'a Ctypes_static.typ ->
+  string ->
+  Mparsetree.Ast_cur.Parsetree.expression ->
+  result option

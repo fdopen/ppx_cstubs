@@ -44,9 +44,10 @@ type extr_info =
   | Extr_uint64_t
   | Extr_nativeint
 
-type info =
-  { ctype : string
-  ; info : extr_info }
+type info = {
+  ctype : string;
+  info : extr_info;
+}
 
 let rec prepare : type a. a Ctypes_static.typ -> info option =
   let open Ctypes_primitive_types in
@@ -61,10 +62,10 @@ let rec prepare : type a. a Ctypes_static.typ -> info option =
   | C.Pointer _ -> None
   | C.Funptr _ -> None
   | C.OCaml _ -> None
-  | C.View {ty; _} as t -> (
+  | C.View { ty; _ } as t -> (
     match prepare ty with
     | None -> None
-    | Some x -> Some {x with ctype = Gen_c.string_of_typ_exn t} )
+    | Some x -> Some { x with ctype = Gen_c.string_of_typ_exn t } )
   | C.Primitive p as t -> (
     let f info =
       (* bool/_Bool leads to ugly compiler warnings.
@@ -72,7 +73,7 @@ let rec prepare : type a. a Ctypes_static.typ -> info option =
       let ctype =
         if info = Extr_bool then "int" else Gen_c.string_of_typ_exn t
       in
-      Some {ctype; info}
+      Some { ctype; info }
     in
     match p with
     | Char -> f Extr_char
@@ -183,14 +184,14 @@ let gen t str =
   let xnative r = X.nativeint (Big_int.nativeint_of_big_int r) in
   let xstr r = Big_int.string_of_big_int r |> X.string in
   let check_limits r min max =
-    if r < min then raise_notrace Eunderflow ;
+    if r < min then raise_notrace Eunderflow;
     if r > max then raise_notrace Eoverflow
   in
   let check_unsigned r =
     if r < Big_int.zero_big_int then raise_notrace Eunderflow
   in
   let normal_int r min max =
-    check_limits r min max ;
+    check_limits r min max;
     xint r
   in
   let rec as_sum ~add ~of_int ~of_int64 r =
@@ -211,7 +212,7 @@ let gen t str =
   | Extr_int16_t -> normal_int r int16_min int16_max
   | Extr_camlint -> normal_int r camlint_min camlint_max
   | Extr_bool ->
-    check_limits r Big_int.zero_big_int Big_int.unit_big_int ;
+    check_limits r Big_int.zero_big_int Big_int.unit_big_int;
     if r = Big_int.zero_big_int then [%expr false] else [%expr true]
   | Extr_sint ->
     if r >= camlint_min && r <= camlint_max then
@@ -238,54 +239,54 @@ let gen t str =
       [%expr Signed.LLong.of_int64 [%e xint64 r]]
     else [%expr Signed.LLong.of_string [%e xstr r]]
   | Extr_int32_t ->
-    check_limits r int32_min int32_max ;
+    check_limits r int32_min int32_max;
     Big_int.int32_of_big_int r |> X.int32
   | Extr_nativeint ->
-    check_limits r intnative_min intnative_max ;
+    check_limits r intnative_min intnative_max;
     xnative r
   | Extr_int64_t ->
-    check_limits r int64_min int64_max ;
+    check_limits r int64_min int64_max;
     xint64 r
   | Extr_uchar ->
-    check_limits r Big_int.zero_big_int uint8_max ;
+    check_limits r Big_int.zero_big_int uint8_max;
     [%expr Unsigned.UChar.of_int [%e xint r]]
   | Extr_ushort ->
-    check_unsigned r ;
+    check_unsigned r;
     if r <= camlint_max then [%expr Unsigned.UShort.of_int [%e xint r]]
     else if r <= int64_max then [%expr Unsigned.UShort.of_int64 [%e xint64 r]]
     else [%expr Unsigned.UShort.of_string [%e xstr r]]
   | Extr_uint ->
-    check_unsigned r ;
+    check_unsigned r;
     if r <= camlint_max then [%expr Unsigned.UInt.of_int [%e xint r]]
     else if r <= int64_max then [%expr Unsigned.UInt.of_int64 [%e xint64 r]]
     else [%expr Unsigned.UInt.of_string [%e xstr r]]
   | Extr_ulong ->
-    check_unsigned r ;
+    check_unsigned r;
     as_sum r ~add:[%expr Unsigned.ULong.add]
       ~of_int:[%expr Unsigned.ULong.of_int]
       ~of_int64:[%expr Unsigned.ULong.of_int64]
   | Extr_ullong ->
-    check_unsigned r ;
+    check_unsigned r;
     as_sum r ~add:[%expr Unsigned.ULLong.add]
       ~of_int:[%expr Unsigned.ULLong.of_int]
       ~of_int64:[%expr Unsigned.ULLong.of_int64]
   | Extr_size_t ->
-    check_unsigned r ;
+    check_unsigned r;
     as_sum r ~add:[%expr Unsigned.Size_t.add]
       ~of_int:[%expr Unsigned.Size_t.of_int]
       ~of_int64:[%expr Unsigned.Size_t.of_int64]
   | Extr_uint8_t ->
-    check_limits r Big_int.zero_big_int uint8_max ;
+    check_limits r Big_int.zero_big_int uint8_max;
     [%expr Unsigned.UInt8.of_int [%e xint r]]
   | Extr_uint16_t ->
-    check_limits r Big_int.zero_big_int uint16_max ;
+    check_limits r Big_int.zero_big_int uint16_max;
     [%expr Unsigned.UInt16.of_int [%e xint r]]
   | Extr_uint32_t ->
-    check_limits r Big_int.zero_big_int uint32_max ;
+    check_limits r Big_int.zero_big_int uint32_max;
     if r <= camlint_max then [%expr Unsigned.UInt32.of_int [%e xint r]]
     else [%expr Unsigned.UInt32.of_int64 [%e xint64 r]]
   | Extr_uint64_t ->
-    check_limits r Big_int.zero_big_int uint64_max ;
+    check_limits r Big_int.zero_big_int uint64_max;
     if r = uint64_max then [%expr Unsigned.UInt64.max_int]
     else
       as_sum r ~add:[%expr Unsigned.UInt64.add]
@@ -301,9 +302,9 @@ let gen_ext =
   fun t res expr ->
     let rec iter :
         type a.
-           bool
-        -> a Ctypes_static.typ
-        -> Parsetree.expression * Parsetree.pattern option =
+        bool ->
+        a Ctypes_static.typ ->
+        Parsetree.expression * Parsetree.pattern option =
      fun inside_view -> function
       | C.Void -> raise_notrace Unsupported
       | C.Struct _ -> raise_notrace Unsupported
@@ -314,7 +315,7 @@ let gen_ext =
       | C.Pointer _ -> raise_notrace Unsupported
       | C.Funptr _ -> raise_notrace Unsupported
       | C.OCaml _ -> raise_notrace Unsupported
-      | C.View {ty; _} ->
+      | C.View { ty; _ } ->
         let e, pat = iter true ty in
         let rvar = U.safe_mlname ~prefix:"read" () in
         let pread = U.mk_pat rvar in
@@ -322,19 +323,21 @@ let gen_ext =
         let pat =
           match pat with
           | None ->
-            [%pat? Ctypes_static.View {Ctypes_static.read = [%p pread]; _}]
+            [%pat? Ctypes_static.View { Ctypes_static.read = [%p pread]; _ }]
           | Some x ->
             [%pat?
               Ctypes_static.View
-                {Ctypes_static.read = [%p pread]; Ctypes_static.ty = [%p x]; _}]
+                {
+                  Ctypes_static.read = [%p pread];
+                  Ctypes_static.ty = [%p x];
+                  _;
+                }]
         in
         let expr = [%expr [%e eread] [%e e]] in
         (expr, Some pat)
       | C.Primitive p as t ->
         let einfo =
-          match prepare t with
-          | None -> raise_notrace Unsupported
-          | Some x -> x
+          match prepare t with None -> raise_notrace Unsupported | Some x -> x
         in
         let expr = gen einfo res in
         let pat =

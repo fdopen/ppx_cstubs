@@ -21,20 +21,21 @@ type pipe_state =
   | Closed
   | Uninit
 
-type pipe_with_status =
-  { mutable state : pipe_state
-  ; mutable fd : Unix.file_descr }
+type pipe_with_status = {
+  mutable state : pipe_state;
+  mutable fd : Unix.file_descr;
+}
 
 let dev_null = if Sys.win32 then "NUL" else "/dev/null"
 
 let pipe a b =
   let tmp1, tmp2 = Unix.pipe () in
-  a.state <- Open ;
-  a.fd <- tmp1 ;
-  b.state <- Open ;
+  a.state <- Open;
+  a.fd <- tmp1;
+  b.state <- Open;
   b.fd <- tmp2
 
-let new_pipe () = {state = Uninit; fd = Unix.stderr}
+let new_pipe () = { state = Uninit; fd = Unix.stderr }
 
 let rec eintr1 f a =
   try f a with Unix.Unix_error (Unix.EINTR, _, _) -> eintr1 f a
@@ -56,7 +57,7 @@ let close_pipe a =
   match a.state with
   | Closed | Uninit -> ()
   | Open ->
-    a.state <- Closed ;
+    a.state <- Closed;
     (* capturing EINTR Os specific ... *)
     Unix.close a.fd
 
@@ -66,12 +67,14 @@ type io_out =
   | `Stdout
   | `Stderr
   | `Buffer of Buffer.t
-  | `Fun of string -> unit ]
+  | `Fun of string -> unit
+  ]
 
 type io_in =
   [ `String of string
   | `Null
-  | `Fd of Unix.file_descr ]
+  | `Fd of Unix.file_descr
+  ]
 
 let close_pipe_ne a = try close_pipe a with Unix.Unix_error _ -> ()
 
@@ -90,17 +93,17 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
   and p_stdin_write = new_pipe ()
   and args = Array.of_list (prog :: args) in
   finally ~h:(fun () ->
-      close_pipe_ne p_stdin_read ;
-      close_pipe_ne p_stdin_write ;
-      close_pipe_ne p_stdout_read ;
-      close_pipe_ne p_stdout_write ;
-      close_pipe_ne p_stderr_write ;
+      close_pipe_ne p_stdin_read;
+      close_pipe_ne p_stdin_write;
+      close_pipe_ne p_stdout_read;
+      close_pipe_ne p_stdout_write;
+      close_pipe_ne p_stderr_write;
       close_pipe_ne p_stderr_read)
   @@ fun () ->
   let () =
     let comm p fd =
       let fd = eintr1 (fun x -> Unix.dup x) fd in
-      p.fd <- fd ;
+      p.fd <- fd;
       p.state <- Open
     in
     let out p_out_write p_out_read out =
@@ -112,36 +115,36 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
         if Sys.win32 then p_out_write.fd <- Unix.stderr
         else comm p_out_write Unix.stderr
       | `Null ->
-        let fd = eintr3 Unix.openfile dev_null [Unix.O_WRONLY] 0o600 in
-        p_out_write.fd <- fd ;
+        let fd = eintr3 Unix.openfile dev_null [ Unix.O_WRONLY ] 0o600 in
+        p_out_write.fd <- fd;
         p_out_write.state <- Open
       | `Fd fd -> comm p_out_write fd
-      | _ -> pipe p_out_read p_out_write ) ;
+      | _ -> pipe p_out_read p_out_write );
       if p_out_read.state = Open then Unix.set_close_on_exec p_out_read.fd
     in
-    out p_stdout_write p_stdout_read stdout ;
-    out p_stderr_write p_stderr_read stderr ;
+    out p_stdout_write p_stdout_read stdout;
+    out p_stderr_write p_stderr_read stderr;
     ( match stdin with
     | `Null ->
-      let fd = eintr3 Unix.openfile dev_null [Unix.O_RDONLY] 0o400 in
-      p_stdin_read.fd <- fd ;
+      let fd = eintr3 Unix.openfile dev_null [ Unix.O_RDONLY ] 0o400 in
+      p_stdin_read.fd <- fd;
       p_stdin_read.state <- Open
     | `Fd fd -> comm p_stdin_read fd
-    | _ -> pipe p_stdin_read p_stdin_write ) ;
+    | _ -> pipe p_stdin_read p_stdin_write );
     if p_stdin_write.state = Open then Unix.set_close_on_exec p_stdin_write.fd
   in
   let pid =
     eintr6 Unix.create_process_env prog args env p_stdin_read.fd
       p_stdout_write.fd p_stderr_write.fd
   in
-  close_pipe p_stdout_write ;
-  close_pipe p_stderr_write ;
-  close_pipe p_stdin_read ;
+  close_pipe p_stdout_write;
+  close_pipe p_stderr_write;
+  close_pipe p_stdin_read;
   let f_read r =
     let is_stdout =
       if r = p_stderr_read.fd then false
       else (
-        assert (r = p_stdout_read.fd) ;
+        assert (r = p_stdout_read.fd);
         true )
     in
     let x = try eintr4 Unix.read r tmp_str 0 str_buffer_len with _ -> -1 in
@@ -150,14 +153,13 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
     else
       match if is_stdout then stdout else stderr with
       | `Fd _ | `Null | `Stdout | `Stderr -> ()
-      | `Buffer b ->
-        Buffer.add_substring b (Bytes.unsafe_to_string tmp_str) 0 x
+      | `Buffer b -> Buffer.add_substring b (Bytes.unsafe_to_string tmp_str) 0 x
       | `Fun (f : string -> unit) -> f (Bytes.sub_string tmp_str 0 x)
   in
   let to_write =
     match stdin with
     | `Fd _ | `String "" | `Null ->
-      close_pipe p_stdin_write ;
+      close_pipe p_stdin_write;
       ref ""
     | `String str -> ref str
   in
@@ -166,28 +168,28 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
     || p_stderr_read.state = Open
     || p_stdin_write.state = Open
   do
-    let wl = if p_stdin_write.state = Open then [p_stdin_write.fd] else [] in
-    let rl = if p_stderr_read.state = Open then [p_stderr_read.fd] else [] in
+    let wl = if p_stdin_write.state = Open then [ p_stdin_write.fd ] else [] in
+    let rl = if p_stderr_read.state = Open then [ p_stderr_read.fd ] else [] in
     let rl =
       if p_stdout_read.state = Open then p_stdout_read.fd :: rl else rl
     in
     let r, w, _ = eintr4 Unix.select rl wl [] 3. in
-    List.iter f_read r ;
+    List.iter f_read r;
     match w with
     | [] -> ()
-    | [fd] ->
-      assert (p_stdin_write.fd = fd) ;
+    | [ fd ] ->
+      assert (p_stdin_write.fd = fd);
       let str_len = String.length !to_write in
-      assert (str_len > 0) ;
+      assert (str_len > 0);
       let n_written = eintr4 Unix.write_substring fd !to_write 0 str_len in
       if n_written >= str_len then (
-        to_write := "" ;
+        to_write := "";
         close_pipe p_stdin_write )
       else to_write := String.sub !to_write n_written (str_len - n_written)
     | _ -> assert false
-  done ;
-  close_pipe p_stdout_read ;
-  close_pipe p_stderr_read ;
+  done;
+  close_pipe p_stdout_read;
+  close_pipe p_stderr_read;
   let _, process_status = eintr2 Unix.waitpid [] pid in
   let ret_code =
     match process_status with

@@ -29,9 +29,9 @@ let foreign_used = ref false
 let c_source = ref None
 
 let clear () =
-  Hashtbl.clear htl_expr ;
-  Hashtbl.clear htl_stri ;
-  Hashtbl.clear htl_used ;
-  Hashtbl.clear htl_type ;
-  foreign_used := false ;
+  Hashtbl.clear htl_expr;
+  Hashtbl.clear htl_stri;
+  Hashtbl.clear htl_used;
+  Hashtbl.clear htl_type;
+  foreign_used := false;
   c_source := None

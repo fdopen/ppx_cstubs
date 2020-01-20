@@ -16,7 +16,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-type 'a return = {return : 'b. 'a -> 'b}
+type 'a return = { return : 'b. 'a -> 'b }
 
 val with_return : ('a return -> 'a) -> 'a
 
@@ -45,10 +45,10 @@ module Util : sig
   val str_expr : ?loc:Ast_helper.loc -> string -> Parsetree.expression
 
   val int_expr :
-       ?loc:Ast_helper.loc
-    -> ?attrs:Ast_helper.attrs
-    -> int
-    -> Parsetree.expression
+    ?loc:Ast_helper.loc ->
+    ?attrs:Ast_helper.attrs ->
+    int ->
+    Parsetree.expression
 
   val mk_loc : 'a -> 'a Location.loc
 
@@ -59,10 +59,10 @@ module Util : sig
   val mk_ident : string -> Parsetree.expression
 
   val mk_typc :
-       ?attrs:Ast_helper.attrs
-    -> ?l:Parsetree.core_type list
-    -> string
-    -> Parsetree.core_type
+    ?attrs:Ast_helper.attrs ->
+    ?l:Parsetree.core_type list ->
+    string ->
+    Parsetree.core_type
 
   val empty_stri : unit -> Parsetree.structure_item
 

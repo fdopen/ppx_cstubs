@@ -19,14 +19,14 @@
 let executable = Filename.basename Sys.executable_name
 
 let error_exit s =
-  Printf.eprintf "%s: %s Try %s --help\n" executable s executable ;
+  Printf.eprintf "%s: %s Try %s --help\n" executable s executable;
   exit 1
 
 let common_main () =
-  set_binary_mode_out stdout true ;
-  set_binary_mode_out stderr true ;
-  set_binary_mode_in stdin true ;
-  Ppx_cstubs.init () ;
+  set_binary_mode_out stdout true;
+  set_binary_mode_out stderr true;
+  set_binary_mode_in stdin true;
+  Ppx_cstubs.init ();
   Migrate_parsetree.Driver.run_main ()
 
 let cpp_main () =
@@ -36,7 +36,7 @@ let cpp_main () =
   in
   let anon_is_target = ref false in
   let na f p =
-    anon_is_target := false ;
+    anon_is_target := false;
     f p
   in
   let arg_set_string v = Arg.String (na (fun s -> v := s)) in
@@ -64,7 +64,7 @@ let cpp_main () =
       if CCString.lowercase_ascii s = "none" then c_output := s
       else raise (Arg.Bad s)
     | Some (_, suf) -> (
-      if String.length suf = 0 then raise (Arg.Bad s) ;
+      if String.length suf = 0 then raise (Arg.Bad s);
       match CCChar.lowercase_ascii suf.[0] with
       | 'r' | 'm' -> ml_output := s
       | 'c' -> c_output := s
@@ -72,55 +72,57 @@ let cpp_main () =
   in
   let spec =
     Arg.align
-      [ ( "-o-ml"
-        , arg_set_string ml_output
-        , "<file>    write generated OCaml file to <file>" )
-      ; ( "-o-c"
-        , arg_set_string c_output
-        , "<file>    write generated C file to <file>. 'none' to disable c output"
-        )
-      ; ( "-o"
-        , Arg.String
+      [
+        ( "-o-ml",
+          arg_set_string ml_output,
+          "<file>    write generated OCaml file to <file>" );
+        ( "-o-c",
+          arg_set_string c_output,
+          "<file>    write generated C file to <file>. 'none' to disable c output"
+        );
+        ( "-o",
+          Arg.String
             (fun s ->
-              anon_is_target := true ;
-              set_output_by_suffix s)
-        , "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes."
-        )
-      ; ( "-cflag"
-        , arg_string (fun s -> cflags := s :: !cflags)
-        , "<opt>     Pass option <opt> to the C compiler" )
-      ; ( "-I"
-        , arg_string (fun s ->
-              include_dirs := s :: !include_dirs ;
-              oflags := s :: "-I" :: !oflags ;
-              anon_is_target := false)
-        , "<dir>     Add <dir> to the list of include directories" )
-      ; ( "-pkg"
-        , arg_string (fun s -> findlib_pkgs := s :: !findlib_pkgs)
-        , "<opt>     import types from findlib package <opt>" )
-      ; ( "-toolchain"
-        , arg_string (fun s -> toolchain := Some s)
-        , "<opt>     use ocamlfind toolchain <opt>" )
-      ; ("-keep-tmp", arg_set keep_tmp, "     Don't delete temporary files")
-      ; ( "-pretty"
-        , arg_set pretty_print
-        , "     Print a human readable ml file instead of the binary ast" )
-      ; ( "-verbose"
-        , arg_set_int verbose
-        , "<level>   Set the level of verbosity. By default, it is set to 1" )
-      ; ( "-quiet"
-        , Arg.Unit (na (fun () -> verbose := 0))
-        , "         Make ppx_cstubs silent. Same as -verbose 0" )
-      ; ( "-absname"
-        , arg_set absname
-        , "     Show absolute filenames in error messages" )
-      ; ("-nopervasives", arg_set nopervasives, "     (undocumented)")
-      ; ( "-cc"
-        , arg_string (fun s -> cc := Some s)
-        , "<command>      Use <command> as the C compiler" )
-      ; ( "--"
-        , Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest)
-        , "     Pass all following parameters verbatim to the c compiler" ) ]
+              anon_is_target := true;
+              set_output_by_suffix s),
+          "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes."
+        );
+        ( "-cflag",
+          arg_string (fun s -> cflags := s :: !cflags),
+          "<opt>     Pass option <opt> to the C compiler" );
+        ( "-I",
+          arg_string (fun s ->
+              include_dirs := s :: !include_dirs;
+              oflags := s :: "-I" :: !oflags;
+              anon_is_target := false),
+          "<dir>     Add <dir> to the list of include directories" );
+        ( "-pkg",
+          arg_string (fun s -> findlib_pkgs := s :: !findlib_pkgs),
+          "<opt>     import types from findlib package <opt>" );
+        ( "-toolchain",
+          arg_string (fun s -> toolchain := Some s),
+          "<opt>     use ocamlfind toolchain <opt>" );
+        ("-keep-tmp", arg_set keep_tmp, "     Don't delete temporary files");
+        ( "-pretty",
+          arg_set pretty_print,
+          "     Print a human readable ml file instead of the binary ast" );
+        ( "-verbose",
+          arg_set_int verbose,
+          "<level>   Set the level of verbosity. By default, it is set to 1" );
+        ( "-quiet",
+          Arg.Unit (na (fun () -> verbose := 0)),
+          "         Make ppx_cstubs silent. Same as -verbose 0" );
+        ( "-absname",
+          arg_set absname,
+          "     Show absolute filenames in error messages" );
+        ("-nopervasives", arg_set nopervasives, "     (undocumented)");
+        ( "-cc",
+          arg_string (fun s -> cc := Some s),
+          "<command>      Use <command> as the C compiler" );
+        ( "--",
+          Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest),
+          "     Pass all following parameters verbatim to the c compiler" );
+      ]
   in
   let add_cma_file a =
     if Sys.file_exists a then cma_files := a :: !cma_files
@@ -129,7 +131,7 @@ let cpp_main () =
         ListLabels.exists !include_dirs ~f:(fun d ->
             let a = Filename.concat d a in
             if Sys.file_exists a then (
-              cma_files := a :: !cma_files ;
+              cma_files := a :: !cma_files;
               true )
             else false)
       in
@@ -138,19 +140,18 @@ let cpp_main () =
   let source = ref None in
   Arg.parse spec
     (fun a ->
-      if a = "" then raise (Arg.Bad a) ;
+      if a = "" then raise (Arg.Bad a);
       let la = CCString.lowercase_ascii a in
-      if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo"
-      then (
-        anon_is_target := false ;
+      if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo" then (
+        anon_is_target := false;
         add_cma_file a )
       else if !anon_is_target then (
-        anon_is_target := false ;
+        anon_is_target := false;
         set_output_by_suffix a )
       else (
-        if !source <> None then raise (Arg.Bad a) ;
+        if !source <> None then raise (Arg.Bad a);
         source := Some a ))
-    usage ;
+    usage;
   let source =
     match !source with
     | None -> error_exit "no source file specified"
@@ -160,12 +161,10 @@ let cpp_main () =
     match !ml_output with "" -> error_exit "ml output file missing" | c -> c
   in
   let c_output =
-    match !c_output with
-    | "" -> error_exit "c stub file not specified"
-    | s -> s
+    match !c_output with "" -> error_exit "c stub file not specified" | s -> s
   in
-  if ml_output = c_output then error_exit "use different output files" ;
-  if !absname then Toplevel.set_absname true ;
+  if ml_output = c_output then error_exit "use different output files";
+  if !absname then Toplevel.set_absname true;
   let h s =
     let s = CCString.lowercase_ascii s in
     let s = Filename.basename s in
@@ -173,32 +172,32 @@ let cpp_main () =
   in
   if CCString.lowercase_ascii c_output <> "none" then (
     if h ml_output = h c_output then
-      error_exit "filenames must differ, not only their suffix" ;
-    Options.c_output_file := Some c_output ) ;
-  Options.ocaml_flags := List.rev !oflags ;
-  Options.c_flags := List.rev !cflags @ List.rev !cflags_rest ;
-  Options.keep_tmp := !keep_tmp ;
-  Options.nopervasives := !nopervasives ;
-  Options.mode := Options.Regular ;
-  Options.ml_input_file := Some source ;
-  Options.ml_output_file := Some ml_output ;
-  Options.toolchain := !toolchain ;
-  Options.cma_files := List.rev !cma_files ;
-  Options.findlib_pkgs := List.rev !findlib_pkgs ;
-  Options.verbosity := !verbose ;
-  Options.cc := !cc ;
+      error_exit "filenames must differ, not only their suffix";
+    Options.c_output_file := Some c_output );
+  Options.ocaml_flags := List.rev !oflags;
+  Options.c_flags := List.rev !cflags @ List.rev !cflags_rest;
+  Options.keep_tmp := !keep_tmp;
+  Options.nopervasives := !nopervasives;
+  Options.mode := Options.Regular;
+  Options.ml_input_file := Some source;
+  Options.ml_output_file := Some ml_output;
+  Options.toolchain := !toolchain;
+  Options.cma_files := List.rev !cma_files;
+  Options.findlib_pkgs := List.rev !findlib_pkgs;
+  Options.verbosity := !verbose;
+  Options.cc := !cc;
   (* trigger exceptions *)
-  Ocaml_config.init () ;
-  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init () ;
-  let l = if ml_output = "-" then [] else ["-o"; ml_output] in
+  Ocaml_config.init ();
+  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init ();
+  let l = if ml_output = "-" then [] else [ "-o"; ml_output ] in
   let l = source :: l in
   let l = if !pretty_print then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
-  Toplevel.set_argv @@ Array.of_list l ;
+  Toplevel.set_argv @@ Array.of_list l;
   common_main ()
 
 let merlin_main () =
-  Options.mode := Options.Emulate ;
+  Options.mode := Options.Emulate;
   common_main ()
 
 let init () =

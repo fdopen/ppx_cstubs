@@ -21,15 +21,17 @@ let htl = Hashtbl.create 8
 let () =
   List.iter
     (fun k -> Hashtbl.replace htl k ())
-    [ "field"
-    ; "funptr"
-    ; "funptr_opt"
-    ; "ptr"
-    ; "ptr_opt"
-    ; "returning"
-    ; "seal"
-    ; "static_funptr"
-    ; "@->" ]
+    [
+      "field";
+      "funptr";
+      "funptr_opt";
+      "ptr";
+      "ptr_opt";
+      "returning";
+      "seal";
+      "static_funptr";
+      "@->";
+    ]
 
 (* cmitomli ctypes.cmi | awk '/val [^\(]/ {print $2}' | ...*)
 
@@ -38,29 +40,33 @@ let htl_modules = Hashtbl.create 16
 let () =
   List.iter
     (fun k -> Hashtbl.replace htl_modules k ())
-    [ "Complex"
-    ; "ComplexL"
-    ; "Cstubs_internals"
-    ; "Ctypes"
-    ; "Ctypes_static"
-    ; "LDouble"
-    ; "Ppx_cstubs_internals"
-    ; "Signed"
-    ; "Unsigned" ]
+    [
+      "Complex";
+      "ComplexL";
+      "Cstubs_internals";
+      "Ctypes";
+      "Ctypes_static";
+      "LDouble";
+      "Ppx_cstubs_internals";
+      "Signed";
+      "Unsigned";
+    ]
 
 let htl_types = Hashtbl.create 16
 
 let () =
   List.iter
     (fun k -> Hashtbl.replace htl_types k ())
-    [ "bool"
-    ; "char"
-    ; "float"
-    ; "int"
-    ; "int32"
-    ; "int64"
-    ; "list"
-    ; "nativeint"
-    ; "option"
-    ; "string"
-    ; "unit" ]
+    [
+      "bool";
+      "char";
+      "float";
+      "int";
+      "int32";
+      "int64";
+      "list";
+      "nativeint";
+      "option";
+      "string";
+      "unit";
+    ]

@@ -19,11 +19,11 @@
 val seal : 'a Ctypes_static.typ -> size:int -> align:int -> unit
 
 val add_field :
-     't Ctypes_static.typ
-  -> string
-  -> int
-  -> 'a Ctypes_static.typ
-  -> ('a, 't) Ctypes_static.field
+  't Ctypes_static.typ ->
+  string ->
+  int ->
+  'a Ctypes_static.typ ->
+  ('a, 't) Ctypes_static.field
 
 external to_voidp : nativeint -> Cstubs_internals.voidp = "%identity"
 
@@ -32,20 +32,20 @@ external identity : 'a -> 'a = "%identity"
 val invalid_code : unit -> 'a
 
 val build_enum :
-     string
-  -> 'a Ctypes.typ
-  -> typedef:bool
-  -> ?unexpected:(int64 -> 'b)
-  -> ('b * 'a) list
-  -> 'b Ctypes.typ
+  string ->
+  'a Ctypes.typ ->
+  typedef:bool ->
+  ?unexpected:(int64 -> 'b) ->
+  ('b * 'a) list ->
+  'b Ctypes.typ
 
 val build_enum_bitmask :
-     string
-  -> 'a Ctypes.typ
-  -> typedef:bool
-  -> ?unexpected:('b list -> int64 -> 'b list)
-  -> ('b * 'a) list
-  -> 'b list Ctypes.typ
+  string ->
+  'a Ctypes.typ ->
+  typedef:bool ->
+  ?unexpected:('b list -> int64 -> 'b list) ->
+  ('b * 'a) list ->
+  'b list Ctypes.typ
 
 module Signed : sig
   module Nativeint : Signed.S with type t = nativeint
