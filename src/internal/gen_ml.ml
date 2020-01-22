@@ -172,8 +172,10 @@ let constraint_of_typ ~mod_path t =
   let _, s = typ_of_ctyp ~mod_path t in
   U.mk_typc ~l:[ s ] "Ctypes.typ"
 
-let ml_typ_of_arg_typ ~mod_path ~cinfo t =
-  let sptr (i, t) = (i, mk_typ ~l:[ t ] "Cstubs_internals.fatptr") in
+let ml_typ_of_arg_typ ~mod_path:_ ~cinfo t =
+  let sptr () =
+    (`Incomplete, mk_typ ~l:[ Typ.any () ] "Cstubs_internals.fatptr")
+  in
   let rec iter : type a. bool -> a typ -> 'b =
     let open Ctypes_static in
     fun inside_view -> function
@@ -192,17 +194,12 @@ let ml_typ_of_arg_typ ~mod_path ~cinfo t =
           ( `Complete,
             ident_of_ml_prim ~no_attr:false (Ctypes_primitive_types.ml_prim p)
           )
-      | Pointer x -> (
-        match typ_of_ctyp ~mod_path x with
-        | `Incomplete, _ ->
-          (`Incomplete, mk_typ ~l:[ Typ.any () ] "Cstubs_internals.fatptr")
-        | `Complete, x -> (`Complete, mk_typ ~l:[ x ] "Cstubs_internals.fatptr")
-        )
+      | Pointer _ -> sptr ()
       | Funptr _ ->
         (`Incomplete, mk_typ ~l:[ Typ.any () ] "Cstubs_internals.fatfunptr")
-      | Struct _ as s -> typ_of_ctyp ~mod_path s |> sptr
-      | Union _ as u -> typ_of_ctyp ~mod_path u |> sptr
-      | Abstract _ as a -> typ_of_ctyp ~mod_path a |> sptr
+      | Struct _ -> sptr ()
+      | Union _ -> sptr ()
+      | Abstract _ -> sptr ()
       | View { ty = Struct { tag; _ }; format_typ = Some ft; _ }
         when ft == Evil_hack.format_typ ->
         (`Complete, Marshal.from_string tag 0)
@@ -323,62 +320,72 @@ let extract_pointer_opt = extract_pointer true
 let extract_pointer = extract_pointer false
 
 let cond_expand_prim p inside_view cinfo =
-  let expand =
+  if
     inside_view
     &&
     match cinfo with None -> false | Some cinfo -> prim_supports_attr ~cinfo p
-  in
-  let r =
-    if expand then
-      let p = pat_expand_prim p in
-      Some [%pat? Ctypes_static.Primitive [%p p]]
-    else None
-  in
-  (r, None)
+  then Some [%pat? Ctypes_static.Primitive [%p pat_expand_prim p]]
+  else None
+
+type expand_in =
+  | In_ptr_bind of
+      Parsetree.pattern
+      * Parsetree.expression
+      * (Parsetree.expression -> Parsetree.expression)
+  | In_fptr_bind of
+      Parsetree.pattern
+      * Parsetree.expression
+      * (Parsetree.expression -> Parsetree.expression)
+  | In_trans of (Parsetree.expression -> Parsetree.expression)
+  | In_ident
 
 let pat_expand_in t ?cinfo ?type_expr param_name =
-  let module X = struct
-    type t =
-      Parsetree.pattern option
-      * (Parsetree.expression -> Parsetree.expression) option
-  end in
   let error t =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support passing %s as parameter" x
   in
-  let structured =
-    let f e =
-      let x = U.mk_lid "Ctypes_static.structured" in
-      let x = Exp.field e x in
-      [%expr Cstubs_internals.cptr [%e x]]
-    in
-    Some f
+  let mptr w =
+    let n = param_name () in
+    let e = U.mk_ident n in
+    let f x = x in
+    match w with
+    | `Ptr -> In_ptr_bind ([%pat? Ctypes_static.CPointer [%p U.mk_pat n]], e, f)
+    | `Fptr ->
+      In_fptr_bind ([%pat? Ctypes_static.Static_funptr [%p U.mk_pat n]], e, f)
   in
-  let rec iter : type a. a typ -> ?type_expr:Parsetree.expression -> bool -> X.t
+  let structured () =
+    match mptr `Ptr with
+    | In_ptr_bind (p, e, f) ->
+      let f e =
+        let x = U.mk_lid "Ctypes_static.structured" in
+        f (Exp.field e x)
+      in
+      In_ptr_bind (p, e, f)
+    | In_ident | In_trans _ | In_fptr_bind _ -> assert false
+  in
+  let rec iter : type a. a typ -> ?type_expr:Parsetree.expression -> bool -> 'b
       =
     let open Ctypes_static in
     fun t ?type_expr inside_view ->
       match t with
-      | Void -> (None, None)
-      | Primitive p -> cond_expand_prim p inside_view cinfo
+      | Void -> (None, In_ident)
+      | Primitive p -> (cond_expand_prim p inside_view cinfo, In_ident)
       | Pointer _ ->
-        let f e = [%expr Cstubs_internals.cptr [%e e]] in
         let pat =
           if inside_view then Some [%pat? Ctypes_static.Pointer _] else None
         in
-        (pat, Some f)
+        (pat, mptr `Ptr)
       | Funptr _ ->
-        let f e = [%expr Cstubs_internals.fptr [%e e]] in
         let pat =
           if inside_view then Some [%pat? Ctypes_static.Funptr _] else None
         in
-        (pat, Some f)
-      | Struct _ -> (Some [%pat? Ctypes_static.Struct _], structured)
-      | Union _ -> (Some [%pat? Ctypes_static.Union _], structured)
-      | Abstract _ -> (Some [%pat? Ctypes_static.Abstract _], structured)
-      | OCaml _ -> (None, None)
+        (pat, mptr `Fptr)
+      | Struct _ -> (Some [%pat? Ctypes_static.Struct _], structured ())
+      | Union _ -> (Some [%pat? Ctypes_static.Union _], structured ())
+      | Abstract _ -> (Some [%pat? Ctypes_static.Abstract _], structured ())
+      | OCaml _ -> (None, In_ident)
       | View { format_typ = Some ft; _ } when ft == Evil_hack.format_typ ->
-        (None, None)
+        (None, In_ident)
       | View { ty; _ } -> (
         match inline_view t ty ?type_expr inside_view with
         | Some s -> s
@@ -398,23 +405,26 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
                     _;
                   }]
           in
+          let h f' e = f' [%expr [%e f] [%e e]] in
           let fexpr =
             match nexpr2 with
-            | None -> fun e -> [%expr [%e f] [%e e]]
-            | Some f' -> fun e -> f' [%expr [%e f] [%e e]]
+            | In_ident -> In_trans (fun e -> [%expr [%e f] [%e e]])
+            | In_trans f' -> In_trans (h f')
+            | In_ptr_bind (p, e, f') -> In_ptr_bind (p, e, h f')
+            | In_fptr_bind (p, e, f') -> In_fptr_bind (p, e, h f')
           in
-          (Some pat, Some fexpr) )
+          (Some pat, fexpr) )
       | Array _ -> error t
       | Bigarray _ -> error t
   (* various dirty tricks to reduce the lines of boilerplate code *)
   and inline_view :
-      type a b.
-      a typ -> b typ -> ?type_expr:Parsetree.expression -> bool -> X.t option =
+      type a b. a typ -> b typ -> ?type_expr:Parsetree.expression -> bool -> 'c
+      =
    fun tparent tchild ?type_expr inside_view ->
     if inside_view then None
     else if Created_types.is_typedef_struct tparent then
       match iter tchild ?type_expr inside_view with
-      | Some p, (Some _ as trans) ->
+      | Some p, (In_trans _ as trans) ->
         let p = [%pat? Ctypes_static.View { Ctypes_static.ty = [%p p]; _ }] in
         Some (Some p, trans)
       | _ -> None
@@ -422,15 +432,17 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
       match (tchild, type_expr) with
       | CS.Pointer _, Some x -> (
         match extract_pointer_opt x with
-        | Some orig_expr ->
-          let res e =
-            [%expr
-              Cstubs_internals.cptr
-                ( match [%e e] with
+        | Some orig_expr -> (
+          match mptr `Ptr with
+          | In_ptr_bind (p, e, _) ->
+            let f e =
+              [%expr
+                match [%e e] with
                 | None -> Ctypes.from_voidp [%e orig_expr] Ctypes.null
-                | Some x -> x )]
-          in
-          Some (None, Some res)
+                | Some x -> x]
+            in
+            Some (None, In_ptr_bind (p, e, f))
+          | In_ident | In_trans _ | In_fptr_bind _ -> assert false )
         | None -> None )
       | _ -> None
   in
@@ -474,7 +486,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
     in
     match t with
     | Void -> (None, None)
-    | Primitive p -> cond_expand_prim p inside_view cinfo
+    | Primitive p -> (cond_expand_prim p inside_view cinfo, None)
     | Pointer _ -> (
       let f e expr =
         [%expr
@@ -575,7 +587,7 @@ type param_info = {
   (* info extraction with pattern matching necessary ? *)
   match_pat : pattern option;
   (* if the parameter needs to be tranformed first .. *)
-  param_trans : (expression -> expression) option;
+  param_trans : expand_in;
   label : Asttypes.arg_label;
   annot_needed : bool;
   (* do I need to repeat the Ctype.typ to type the generated function *)
@@ -621,7 +633,7 @@ let build_external ~ocaml_name param_infos ret_info cinfo =
 let build_fun param_infos ret_info ~ext_fun =
   let is_simple_fun =
     List.for_all param_infos ~f:(fun x ->
-        x.match_pat = None && x.param_trans = None)
+        x.match_pat = None && x.param_trans = In_ident)
     && ret_info.rmatch_pat = None
     && ret_info.res_trans = None
   in
@@ -631,15 +643,23 @@ let build_fun param_infos ret_info ~ext_fun =
       List.map param_infos ~f:(fun a ->
           ( a.label,
             match a.param_trans with
-            | Some f -> f a.fun_expr
-            | None -> a.fun_expr ))
+            | In_ident -> a.fun_expr
+            | In_trans f -> f a.fun_expr
+            | In_ptr_bind (_, e, _) | In_fptr_bind (_, e, _) -> e ))
     in
-    let fbody = Exp.apply ext_fun l in
-    let fbody =
-      match ret_info.res_trans with None -> fbody | Some f -> f fbody
+    let fb = Exp.apply ext_fun l in
+    let fb = match ret_info.res_trans with None -> fb | Some f -> f fb in
+    let fb =
+      List.fold_left (List.rev param_infos) ~init:fb ~f:(fun ac el ->
+          match el.param_trans with
+          | In_ident | In_trans _ -> ac
+          | In_ptr_bind (p, _, f) | In_fptr_bind (p, _, f) ->
+            [%expr
+              let [%p p] = [%e f el.fun_expr] in
+              [%e ac]])
     in
     Some
-      (ListLabels.fold_right ~init:fbody param_infos ~f:(fun a ac ->
+      (ListLabels.fold_right ~init:fb param_infos ~f:(fun a ac ->
            Exp.fun_ a.label None a.fun_pat ac))
 
 let poly_prefix pos = "ppxc__t_" ^ string_of_int pos
@@ -963,7 +983,7 @@ type cb_param_info = {
 type cb_ret_info = {
   cb_rfun_pat : pattern;
   cb_rmatch_pat : pattern option;
-  cb_res_trans : (expression -> expression) option;
+  cb_res_trans : expand_in;
 }
 
 (* FIXME: Avoid code duplication with build_fun without
@@ -973,7 +993,7 @@ let build_cb_fun param_infos ret_info ~user_fun =
     List.for_all param_infos ~f:(fun x ->
         x.cb_match_pat = None && x.cb_param_trans = None)
     && ret_info.cb_rmatch_pat = None
-    && ret_info.cb_res_trans = None
+    && ret_info.cb_res_trans = In_ident
   in
   if is_simple_fun then None
   else
@@ -985,8 +1005,19 @@ let build_cb_fun param_infos ret_info ~user_fun =
             | None -> a.cb_fun_expr ))
     in
     let fbody = Exp.apply user_fun l in
+    (* TODO: how to avoid this Obj.magic? *)
     let fbody =
-      match ret_info.cb_res_trans with None -> fbody | Some f -> f fbody
+      match ret_info.cb_res_trans with
+      | In_ident -> fbody
+      | In_trans f -> f fbody
+      | In_ptr_bind (p, e, f) ->
+        [%expr
+          let [%p p] = [%e f fbody] in
+          Ppx_cstubs_internals.fatptr_magic [%e e]]
+      | In_fptr_bind (p, e, f) ->
+        [%expr
+          let [%p p] = [%e f fbody] in
+          Ppx_cstubs_internals.fatfunptr_magic [%e e]]
     in
     Some
       (ListLabels.fold_right ~init:fbody param_infos ~f:(fun a ac ->
