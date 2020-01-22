@@ -85,6 +85,15 @@ module C_content_make (E : Empty) = struct
 #define PPX_CSTUBS_ADDR_OF_FATPTR(typ,var)      \
   CTYPES_ADDR_OF_FATPTR(var)
 #endif
+
+#ifndef CTYPES_PTR_OF_OCAML_BYTES
+#ifdef Bytes_val
+#define CTYPES_PTR_OF_OCAML_BYTES(s)   \
+  (Bytes_val(Field(s, 1)) + Long_val(Field(s, 0)))
+#else
+#define CTYPES_PTR_OF_OCAML_BYTES(s) CTYPES_PTR_OF_OCAML_STRING(s)
+#endif
+#endif
 |}
 
   let htl_id_func = Hashtbl.create 16

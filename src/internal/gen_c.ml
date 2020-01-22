@@ -481,13 +481,6 @@ let rec pinfo :
             (string_of_typ_exn ~name:c_var orig)
             cast_name ocaml_param)
     in
-    let f ?noalloc_possible s =
-      standard ?noalloc_possible (fun () ->
-          Printf.sprintf "%s = %s(%s);"
-            (string_of_typ_exn ~name:c_var orig)
-            s ocaml_param)
-    in
-    let str () = f "CTYPES_PTR_OF_OCAML_STRING" in
     let hptr noalloc_possible =
       standard ~noalloc_possible (fun () ->
           Printf.sprintf "%s = PPX_CSTUBS_ADDR_OF_FATPTR(%s,%s);"
@@ -515,9 +508,17 @@ let rec pinfo :
     | C.Struct _ -> stru ()
     | C.Union _ -> stru ()
     | C.Funptr _ -> hptr false
-    | C.OCaml C.String -> str ()
-    | C.OCaml C.Bytes -> str ()
-    | C.OCaml C.FloatArray -> f "CTYPES_PTR_OF_FLOAT_ARRAY"
+    | C.OCaml x ->
+      let s =
+        match x with
+        | C.String -> "CTYPES_PTR_OF_OCAML_STRING"
+        | C.Bytes -> "CTYPES_PTR_OF_OCAML_BYTES"
+        | C.FloatArray -> "CTYPES_PTR_OF_FLOAT_ARRAY"
+      in
+      standard (fun () ->
+          Printf.sprintf "%s = %s(%s);"
+            (string_of_typ_exn ~name:c_var orig)
+            s ocaml_param)
 
 let pinfo p = pinfo p p
 

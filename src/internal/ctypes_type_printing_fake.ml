@@ -72,7 +72,7 @@ let rec format_typ' :
         `nonarray fmt
     | Bigarray _ -> ()
     | OCaml String -> format_typ' (ptr char) k context fmt
-    | OCaml Bytes -> format_typ' (ptr char) k context fmt
+    | OCaml Bytes -> format_typ' (ptr uchar) k context fmt
     | OCaml FloatArray -> format_typ' (ptr double) k context fmt
 
 and format_fields : type a. a boxed_field list -> Format.formatter -> unit =
