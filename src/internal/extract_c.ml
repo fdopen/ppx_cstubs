@@ -37,6 +37,9 @@ let prologue =
 #include <string.h>
 #include <assert.h>
 #include <ctypes_cstubs_internals.h>
+#if defined(__cplusplus) && __cplusplus >= 201103L
+#include <type_traits>
+#endif
 
 #if (defined(__GNUC__) && ( __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 3))) || (defined(__clang_major__) && (__clang_major__ >= 3))
 #define PPXC_HAS_TYPEOF 1
@@ -113,7 +116,11 @@ let prologue =
 #endif
 #endif /* ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE */
 
-#ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE
+#if defined(__cplusplus) && __cplusplus >= 201103L
+#define PPXC_IS_INTEGER(x)                                            \
+  ( std::is_integral<decltype(x)>::value || std::is_enum<decltype(x)>::value )
+#define PPXC_IS_INTEGER_DEF_TRUE(x) PPXC_IS_INTEGER(x)
+#elif defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE)
 #define PPXC_IS_INTEGER(var)                                       \
   ((unsigned)(PPXC_CLASSIFY_TYPE(var) == PPXC_CLASSIFY_TYPE(0)))
 #define PPXC_IS_INTEGER_DEF_TRUE(x) PPXC_IS_INTEGER(x)
@@ -153,8 +160,9 @@ let prologue =
 
 #endif
 
-#if !defined(__cplusplus) && defined(PPXC_HAS_TYPEOF) && defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE)
+#if !defined(__cplusplus)
 
+#if defined(PPXC_HAS_TYPEOF) && defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE)
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define PPXC_IS_UNSIGNED(x)                                             \
   (!(_Generic((1 ? (x*)0 : (void*)(!PPXC_IS_INTEGER(*((x*)0)))),        \
@@ -166,11 +174,48 @@ let prologue =
                             ((__typeof__(*(1 ? (x*)0 : (void*)(!PPXC_IS_INTEGER(*((x*)1)))))) -1), \
                             ((int)(-1)))) < 1))
 #endif
-#endif
 #ifdef PPXC_IS_UNSIGNED
 #define PPXC_IS_UNSIGNED_VAR(x) PPXC_IS_UNSIGNED(__typeof__(x))
-#else
+#endif
+#endif /* defined(PPXC_HAS_TYPEOF) && defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE) */
+
+#if !defined(PPXC_IS_UNSIGNED) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define PPXC_IS_UNSIGNED_VAR(x)                 \
+  (_Generic((x),                                \
+            _Bool: 1,                           \
+            char: CHAR_MAX == UCHAR_MAX,        \
+            unsigned char: 1,                   \
+            unsigned short: 1,                  \
+            unsigned int: 1,                    \
+            unsigned long: 1,                   \
+            unsigned long long: 1,              \
+            default: 0))
+
+#define PPXC_IS_UNSIGNED(x)                     \
+  PPXC_IS_UNSIGNED_VAR( *((x*)NULL) )
+#endif
+
+#elif __cplusplus >= 201103L
+
+namespace pxxc_signedness {
+  template<typename T,bool = std::is_integral<T>::value || std::is_enum<T>::value>
+  struct h_is_unsigned : std::integral_constant<bool, T(0) < T(-1)> {};
+
+  template<typename T> struct h_is_unsigned<T,false> : std::false_type {};
+  template<typename T> struct is_unsigned : h_is_unsigned<T>::type {};
+}
+
+#define PPXC_IS_UNSIGNED(x) (pxxc_signedness::is_unsigned<x>::value)
+#define PPXC_IS_UNSIGNED_VAR(x) \
+  (pxxc_signedness::is_unsigned<decltype(x)>::value)
+
+#endif /* !defined(__cplusplus) */
+
+#ifndef PPXC_IS_UNSIGNED
 #define PPXC_IS_UNSIGNED(x) 0
+#endif
+
+#ifndef PPXC_IS_UNSIGNED_VAR
 #define PPXC_IS_UNSIGNED_VAR(x) 0
 #endif
 
@@ -218,55 +263,90 @@ AHELPER_1(int64_t)
 #if !defined(__cplusplus) && ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || defined(PPXC_HAS_BUILTIN_TYPES_COMPATIBLE_P))
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-#define PPXC_TYPE_HELPER_H1(i,ex,typ)                             \
+#define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                        \
   (((uint64_t)(_Generic((ex),typ:1,default: 0))) << UINT64_C(i))
 
-#define PPXC_TYPE_HELPER_H2(i,ex,ct,ot)                             \
+#define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                      \
   (((uint64_t)((_Generic((ex),ct:1,default: 0))                     \
                && (sizeof(ct) == sizeof(ot))                        \
                && (_Alignof(ct) == _Alignof(ot)))) << UINT64_C(i))
 #else
-#define PPXC_TYPE_HELPER_H1(i,ex,typ)                                    \
-  (((uint64_t)(__builtin_types_compatible_p(__typeof__(ex), typ))) << UINT64_C(i))
+#define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                            \
+  (((uint64_t)(__builtin_types_compatible_p(ex_typ, typ))) << UINT64_C(i))
 
-#define PPXC_TYPE_HELPER_H2(i,ex,ct,ot)                                 \
-  (((uint64_t)((__builtin_types_compatible_p(__typeof__(ex), ct))       \
+#define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                          \
+  (((uint64_t)((__builtin_types_compatible_p(ex_typ, ct))               \
                && (sizeof(ct) == sizeof(ot))                            \
                && (__alignof__(ct) == __alignof__(ot)))) << UINT64_C(i))
 #endif
 
-#define PPXC_TYPE_HELPER_OPAQUE_TC(ex)              \
-  (PPXC_TYPE_HELPER_H1(20,ex,signed char) |         \
-   PPXC_TYPE_HELPER_H1(21,ex,unsigned char) |       \
-   PPXC_TYPE_HELPER_H1(22,ex,short) |               \
-   PPXC_TYPE_HELPER_H1(23,ex,int) |                 \
-   PPXC_TYPE_HELPER_H1(24,ex,long) |                \
-   PPXC_TYPE_HELPER_H1(25,ex,long long) |           \
-   PPXC_TYPE_HELPER_H1(26,ex,unsigned short) |      \
-   PPXC_TYPE_HELPER_H1(27,ex,unsigned int) |        \
-   PPXC_TYPE_HELPER_H1(28,ex,unsigned long) |       \
-   PPXC_TYPE_HELPER_H1(29,ex,unsigned long long) |  \
-   PPXC_TYPE_HELPER_H1(30,ex,size_t) |              \
-   PPXC_TYPE_HELPER_H1(31,ex,int8_t) |              \
-   PPXC_TYPE_HELPER_H1(32,ex,int16_t) |             \
-   PPXC_TYPE_HELPER_H1(33,ex,int32_t) |             \
-   PPXC_TYPE_HELPER_H1(34,ex,int64_t) |             \
-   PPXC_TYPE_HELPER_H1(35,ex,uint8_t) |             \
-   PPXC_TYPE_HELPER_H1(36,ex,uint16_t) |            \
-   PPXC_TYPE_HELPER_H1(37,ex,uint32_t) |            \
-   PPXC_TYPE_HELPER_H1(38,ex,uint64_t) |            \
-   PPXC_TYPE_HELPER_H1(39,ex,intnat) |              \
-   PPXC_TYPE_HELPER_H1(40,ex,char) |                \
-   PPXC_TYPE_HELPER_H1(41,ex,bool) |                \
-   PPXC_TYPE_HELPER_H2(50,ex,long,intnat) |         \
-   PPXC_TYPE_HELPER_H2(51,ex,long long,intnat) |    \
-   PPXC_TYPE_HELPER_H2(52,ex,long,int32_t) |        \
-   PPXC_TYPE_HELPER_H2(53,ex,long,int64_t) |        \
-   PPXC_TYPE_HELPER_H2(54,ex,long long,int64_t))
+#endif /*  !defined(__cplusplus) && ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || defined(PPXC_HAS_BUILTIN_TYPES_COMPATIBLE_P)) */
+
+
+#if defined(__cplusplus) && ( (__cplusplus >= 201103L) || (defined(__GNUC__) && __GNUC__ >= 4) || (defined(__clang_major__) && __clang_major__ > 3) )
+
+#if __cplusplus >= 201103L
+#define PPXC_ALIGNOF(x)  alignof(x)
+#else
+#define PPXC_ALIGNOF(x) __alignof__(x)
+#endif
+
+namespace ppxc_types_compatible
+{
+  template<typename T, typename U> struct are_same {static const char ok = false;};
+  template<typename T> struct are_same<T, T> {static const char ok = true;};
+  template<typename T> struct are_same<T const, T> {static const char ok = true;};
+  template<typename T> struct are_same<T const volatile, T> {static const char ok = true;};
+  template<typename T> struct are_same<T volatile, T> {static const char ok = true;};
+}
+
+#define PPXC_CXX_TYPES_COMPATIBLE(t1,t2)                  \
+   (ppxc_types_compatible::are_same<t1,t2>::ok)
+
+#define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                           \
+  (((uint64_t)(PPXC_CXX_TYPES_COMPATIBLE(ex_typ, typ))) << UINT64_C(i))
+
+#define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                          \
+  (((uint64_t)((PPXC_CXX_TYPES_COMPATIBLE(ex_typ, ct))                  \
+               && (sizeof(ct) == sizeof(ot))                            \
+               && (PPXC_ALIGNOF(ct) == PPXC_ALIGNOF(ot)))) << UINT64_C(i))
+#endif
+
+
+#ifdef PPXC_TYPE_HELPER_H1
+
+#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ)             \
+  (PPXC_TYPE_HELPER_H1(20,ex,ex_typ,signed char) |        \
+   PPXC_TYPE_HELPER_H1(21,ex,ex_typ,unsigned char) |      \
+   PPXC_TYPE_HELPER_H1(22,ex,ex_typ,short) |              \
+   PPXC_TYPE_HELPER_H1(23,ex,ex_typ,int) |                \
+   PPXC_TYPE_HELPER_H1(24,ex,ex_typ,long) |               \
+   PPXC_TYPE_HELPER_H1(25,ex,ex_typ,long long) |          \
+   PPXC_TYPE_HELPER_H1(26,ex,ex_typ,unsigned short) |     \
+   PPXC_TYPE_HELPER_H1(27,ex,ex_typ,unsigned int) |       \
+   PPXC_TYPE_HELPER_H1(28,ex,ex_typ,unsigned long) |      \
+   PPXC_TYPE_HELPER_H1(29,ex,ex_typ,unsigned long long) | \
+   PPXC_TYPE_HELPER_H1(30,ex,ex_typ,size_t) |             \
+   PPXC_TYPE_HELPER_H1(31,ex,ex_typ,int8_t) |             \
+   PPXC_TYPE_HELPER_H1(32,ex,ex_typ,int16_t) |            \
+   PPXC_TYPE_HELPER_H1(33,ex,ex_typ,int32_t) |            \
+   PPXC_TYPE_HELPER_H1(34,ex,ex_typ,int64_t) |            \
+   PPXC_TYPE_HELPER_H1(35,ex,ex_typ,uint8_t) |            \
+   PPXC_TYPE_HELPER_H1(36,ex,ex_typ,uint16_t) |           \
+   PPXC_TYPE_HELPER_H1(37,ex,ex_typ,uint32_t) |           \
+   PPXC_TYPE_HELPER_H1(38,ex,ex_typ,uint64_t) |           \
+   PPXC_TYPE_HELPER_H1(39,ex,ex_typ,intnat) |             \
+   PPXC_TYPE_HELPER_H1(40,ex,ex_typ,char) |               \
+   PPXC_TYPE_HELPER_H1(41,ex,ex_typ,bool) |               \
+   PPXC_TYPE_HELPER_H2(50,ex,ex_typ,long,intnat) |        \
+   PPXC_TYPE_HELPER_H2(51,ex,ex_typ,long long,intnat) |   \
+   PPXC_TYPE_HELPER_H2(52,ex,ex_typ,long,int32_t) |       \
+   PPXC_TYPE_HELPER_H2(53,ex,ex_typ,long,int64_t) |       \
+   PPXC_TYPE_HELPER_H2(54,ex,ex_typ,long long,int64_t))
 
 #else
-#define PPXC_TYPE_HELPER_OPAQUE_TC(ex) UINT64_C(0)
-#endif /*  !defined(__cplusplus) && ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || defined(PPXC_HAS_BUILTIN_TYPES_COMPATIBLE_P)) */
+#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ) UINT64_C(0)
+#endif /* ifdef PPXC_TYPE_HELPER_H1 */
 
 #ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE
 #define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,var)                \
@@ -279,13 +359,13 @@ AHELPER_1(int64_t)
 #endif
 
 #define PPXC_OPAQUE(typ,stru,ex)                                  \
-  (PPXC_TYPE_HELPER_OPAQUE_TC(ex) |                               \
+  (PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ) |                           \
    PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,ex) |                      \
-   (((uint64_t)(PPXC_IS_UNSIGNED_VAR(ex))) << UINT64_C(5)))
+   (((uint64_t)(PPXC_IS_UNSIGNED(typ))) << UINT64_C(5)))
 
 #define PPXC_INTALIAS(typ,stru,ex)                        \
   (PPXC_INT_ALIGN_SIZE(typ,stru,ex)                     | \
-   PPXC_TYPE_HELPER_OPAQUE_TC(ex)                       | \
+   PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ)                   | \
    (((uint64_t)(PPXC_IS_INTEGER_DEF_TRUE(ex)) << UINT64_C(62))) | \
    (((uint64_t)(((typ) (-1)) > 0)) << UINT64_C(63)))
 
