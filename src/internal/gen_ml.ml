@@ -1067,19 +1067,21 @@ let ocaml_funptr mof callback_fn =
   let fn_ref = U.mk_ident fn_n in
   let e = U.mk_ident (cb_orig_mod ^ ".make_pointer") in
   let mod_type_name = U.safe_mlname ~capitalize:true ~prefix:cb_orig_mod () in
+  let pat_binding_name = U.mk_pat cb_binding_name in
   let typ =
     U.sig_from_mod_type
       [%stri
         module type X = sig
           include module type of struct
-            let r = [%e e] (Obj.magic 0n)
+            let [%p pat_binding_name] = [%e e] (Obj.magic 0n)
           end
         end]
   in
   let mt = Mtd.mk ~typ:(Mty.signature typ) (U.mk_loc mod_type_name) in
   let mod_typ = Str.modtype mt in
   Hashtbl.replace Script_result.htl_stri cb_top mod_typ;
-  let f e =
+  let prim_name = U.safe_mlname () in
+  let external' =
     let pointer =
       String.concat "." (mod_path @ [ cb_top_mod; "raw_pointer" ]) |> U.mk_typc
     in
@@ -1088,23 +1090,16 @@ let ocaml_funptr mof callback_fn =
           Typ.arrow Asttypes.Nolabel (Typ.any ()) acc)
     in
     let typ = Typ.arrow Asttypes.Nolabel typ pointer in
-    let prim_name = U.safe_mlname () in
     let p = Val.mk ~prim:[ cb_init_fun ] (U.mk_loc prim_name) typ in
+    Str.primitive p
+  in
+  let f e =
     let mk_pointer =
       String.concat "." (mod_path @ [ cb_top_mod; "make_pointer" ])
       |> U.mk_ident
     in
-    let ext = Str.primitive p in
-    let mt =
-      Mty.ident (U.mk_lid (String.concat "." (mod_path @ [ mod_type_name ])))
-    in
     let f = U.mk_ident prim_name in
-    let stri = [%stri let r = [%e mk_pointer] ([%e f] [%e e])] in
-    let st = Mod.structure [ ext; stri ] in
-    let m = Mod.constraint_ st mt in
-    let m_name = U.safe_mlname ~capitalize:true () in
-    let e = U.mk_ident (m_name ^ ".r") in
-    Exp.letmodule (U.mk_loc m_name) m e
+    [%expr [%e mk_pointer] ([%e f] [%e e])]
   in
   let expr =
     match fun' with
@@ -1117,8 +1112,11 @@ let ocaml_funptr mof callback_fn =
       in
       match build_pattern fn_ref pats ~func with None -> func | Some f -> f )
   in
-  let pat = U.mk_pat cb_binding_name in
-  let stri = [%stri let [%p pat] = [%e expr]] in
+  let stri = [%stri let [%p pat_binding_name] = [%e expr]] in
+  let m = Mod.structure [ external'; stri ] in
+  let path = String.concat "." (mod_path @ [ mod_type_name ]) in
+  let mt = Mty.ident (U.mk_lid path) in
+  let stri = Str.include_ (Incl.mk (Mod.constraint_ m mt)) in
   Hashtbl.replace Script_result.htl_stri cb_bottom stri
 
 type record_stris = {
