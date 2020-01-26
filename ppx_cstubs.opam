@@ -2,7 +2,7 @@ opam-version: "2.0"
 maintainer: "andreashauptmann@t-online.de"
 authors: [ "andreashauptmann@t-online.de" ]
 license: "LGPL-2.1+ with OCaml linking exception"
-homepage: "https://github.com/fdopen/ppx_cstubs"
+homepage: "https://fdopen.github.io/ppx_cstubs/"
 dev-repo: "git+https://github.com/fdopen/ppx_cstubs.git"
 doc: "https://fdopen.github.io/ppx_cstubs/"
 bug-reports: "https://github.com/fdopen/ppx_cstubs/issues"
@@ -11,7 +11,7 @@ build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
-  "ctypes" {>= "0.13.0" & < "0.17.0"}
+  "ctypes" {>= "0.13.0"}
   "integers"
   "num"
   "result"
@@ -27,11 +27,12 @@ depends: [
 ]
 
 synopsis: """
-Preprocessor for quick and dirty stub generation
+Preprocessor for easier stub generation with ctypes
 """
 
 description: """
-ppx_cstubs is a ppx-based preprocessor for quick and dirty stub generation with
-ctypes. ppx_cstubs creates two files from a single ml file: a file with c stub
-code and an OCaml file with all additional boilerplate code.
+ppx_cstubs is a ppx-based preprocessor for stub generation with
+ctypes. ppx_cstubs creates two files from a single ml file: a file
+with c stub code and an OCaml file with all additional boilerplate
+code.
 """

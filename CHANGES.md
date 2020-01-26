@@ -1,3 +1,15 @@
+0.3.0 (26/01/2020)
+------------------
+
+- support for OCaml 4.10.0+beta1
+
+- fix merlin mode
+
+- bump internally used AST version to 4.09
+
+- let-bound constants
+
+
 0.2.1 (12/08/2019)
 ------------------
 
