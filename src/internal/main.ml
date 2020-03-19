@@ -22,12 +22,12 @@ let error_exit s =
   Printf.eprintf "%s: %s Try %s --help\n" executable s executable;
   exit 1
 
-let common_main () =
+let common_main argv =
   set_binary_mode_out stdout true;
   set_binary_mode_out stderr true;
   set_binary_mode_in stdin true;
   Ppx_cstubs.init ();
-  Migrate_parsetree.Driver.run_main ()
+  Migrate_parsetree.Driver.run_main ~argv ()
 
 let cpp_main () =
   let usage =
@@ -78,14 +78,13 @@ let cpp_main () =
           "<file>    write generated OCaml file to <file>" );
         ( "-o-c",
           arg_set_string c_output,
-          "<file>    write generated C file to <file>. 'none' to disable c output"
-        );
+          "<file>    write generated C file to <file>" );
         ( "-o",
           Arg.String
             (fun s ->
               anon_is_target := true;
               set_output_by_suffix s),
-          "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes."
+          "<file1>\xC2\xA0<file2>    \xC2\xA0write generated files to <file1> and <file2>. The files must have proper suffixes"
         );
         ( "-cflag",
           arg_string (fun s -> cflags := s :: !cflags),
@@ -160,9 +159,7 @@ let cpp_main () =
   let ml_output =
     match !ml_output with "" -> error_exit "ml output file missing" | c -> c
   in
-  let c_output =
-    match !c_output with "" -> error_exit "c stub file not specified" | s -> s
-  in
+  let c_output = match !c_output with "" -> "none" | s -> s in
   if ml_output = c_output then error_exit "use different output files";
   if !absname then Toplevel.set_absname true;
   let h s =
@@ -193,12 +190,11 @@ let cpp_main () =
   let l = source :: l in
   let l = if !pretty_print then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
-  Toplevel.set_argv @@ Array.of_list l;
-  common_main ()
+  common_main (Array.of_list l)
 
 let merlin_main () =
   Options.mode := Options.Emulate;
-  common_main ()
+  common_main Sys.argv
 
 let init () =
   if CCArray.exists (( = ) "--as-ppx") Sys.argv then merlin_main ()

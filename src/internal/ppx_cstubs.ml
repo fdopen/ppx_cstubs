@@ -615,7 +615,7 @@ module C_content = struct
             (fun ch -> output_string ch source) )
       | Some _, None ->
         prerr_endline
-          "no c file necessary, set -o-c to 'none' and update your build instructions";
+          "no c file necessary, remove it from the command-line invocation and update your build instructions";
         exit 2
       | None, None -> ()
       | None, Some _ ->
