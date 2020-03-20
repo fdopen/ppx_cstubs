@@ -1005,7 +1005,6 @@ let build_cb_fun param_infos ret_info ~user_fun =
             | None -> a.cb_fun_expr ))
     in
     let fbody = Exp.apply user_fun l in
-    (* TODO: how to avoid this Obj.magic? *)
     let fbody =
       match ret_info.cb_res_trans with
       | In_ident -> fbody
@@ -1013,11 +1012,11 @@ let build_cb_fun param_infos ret_info ~user_fun =
       | In_ptr_bind (p, e, f) ->
         [%expr
           let [%p p] = [%e f fbody] in
-          Ppx_cstubs_internals.fatptr_magic [%e e]]
+          [%e e]]
       | In_fptr_bind (p, e, f) ->
         [%expr
           let [%p p] = [%e f fbody] in
-          Ppx_cstubs_internals.fatfunptr_magic [%e e]]
+          [%e e]]
     in
     Some
       (ListLabels.fold_right ~init:fbody param_infos ~f:(fun a ac ->

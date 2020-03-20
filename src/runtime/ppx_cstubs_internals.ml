@@ -456,7 +456,7 @@ module Shadow = struct
     | Pointer _ -> true
     | Funptr _ -> true
     (* Allow to pass and return abstract types. I don't know why it is
-     disabled upstream. They are handled like structs and unions *)
+       disabled upstream. They are handled like structs and unions *)
     | Abstract _ -> true
     | OCaml _ -> true
     | View { ty; _ } -> passable ty
@@ -469,9 +469,3 @@ module Shadow = struct
     if not (passable a) then raise (Unsupported "Unsupported return type")
     else Returns a
 end
-
-external fatptr_magic : _ Cstubs_internals.fatptr -> _ Cstubs_internals.fatptr
-  = "%identity"
-
-external fatfunptr_magic :
-  _ Cstubs_internals.fatfunptr -> _ Cstubs_internals.fatfunptr = "%identity"

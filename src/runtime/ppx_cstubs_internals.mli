@@ -97,10 +97,4 @@ module Shadow : sig
   val returning : 'a Ctypes.typ -> 'a Ctypes.fn
 end
 
-external fatptr_magic : _ Cstubs_internals.fatptr -> _ Cstubs_internals.fatptr
-  = "%identity"
-
-external fatfunptr_magic :
-  _ Cstubs_internals.fatfunptr -> _ Cstubs_internals.fatfunptr = "%identity"
-
 (**/**)
