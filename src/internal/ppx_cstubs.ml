@@ -2255,6 +2255,7 @@ let mapper _config _cookies =
       if txt = "cb" then (
         if !unsafe_depth_funptr <> 0 then
           U.error "static ocaml callbacks must be declared at the top level";
+        assert (!unsafe_depth = 0);
         if mod_name = "" then
           U.error "module for ocaml callback must have a name";
         H.type_cb lname mod_name [ (Asttypes.Nolabel, exp) ] )
@@ -2551,13 +2552,14 @@ let mapper _config _cookies =
     if !phase <> P.Initial_scan then default_mapper.module_expr mapper m
     else
       match m.pmod_desc with
-      | Pmod_ident _ | Pmod_structure _ -> default_mapper.module_expr mapper m
-      | Pmod_functor _ ->
+      | Pmod_ident _ | Pmod_structure _ | Pmod_constraint _ ->
+        default_mapper.module_expr mapper m
+      | Pmod_apply _ | Pmod_unpack _ | Pmod_functor _ ->
         incr unsafe_depth_funptr;
         let r = default_mapper.module_expr mapper m in
         decr unsafe_depth_funptr;
         r
-      | Pmod_apply _ | Pmod_constraint _ | Pmod_unpack _ | Pmod_extension _ ->
+      | Pmod_extension _ ->
         incr unsafe_depth_funptr;
         incr unsafe_depth;
         let r = default_mapper.module_expr mapper m in
