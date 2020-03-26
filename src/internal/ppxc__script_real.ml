@@ -1508,7 +1508,7 @@ module Build = struct
       let salias = Sig.include_ idl :: salias in
       let ms = Mod.structure alias in
       let m = Mod.constraint_ ms (Mty.signature salias) in
-      let r = Str.module_ (Mb.mk (U.mk_loc mod_name) m) in
+      let r = Str.module_ (Mb.mk (U.mk_oloc mod_name) m) in
       Hashtbl.replace G.htl_stri id r
 
   let int_alias id_loc ~mod_name ?strict ctyp =

@@ -424,7 +424,7 @@ module Ppx_mod_top_common (M : sig end) = struct
       if internal = false && CCString.prefix ~pre:"Ppxc__" s then
         error "module prefix Ppxc__ is reserved (%S)" s;
       let ms = Mod.structure (List.rev l) in
-      let mb = Mb.mk (U.mk_loc s) ms in
+      let mb = Mb.mk (U.mk_oloc s) ms in
       let x = Str.module_ mb in
       add_entry x
 
@@ -534,7 +534,7 @@ module Ppx_mod = struct
         in
         let module A = Ast_helper in
         let ms = A.Mod.structure l in
-        let mb = A.Mb.mk (U.mk_loc (main_name ())) ms in
+        let mb = A.Mb.mk (U.mk_oloc (main_name ())) ms in
         [ A.Str.module_ mb ]
       in
       match !Options.mode with
@@ -763,40 +763,58 @@ end
 module Scripts_structure = struct
   (* Script structure and Top module structure might differ in the future. Not
      yet sure what to do about functors and similar constructs *)
-  let open_module s =
+
+  (* exception order matters, different to Std.finally! *)
+  let finally ~h f =
+    match f () with
+    | exception exn ->
+      (try h () with _ -> ());
+      raise exn
+    | r ->
+      h ();
+      r
+
+  let modul loc s f =
     Top.Structure_build_external.open_module s;
     Top.Structure_extract.open_module s;
-    Ppx_mod.Structure.open_module s
+    Ppx_mod.Structure.open_module s;
+    finally
+      ~h:(fun () ->
+        Top.Structure_build_external.close_module loc;
+        Top.Structure_extract.close_module loc;
+        Ppx_mod.Structure.close_module loc)
+      f
 
-  let open_let_module s =
+  let let_module loc s ~fmexpr ~fexpr =
     Top.Structure_build_external.open_let_module s;
     Top.Structure_extract.open_let_module s;
-    Ppx_mod.Structure.open_let_module s
+    Ppx_mod.Structure.open_let_module s;
+    finally ~h:(fun () ->
+        Top.Structure_build_external.close_let_module_expr loc;
+        Top.Structure_extract.close_let_module_expr loc;
+        Ppx_mod.Structure.close_let_module_expr loc)
+    @@ fun () ->
+    let mexpr =
+      finally
+        ~h:(fun () ->
+          Top.Structure_build_external.close_let_module_module loc;
+          Top.Structure_extract.close_let_module_module loc;
+          Ppx_mod.Structure.close_let_module_module loc)
+        fmexpr
+    in
+    (mexpr, fexpr ())
 
-  let close_let_module_module loc =
-    Top.Structure_build_external.close_let_module_module loc;
-    Top.Structure_extract.close_let_module_module loc;
-    Ppx_mod.Structure.close_let_module_module loc
-
-  let close_let_module_expr loc =
-    Top.Structure_build_external.close_let_module_expr loc;
-    Top.Structure_extract.close_let_module_expr loc;
-    Ppx_mod.Structure.close_let_module_expr loc
-
-  let close_module loc =
-    Top.Structure_build_external.close_module loc;
-    Top.Structure_extract.close_module loc;
-    Ppx_mod.Structure.close_module loc
-
-  let open_module_anon s =
+  let module_anon loc f =
+    let s = U.safe_mlname ~capitalize:true () in
     Top.Structure_build_external.open_module_anon s;
     Top.Structure_extract.open_module_anon s;
-    Ppx_mod.Structure.open_module_anon s
-
-  let close_module_anon loc =
-    Top.Structure_build_external.close_module_anon loc;
-    Top.Structure_extract.close_module_anon loc;
-    Ppx_mod.Structure.close_module_anon loc
+    Ppx_mod.Structure.open_module_anon s;
+    finally
+      ~h:(fun () ->
+        Top.Structure_build_external.close_module_anon loc;
+        Top.Structure_extract.close_module_anon loc;
+        Ppx_mod.Structure.close_module_anon loc)
+      f
 end
 
 let htl_tdl_entries = Hashtbl.create 32
@@ -1619,7 +1637,7 @@ module H = struct
               [%e str_expr]];
       let func_name = func_name ^ "_alias" in
       let mod_name_expr = U.str_expr mod_name in
-      let lmod_name = U.mk_loc mod_name in
+      let lmod_name = U.mk_oloc mod_name in
       let f e_b =
         let e = U.mk_ident (e_b ^ func_name) in
         let e =
@@ -1670,7 +1688,7 @@ module H = struct
               ~typ:[%e id_type.Id.script_param] ~mi:[%e marshal_info]]
         in
         let e = Mod.unpack (Exp.apply e l) in
-        let e = Mb.mk (U.mk_loc mod_unique) e in
+        let e = Mb.mk (U.mk_oloc mod_unique) e in
         Str.module_ e
       in
       Top.add_extract @@ f [%expr Ppxc__script.Extract.opaque];
@@ -1775,7 +1793,7 @@ module H = struct
       U.safe_mlname ~capitalize:true ~prefix:cb_binding_name ()
     in
     let ident = Mod.ident (U.mk_lid cb_orig_mod) in
-    let mb = Mb.mk (U.mk_loc cb_top_mod) ident in
+    let mb = Mb.mk (U.mk_oloc cb_top_mod) ident in
     Ppx_mod.Structure.add_entry (Str.module_ mb);
     let id_top = Id.get () in
     Ppx_mod.Structure.add_entry id_top.Id.stri;
@@ -1805,7 +1823,7 @@ module H = struct
     Top.add_build_external @@ f [%expr Ppxc__script.Build.ocaml_funptr];
     id_bottom.Id.stri
 
-  let type_cb lmod_name l =
+  let type_cb lmod_name_opt mod_name l =
     let expr = Exp.apply [%expr Ppx_cstubs_internals.Callback.make] l in
     let mexpr = Mod.unpack expr in
     let mexpr =
@@ -1813,7 +1831,7 @@ module H = struct
         (Mod.ident (U.mk_lid "Ppx_cstubs_internals.Callback.Make"))
         mexpr
     in
-    let mb = Mb.mk lmod_name mexpr in
+    let mb = Mb.mk lmod_name_opt mexpr in
     let stri = Str.module_ mb in
     Top.add_extract stri;
     Top.add_build_external stri;
@@ -1823,14 +1841,14 @@ module H = struct
       [%stri
         let (_ : _ Ctypes.static_funptr Ctypes.typ) =
           Ppxc__script.Build.reg_trace ~no_dup:true [%e id_expr]
-            [%e U.mk_ident (lmod_name.txt ^ ".t")]];
+            [%e U.mk_ident (mod_name ^ ".t")]];
     let mp = Ppx_mod.get_mod_path () in
-    let mp = mp @ [ lmod_name.txt ] in
+    let mp = mp @ [ mod_name ] in
     let _, typ_ref = Uniq_ref.make_type_alias mp "t" in
     let ct = `Funptr (`Typ_id typ_ref) in
-    add_to_created_types (lmod_name.txt ^ ".t") ct;
+    add_to_created_types (mod_name ^ ".t") ct;
     let ident = Mod.ident (U.mk_lid (String.concat "." mp)) in
-    let mb = Mb.mk ~attrs lmod_name ident in
+    let mb = Mb.mk ~attrs lmod_name_opt ident in
     Str.module_ mb
 
   let typ name e =
@@ -1978,8 +1996,8 @@ let external' ~is_inline loc strpri =
         | "remove_labels" when is_inline ->
           remove_labels := true;
           false
-        | "ocaml.warnerror" | "ocaml.deprecated" | "ocaml.warning"
-        | "warnerror" | "deprecated" | "warning" ->
+        | "ocaml.warnerror" | "ocaml.deprecated" | "ocaml.warning" | "warnerror"
+        | "deprecated" | "warning" ->
           attrs := x :: !attrs;
           true
         | y -> error ~loc:x.attr_loc "unsupported attribute %s" y
@@ -2226,12 +2244,20 @@ let mapper _config _cookies =
             };
         _;
       } -> (
-      if Hashtbl.mem Keywords.htl_modules lname.txt then
-        U.error "module name %S is reserved" lname.txt;
+      let mod_name =
+        match lname.txt with
+        | None -> ""
+        | Some txt ->
+          if Hashtbl.mem Keywords.htl_modules txt then
+            U.error "module name %S is reserved" txt;
+          txt
+      in
       if txt = "cb" then (
         if !unsafe_depth_funptr <> 0 then
           U.error "static ocaml callbacks must be declared at the top level";
-        H.type_cb lname [ (Asttypes.Nolabel, exp) ] )
+        if mod_name = "" then
+          U.error "module for ocaml callback must have a name";
+        H.type_cb lname mod_name [ (Asttypes.Nolabel, exp) ] )
       else
         let s, l, loc =
           match exp.pexp_desc with
@@ -2250,7 +2276,8 @@ let mapper _config _cookies =
         check_context s;
         match s with
         | "int" | "uint" | "aint" ->
-          H.int_alias ~mod_name:lname.txt ~func_name:s l
+          if mod_name = "" then U.error "module for int_alias must have a name";
+          H.int_alias ~mod_name ~func_name:s l
         | _ -> U.error ~loc "unsupported function %S" s )
     | { pstr_desc = Pstr_extension (({ txt; loc }, _), _); _ }
       when List.mem ~eq:CCString.equal txt own_extensions ->
@@ -2305,18 +2332,18 @@ let mapper _config _cookies =
       in
       let na = mark_empty { a with pvb_expr = t } in
       { stri with pstr_desc = Pstr_value (Nonrecursive, [ na ]) }
-    | { pstr_desc = Pstr_module x; pstr_loc; _ } as stri ->
-      Scripts_structure.open_module x.pmb_name.txt;
-      let stri = default_mapper.structure_item mapper stri in
-      Scripts_structure.close_module pstr_loc;
-      stri
+    | { pstr_desc = Pstr_module x; pstr_loc; _ } as stri -> (
+      let f () = default_mapper.structure_item mapper stri in
+      match x.pmb_name.txt with
+      | Some n -> Scripts_structure.modul pstr_loc n f
+      | None -> Scripts_structure.module_anon pstr_loc f )
     | { pstr_desc = Pstr_recmodule l; pstr_loc } ->
       let l' =
         List.map l ~f:(fun x ->
-            Scripts_structure.open_module x.pmb_name.txt;
-            let r = default_mapper.module_binding mapper x in
-            Scripts_structure.close_module pstr_loc;
-            r)
+            let f () = default_mapper.module_binding mapper x in
+            match x.pmb_name.txt with
+            | Some n -> Scripts_structure.modul pstr_loc n f
+            | None -> Scripts_structure.module_anon pstr_loc f)
       in
       { pstr_desc = Pstr_recmodule l'; pstr_loc }
     | stri -> default_mapper.structure_item mapper stri
@@ -2440,23 +2467,27 @@ let mapper _config _cookies =
       error ~loc "extension '%s' is not allowed here" txt
     | { pexp_desc = Pexp_letmodule (name, mexpr, expr); _ } as pexp ->
       incr unsafe_depth_funptr;
-      Scripts_structure.open_let_module name.txt;
-      let mexpr' =
-        let r = default_mapper.module_expr mapper mexpr in
-        Scripts_structure.close_let_module_module mexpr.pmod_loc;
-        r
+      let mexpr', expr' =
+        match name.txt with
+        | Some txt ->
+          Scripts_structure.let_module mexpr.pmod_loc txt
+            ~fmexpr:(fun () -> default_mapper.module_expr mapper mexpr)
+            ~fexpr:(fun () -> default_mapper.expr mapper expr)
+        | None ->
+          let mexpr' =
+            Scripts_structure.module_anon mexpr.pmod_loc @@ fun () ->
+            default_mapper.module_expr mapper mexpr
+          in
+          let expr' = default_mapper.expr mapper expr in
+          (mexpr', expr')
       in
-      let expr' = default_mapper.expr mapper expr in
-      Scripts_structure.close_let_module_expr mexpr.pmod_loc;
       decr unsafe_depth_funptr;
       { pexp with pexp_desc = Pexp_letmodule (name, mexpr', expr') }
     | { pexp_desc = Pexp_pack m; _ } as pexp ->
-      let n = U.safe_mlname ~capitalize:true () in
-      Scripts_structure.open_module_anon n;
+      Scripts_structure.module_anon m.pmod_loc @@ fun () ->
       incr unsafe_depth_funptr;
       let r = default_mapper.expr mapper pexp in
       decr unsafe_depth_funptr;
-      Scripts_structure.close_module_anon m.pmod_loc;
       r
     | pexp -> default_mapper.expr mapper pexp
   in

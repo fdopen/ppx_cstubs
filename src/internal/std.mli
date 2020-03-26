@@ -52,6 +52,8 @@ module Util : sig
 
   val mk_loc : 'a -> 'a Location.loc
 
+  val mk_oloc : 'a -> 'a option Location.loc
+
   val mk_lid : ?loc:Ast_helper.loc -> string -> Longident.t Location.loc
 
   val mk_pat : string -> Parsetree.pattern

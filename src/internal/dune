@@ -18,9 +18,9 @@
  (synopsis "just ignore it")
  (public_name ppx_cstubs.internal)
  (private_modules attributes created_types ctypes_type_printing_fake evil_hack extract_c extract_c_ml gen_c gen_ml inline_lexer keywords main marshal_types mparsetree ocaml_config options ppx_cstubs run script_result std toplevel uniq_ref ppx_cstubs ppxc__script_real)
- (libraries re.perl unix integers containers num ppx_tools_versioned ocaml-migrate-parsetree ctypes compiler-libs.bytecomp compiler-libs.toplevel findlib findlib.top ppx_tools_versioned.metaquot_409 ppx_cstubs_internals)
- (preprocess (pps ppx_tools_versioned.metaquot_409))
+ (libraries re.perl unix integers containers num ppx_tools_versioned ocaml-migrate-parsetree ctypes compiler-libs.bytecomp compiler-libs.toplevel findlib findlib.top ppx_tools_versioned.metaquot_410 ppx_cstubs_internals)
+ (preprocess (pps ppx_tools_versioned.metaquot_410))
 ; broken .merlin generation ....
 ; (preprocess (per_module
-;              ((pps ppx_tools_versioned.metaquot_409) extract_c_ml created_types ppxc__script_real ppx_cstubs gen_ml uniq_ref)))
+;              ((pps ppx_tools_versioned.metaquot_410) extract_c_ml created_types ppxc__script_real ppx_cstubs gen_ml uniq_ref)))
  (modes byte))

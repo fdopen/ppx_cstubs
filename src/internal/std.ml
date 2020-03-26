@@ -53,6 +53,8 @@ module Util = struct
 
   let mk_loc s = Lo.mkloc s !Ast_helper.default_loc
 
+  let mk_oloc s = Lo.mkloc (Some s) !Ast_helper.default_loc
+
   let mk_lid ?(loc = !Ast_helper.default_loc) s =
     Lo.mkloc (Longident.parse s) loc
 
