@@ -88,10 +88,10 @@ module Extract : sig
   val variable_from_pattern : pattern -> string option
 
   val fun_def :
+    lookup:string ->
     bool ->
-    (Asttypes.arg_label * expression) list ->
     core_type ->
-    expression * (Asttypes.arg_label * expression) list
+    expression * (Asttypes.arg_label * expression) list * bool
 
   val constant_string : expression -> string option
 
@@ -196,31 +196,33 @@ end = struct
       (([%expr [%e t1] @-> [%e t2]] [@metaloc loc]), c1 || c2)
     | _ -> error ~loc "unsupported Ctypes.fn definition"
 
-  let rec fun_def is_inline accu typ =
+  let rec fun_def ~lookup is_inline accu found typ =
     let loc = typ.ptyp_loc in
     let type_conf is_inline t =
       let is_ocaml_typ, attribs = get_remove "ocaml_type" t.ptyp_attributes in
-      if is_ocaml_typ = false || is_inline = false then
-        fst @@ type_to_ctype ~lookup:None t
+      if is_ocaml_typ = false || is_inline = false then type_to_ctype ~lookup t
       else
         let () = check_no_attribs attribs in
         let t = { t with ptyp_attributes = attribs } in
         let e = U.marshal_to_str_expr t in
-        ([%expr Ctypes.ppxc__private_ocaml_typ [%e e]] [@metaloc loc])
+        (([%expr Ctypes.ppxc__private_ocaml_typ [%e e]] [@metaloc loc]), false)
     in
     match typ.ptyp_desc with
     | Ptyp_constr _ ->
       if accu = [] then error ~loc "function expected";
-      (type_conf is_inline typ, List.rev accu)
+      let r, f = type_conf is_inline typ in
+      (r, List.rev accu, f || found)
     | Ptyp_arrow (l, t1, t2) ->
       check_no_attribs_t typ;
-      let t1' = type_conf is_inline t1 in
+      let t1', found' = type_conf is_inline t1 in
       ( match l with
       | Nolabel | Labelled _ -> ()
       | Optional _ ->
         error ~loc:t1.ptyp_loc "optional parameters are not supported" );
-      fun_def is_inline ((l, t1') :: accu) t2
+      fun_def is_inline ~lookup ((l, t1') :: accu) (found' || found) t2
     | _ -> unsupported_typ typ.ptyp_loc
+
+  let fun_def ~lookup i t = fun_def ~lookup:(Some lookup) i [] false t
 
   let constant_string e =
     match e.pexp_desc with
@@ -761,13 +763,29 @@ end = struct
     let remove_labels =
       remove_labels || (is_inline && is_ocaml_operator name)
     in
-    let ret, el = Extract.fun_def is_inline [] v.pval_type in
+    let ret, el, rec' = Extract.fun_def ~lookup:name is_inline v.pval_type in
     let fun_expr = build_ctypes_fn (List.map ~f:snd el) ret in
     let id_stri_expr = Id.get () in
     let id_stri_ext = Id.get () in
+    let name_impl = if rec' then U.safe_mlname ~prefix:name () else name in
     let uniq_ref_id, fres =
-      Impl_mod.add_external id_stri_ext.Id.stri id_stri_expr.Id.stri ~name
+      Impl_mod.add_external ~name_check:(not rec') id_stri_ext.Id.stri
+        id_stri_expr.Id.stri ~name:name_impl
     in
+    ( if rec' then
+      let mp = Impl_mod.get_mod_path () in
+      let n = U.mk_ident_l [ name_impl ] in
+      let r = Uniq_ref.make mp ~retype:false name n in
+      (* slightly redundant. But it's an usual to name the function like
+         a Ctypes.typ value that is used to construct the function. I won't
+         waste time for a nicer  solution... *)
+      Impl_mod.add_entry
+        [%stri
+          include struct
+            [@@@ocaml.warning "-32"]
+
+            [%%s [ r.Uniq_ref.topmod_vb; r.Uniq_ref.topmod_ref ]]
+          end] );
     let vb = Vb.mk ~attrs (U.mk_pat name) fres in
     let fres = Str.value Asttypes.Nonrecursive [ vb ] in
     let marshal_info =
@@ -782,7 +800,7 @@ end = struct
           is_inline;
           remove_labels;
           c_name;
-          prim_name = name;
+          prim_name = name_impl;
           uniq_ref_id;
         }
       in

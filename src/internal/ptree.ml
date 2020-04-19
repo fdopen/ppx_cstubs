@@ -305,8 +305,8 @@ module Impl_mod = struct
     add_entry r.Ur.topmod_ref;
     r.Ur.main_ref
 
-  let add_external stri_external stri_expr ~name =
-    check_name true name;
+  let add_external ~name_check stri_external stri_expr ~name =
+    if name_check then check_name true name;
     let mod_path = get_mod_path () in
     let r = Ur.make mod_path ~retype:true name [%expr ()] in
     add_entry stri_external;

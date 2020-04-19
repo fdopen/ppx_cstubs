@@ -92,6 +92,7 @@ module Impl_mod : sig
     Parsetree.expression
 
   val add_external :
+    name_check:bool ->
     Parsetree.structure_item ->
     Parsetree.structure_item ->
     name:string ->
