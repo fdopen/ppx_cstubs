@@ -54,41 +54,20 @@ let prologue =
 #define PPXC_HAS_BUILTIN_CHOOSE_EXPR 1
 #endif
 
-#define PPXC__UD00(x) ('0' + ((char)(( (x) / UINT64_C(1)                    ) % UINT64_C(10))))
-#define PPXC__UD01(x) ('0' + ((char)(( (x) / UINT64_C(10)                   ) % UINT64_C(10)))), PPXC__UD00(x)
-#define PPXC__UD02(x) ('0' + ((char)(( (x) / UINT64_C(100)                  ) % UINT64_C(10)))), PPXC__UD01(x)
-#define PPXC__UD03(x) ('0' + ((char)(( (x) / UINT64_C(1000)                 ) % UINT64_C(10)))), PPXC__UD02(x)
-#define PPXC__UD04(x) ('0' + ((char)(( (x) / UINT64_C(10000)                ) % UINT64_C(10)))), PPXC__UD03(x)
-#define PPXC__UD05(x) ('0' + ((char)(( (x) / UINT64_C(100000)               ) % UINT64_C(10)))), PPXC__UD04(x)
-#define PPXC__UD06(x) ('0' + ((char)(( (x) / UINT64_C(1000000)              ) % UINT64_C(10)))), PPXC__UD05(x)
-#define PPXC__UD07(x) ('0' + ((char)(( (x) / UINT64_C(10000000)             ) % UINT64_C(10)))), PPXC__UD06(x)
-#define PPXC__UD08(x) ('0' + ((char)(( (x) / UINT64_C(100000000)            ) % UINT64_C(10)))), PPXC__UD07(x)
-#define PPXC__UD09(x) ('0' + ((char)(( (x) / UINT64_C(1000000000)           ) % UINT64_C(10)))), PPXC__UD08(x)
-#define PPXC__UD10(x) ('0' + ((char)(( (x) / UINT64_C(10000000000)          ) % UINT64_C(10)))), PPXC__UD09(x)
-#define PPXC__UD11(x) ('0' + ((char)(( (x) / UINT64_C(100000000000)         ) % UINT64_C(10)))), PPXC__UD10(x)
-#define PPXC__UD12(x) ('0' + ((char)(( (x) / UINT64_C(1000000000000)        ) % UINT64_C(10)))), PPXC__UD11(x)
-#define PPXC__UD13(x) ('0' + ((char)(( (x) / UINT64_C(10000000000000)       ) % UINT64_C(10)))), PPXC__UD12(x)
-#define PPXC__UD14(x) ('0' + ((char)(( (x) / UINT64_C(100000000000000)      ) % UINT64_C(10)))), PPXC__UD13(x)
-#define PPXC__UD15(x) ('0' + ((char)(( (x) / UINT64_C(1000000000000000)     ) % UINT64_C(10)))), PPXC__UD14(x)
-#define PPXC__UD16(x) ('0' + ((char)(( (x) / UINT64_C(10000000000000000)    ) % UINT64_C(10)))), PPXC__UD15(x)
-#define PPXC__UD17(x) ('0' + ((char)(( (x) / UINT64_C(100000000000000000)   ) % UINT64_C(10)))), PPXC__UD16(x)
-#define PPXC__UD18(x) ('0' + ((char)(( (x) / UINT64_C(1000000000000000000)  ) % UINT64_C(10)))), PPXC__UD17(x)
-#define PPXC__UD19(x) ('0' + ((char)(( (x) / UINT64_C(10000000000000000000) ) % UINT64_C(10)))), PPXC__UD18(x)
-#define PPXC__NSTR(x) ((x) >= 0 ? '0' : '-'), PPXC__UD19(((x) >= 0 ? ((uint64_t)(x)) : \
- ( (x) == INT64_MIN ? UINT64_C(9223372036854775808) : ((uint64_t)(-((int64_t)(x)))))))
+#define PPXC__UD00(x) (unsigned char)( (x) & UINT64_C(255) )
+#define PPXC__UD01(x) (unsigned char)( ( (x) >>  8u ) & UINT64_C(255) ), PPXC__UD00(x)
+#define PPXC__UD02(x) (unsigned char)( ( (x) >> 16u ) & UINT64_C(255) ), PPXC__UD01(x)
+#define PPXC__UD03(x) (unsigned char)( ( (x) >> 24u ) & UINT64_C(255) ), PPXC__UD02(x)
+#define PPXC__UD04(x) (unsigned char)( ( (x) >> 32u ) & UINT64_C(255) ), PPXC__UD03(x)
+#define PPXC__UD05(x) (unsigned char)( ( (x) >> 40u ) & UINT64_C(255) ), PPXC__UD04(x)
+#define PPXC__UD06(x) (unsigned char)( ( (x) >> 48u ) & UINT64_C(255) ), PPXC__UD05(x)
+#define PPXC__UD07(x) (unsigned char)( (x) >> 56u ), PPXC__UD06(x)
+#define PPXC__NSTR(x) ((x) >= 0 ? '0' : '-'), PPXC__UD07(((x) >= 0 ? ((uint64_t)(x)) : (-(uint64_t)(x))))
 
-#define PPXC__SUD00(x) ('0' + ((char)(( (x) / UINT32_C(1)                    ) % UINT32_C(10))))
-#define PPXC__SUD01(x) ('0' + ((char)(( (x) / UINT32_C(10)                   ) % UINT32_C(10)))), PPXC__SUD00(x)
-#define PPXC__SUD02(x) ('0' + ((char)(( (x) / UINT32_C(100)                  ) % UINT32_C(10)))), PPXC__SUD01(x)
-#define PPXC__SUD03(x) ('0' + ((char)(( (x) / UINT32_C(1000)                 ) % UINT32_C(10)))), PPXC__SUD02(x)
-#define PPXC__SUD04(x) ('0' + ((char)(( (x) / UINT32_C(10000)                ) % UINT32_C(10)))), PPXC__SUD03(x)
-#define PPXC__SUD05(x) ('0' + ((char)(( (x) / UINT32_C(100000)               ) % UINT32_C(10)))), PPXC__SUD04(x)
-#define PPXC__SUD06(x) ('0' + ((char)(( (x) / UINT32_C(1000000)              ) % UINT32_C(10)))), PPXC__SUD05(x)
-#define PPXC__SUD07(x) ('0' + ((char)(( (x) / UINT32_C(10000000)             ) % UINT32_C(10)))), PPXC__SUD06(x)
-#define PPXC__SUD08(x) ('0' + ((char)(( (x) / UINT32_C(100000000)            ) % UINT32_C(10)))), PPXC__SUD07(x)
-#define PPXC__SUD09(x) ('0' + ((char)(( (x) / UINT32_C(1000000000)           ) % UINT32_C(10)))), PPXC__SUD08(x)
-#define PPXC__SNSTR(x) ((x) >= 0 ? '0' : '-'), PPXC__SUD09(((x) >= 0 ? ((uint32_t)(x)) : \
-               ( (x) == INT32_MIN ? UINT32_C(2147483648) : ((uint32_t)(-((int64_t)(x)))))))
+#define PPXC__SUD00(x) (unsigned char)( (uint32_t)(x) & UINT32_C(255) )
+#define PPXC__SUD01(x) (unsigned char)( ( (uint32_t)(x) >>  8u ) & UINT32_C(255) ), PPXC__SUD00(x)
+#define PPXC__SUD02(x) (unsigned char)( ( (uint32_t)(x) >> 16u ) & UINT32_C(255) ), PPXC__SUD01(x)
+#define PPXC__SUD03(x) (unsigned char)(  (uint32_t)(x) >> 24u ), PPXC__SUD02(x)
 
 #ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE
 #if defined(__clang__) && __clang_major__ < 4
@@ -250,34 +229,34 @@ AHELPER_1(int64_t)
 #undef AHELPER_1
 
 #define PPXC_TYPE_HELPER_H_1(i,typ,stru,t1)                             \
-  (((uint64_t)(((sizeof (typ)) == (sizeof (t1))) &&                     \
-               ((offsetof(struct ppx_cstubs_alignof_ ## t1 ,x)) == (offsetof(struct stru,x))))) << UINT64_C(i))
+  (((unsigned)(((sizeof (typ)) == (sizeof (t1))) &&                     \
+               ((offsetof(struct ppx_cstubs_alignof_ ## t1 ,x)) == (offsetof(struct stru,x))))) << i)
 
-#define PPXC_INT_ALIGN_SIZE(typ,stru,example)   \
-  (PPXC_TYPE_HELPER_H_1(0,typ,stru,int) |       \
-   PPXC_TYPE_HELPER_H_1(1,typ,stru,int8_t) |    \
-   PPXC_TYPE_HELPER_H_1(2,typ,stru,int16_t) |   \
-   PPXC_TYPE_HELPER_H_1(3,typ,stru,int32_t) |   \
-   PPXC_TYPE_HELPER_H_1(4,typ,stru,int64_t))
+#define PPXC_INT_ALIGN_SIZE(typ,stru,example)    \
+  (PPXC_TYPE_HELPER_H_1(0u,typ,stru,int) |       \
+   PPXC_TYPE_HELPER_H_1(1u,typ,stru,int8_t) |    \
+   PPXC_TYPE_HELPER_H_1(2u,typ,stru,int16_t) |   \
+   PPXC_TYPE_HELPER_H_1(3u,typ,stru,int32_t) |   \
+   PPXC_TYPE_HELPER_H_1(4u,typ,stru,int64_t))
 
 #if !defined(__cplusplus) && ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || defined(PPXC_HAS_BUILTIN_TYPES_COMPATIBLE_P))
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                        \
-  (((uint64_t)(_Generic((ex),typ:1,default: 0))) << UINT64_C(i))
+  (((unsigned)(_Generic((ex),typ:1,default: 0))) << i)
 
 #define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                      \
-  (((uint64_t)((_Generic((ex),ct:1,default: 0))                     \
+  (((unsigned)((_Generic((ex),ct:1,default: 0))                     \
                && (sizeof(ct) == sizeof(ot))                        \
-               && (_Alignof(ct) == _Alignof(ot)))) << UINT64_C(i))
+               && (_Alignof(ct) == _Alignof(ot)))) << i)
 #else
 #define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                            \
-  (((uint64_t)(__builtin_types_compatible_p(ex_typ, typ))) << UINT64_C(i))
+  (((unsigned)(__builtin_types_compatible_p(ex_typ, typ))) << i)
 
 #define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                          \
-  (((uint64_t)((__builtin_types_compatible_p(ex_typ, ct))               \
+  (((unsigned)((__builtin_types_compatible_p(ex_typ, ct))               \
                && (sizeof(ct) == sizeof(ot))                            \
-               && (__alignof__(ct) == __alignof__(ot)))) << UINT64_C(i))
+               && (__alignof__(ct) == __alignof__(ot)))) << i)
 #endif
 
 #endif /*  !defined(__cplusplus) && ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) || defined(PPXC_HAS_BUILTIN_TYPES_COMPATIBLE_P)) */
@@ -304,48 +283,44 @@ namespace ppxc_types_compatible
    (ppxc_types_compatible::are_same<t1,t2>::ok)
 
 #define PPXC_TYPE_HELPER_H1(i,ex,ex_typ,typ)                           \
-  (((uint64_t)(PPXC_CXX_TYPES_COMPATIBLE(ex_typ, typ))) << UINT64_C(i))
+  (((unsigned)(PPXC_CXX_TYPES_COMPATIBLE(ex_typ, typ))) << i)
 
 #define PPXC_TYPE_HELPER_H2(i,ex,ex_typ,ct,ot)                          \
-  (((uint64_t)((PPXC_CXX_TYPES_COMPATIBLE(ex_typ, ct))                  \
+  (((unsigned)((PPXC_CXX_TYPES_COMPATIBLE(ex_typ, ct))                  \
                && (sizeof(ct) == sizeof(ot))                            \
-               && (PPXC_ALIGNOF(ct) == PPXC_ALIGNOF(ot)))) << UINT64_C(i))
+               && (PPXC_ALIGNOF(ct) == PPXC_ALIGNOF(ot)))) << i)
 #endif
 
 
 #ifdef PPXC_TYPE_HELPER_H1
 
-#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ)             \
-  (PPXC_TYPE_HELPER_H1(20,ex,ex_typ,signed char) |        \
-   PPXC_TYPE_HELPER_H1(21,ex,ex_typ,unsigned char) |      \
-   PPXC_TYPE_HELPER_H1(22,ex,ex_typ,short) |              \
-   PPXC_TYPE_HELPER_H1(23,ex,ex_typ,int) |                \
-   PPXC_TYPE_HELPER_H1(24,ex,ex_typ,long) |               \
-   PPXC_TYPE_HELPER_H1(25,ex,ex_typ,long long) |          \
-   PPXC_TYPE_HELPER_H1(26,ex,ex_typ,unsigned short) |     \
-   PPXC_TYPE_HELPER_H1(27,ex,ex_typ,unsigned int) |       \
-   PPXC_TYPE_HELPER_H1(28,ex,ex_typ,unsigned long) |      \
-   PPXC_TYPE_HELPER_H1(29,ex,ex_typ,unsigned long long) | \
-   PPXC_TYPE_HELPER_H1(30,ex,ex_typ,size_t) |             \
-   PPXC_TYPE_HELPER_H1(31,ex,ex_typ,int8_t) |             \
-   PPXC_TYPE_HELPER_H1(32,ex,ex_typ,int16_t) |            \
-   PPXC_TYPE_HELPER_H1(33,ex,ex_typ,int32_t) |            \
-   PPXC_TYPE_HELPER_H1(34,ex,ex_typ,int64_t) |            \
-   PPXC_TYPE_HELPER_H1(35,ex,ex_typ,uint8_t) |            \
-   PPXC_TYPE_HELPER_H1(36,ex,ex_typ,uint16_t) |           \
-   PPXC_TYPE_HELPER_H1(37,ex,ex_typ,uint32_t) |           \
-   PPXC_TYPE_HELPER_H1(38,ex,ex_typ,uint64_t) |           \
-   PPXC_TYPE_HELPER_H1(39,ex,ex_typ,intnat) |             \
-   PPXC_TYPE_HELPER_H1(40,ex,ex_typ,char) |               \
-   PPXC_TYPE_HELPER_H1(41,ex,ex_typ,bool) |               \
-   PPXC_TYPE_HELPER_H2(50,ex,ex_typ,long,intnat) |        \
-   PPXC_TYPE_HELPER_H2(51,ex,ex_typ,long long,intnat) |   \
-   PPXC_TYPE_HELPER_H2(52,ex,ex_typ,long,int32_t) |       \
-   PPXC_TYPE_HELPER_H2(53,ex,ex_typ,long,int64_t) |       \
-   PPXC_TYPE_HELPER_H2(54,ex,ex_typ,long long,int64_t))
+#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ)              \
+  (PPXC_TYPE_HELPER_H1(5u,ex,ex_typ,signed char) |         \
+   PPXC_TYPE_HELPER_H1(6u,ex,ex_typ,unsigned char) |       \
+   PPXC_TYPE_HELPER_H1(7u,ex,ex_typ,short) |               \
+   PPXC_TYPE_HELPER_H1(8u,ex,ex_typ,int) |                 \
+   PPXC_TYPE_HELPER_H1(9u,ex,ex_typ,long) |                \
+   PPXC_TYPE_HELPER_H1(10u,ex,ex_typ,long long) |          \
+   PPXC_TYPE_HELPER_H1(11u,ex,ex_typ,unsigned short) |     \
+   PPXC_TYPE_HELPER_H1(12u,ex,ex_typ,unsigned int) |       \
+   PPXC_TYPE_HELPER_H1(13u,ex,ex_typ,unsigned long) |      \
+   PPXC_TYPE_HELPER_H1(14u,ex,ex_typ,unsigned long long) | \
+   PPXC_TYPE_HELPER_H1(15u,ex,ex_typ,int8_t) |             \
+   PPXC_TYPE_HELPER_H1(16u,ex,ex_typ,int16_t) |            \
+   PPXC_TYPE_HELPER_H1(17u,ex,ex_typ,int32_t) |            \
+   PPXC_TYPE_HELPER_H1(18u,ex,ex_typ,int64_t) |            \
+   PPXC_TYPE_HELPER_H1(19u,ex,ex_typ,uint8_t) |            \
+   PPXC_TYPE_HELPER_H1(20u,ex,ex_typ,uint16_t) |           \
+   PPXC_TYPE_HELPER_H1(21u,ex,ex_typ,uint32_t) |           \
+   PPXC_TYPE_HELPER_H1(22u,ex,ex_typ,uint64_t) |           \
+   PPXC_TYPE_HELPER_H1(23u,ex,ex_typ,intnat) |             \
+   PPXC_TYPE_HELPER_H1(24u,ex,ex_typ,char) |               \
+   PPXC_TYPE_HELPER_H1(25u,ex,ex_typ,bool) |               \
+   PPXC_TYPE_HELPER_H2(26u,ex,ex_typ,long long,intnat) |   \
+   PPXC_TYPE_HELPER_H2(27u,ex,ex_typ,long long,int64_t))
 
 #else
-#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ) UINT64_C(0)
+#define PPXC_TYPE_HELPER_OPAQUE_TC(ex,ex_typ) 0u
 #endif /* ifdef PPXC_TYPE_HELPER_H1 */
 
 #ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE
@@ -353,29 +328,29 @@ namespace ppxc_types_compatible
   ( PPXC_CLASSIFY_TYPE(var) == PPXC_CLASSIFY_TYPE(0) ?          \
     (PPXC_INT_ALIGN_SIZE(typ,stru,var)) :                       \
     (PPXC_CLASSIFY_TYPE(var) == PPXC_CLASSIFY_TYPE((void*)0) ?  \
-     (UINT64_C(1)<< UINT64_C(60)) : UINT64_C(0)) )
+     (1u << 28u) : 0u) )
 #else
-#define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,var) UINT64_C(0)
+#define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,var) 0u
 #endif
 
 #define PPXC_OPAQUE(typ,stru,ex)                                  \
   (PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ) |                           \
    PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,ex) |                      \
-   (((uint64_t)(PPXC_IS_UNSIGNED(typ))) << UINT64_C(5)))
+   (((unsigned)(PPXC_IS_UNSIGNED(typ))) << 29u))
 
-#define PPXC_INTALIAS(typ,stru,ex)                        \
-  (PPXC_INT_ALIGN_SIZE(typ,stru,ex)                     | \
-   PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ)                   | \
-   (((uint64_t)(PPXC_IS_INTEGER_DEF_TRUE(ex)) << UINT64_C(62))) | \
-   (((uint64_t)(((typ) (-1)) > 0)) << UINT64_C(63)))
+#define PPXC_INTALIAS(typ,stru,ex)                           \
+  (PPXC_INT_ALIGN_SIZE(typ,stru,ex)                     |    \
+   PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ)                   |    \
+   (((unsigned)(PPXC_IS_INTEGER_DEF_TRUE(ex)) << 28u))  |    \
+   (((unsigned)(((typ) (-1)) > 0)) << 29u))
 
 /* Neither `sizeof(mem) == sizeof(typ)` nor
    `__builtin_types_compatible_p (__typeof__ (mem), typ)`, nor
    `(((__typeof__ (mem))-1) < 1) == ((typ)-1 < 1)` hold. */
 
-#define PPXC_ENUM_MEMBER_CHECK(mem,typ)               \
-  (((unsigned)(sizeof(mem) <= 8 ))  |                 \
-   (((unsigned)(PPXC_IS_INTEGER_DEF_TRUE(mem))) <<  1u) |     \
+#define PPXC_ENUM_MEMBER_CHECK(mem,typ)                   \
+  (((unsigned)(sizeof(mem) <= 8 ))  |                     \
+   (((unsigned)(PPXC_IS_INTEGER_DEF_TRUE(mem))) << 1u) |  \
    (((unsigned)( sizeof(mem) <= sizeof(typ))) << 2u))
 
 #if defined(__clang__) && (__clang_major__ > 3 || ((__clang_major__ == 3) && (__clang_minor__ >= 3)))
@@ -519,19 +494,26 @@ type extract_info = {
 
 let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
-let prepare_extract_int ?(bit32 = false) ~loc check expr =
+type extract_int =
+  [ `Unchecked_U8
+  | `Unchecked_U32
+  | `Any_int
+  | `Int_type of string
+  ]
+
+let prepare_extract_int ~loc etyp expr =
   let com_loc = Std.Util.cloc_comment loc in
   let s_check =
-    match check with
-    | `Disable -> ""
+    match etyp with
+    | `Unchecked_U8 | `Unchecked_U32 -> ""
     | `Any_int | `Int_type _ ->
       let assign =
-        match check with
+        match etyp with
         | `Any_int -> ""
         | `Int_type ctype ->
           let var = Std.Util.safe_cname ~prefix:"type_defined" in
           Printf.sprintf "\n%s %s = %s;" ctype var expr
-        | `Disable -> assert false
+        | `Unchecked_U8 | `Unchecked_U32 -> assert false
       in
       let var = Std.Util.safe_cname ~prefix:"extract_is_constexpr" in
       Printf.sprintf
@@ -542,11 +524,31 @@ char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
         com_loc assign var expr
         (Std.Util.no_c_comments expr)
   in
-  let gen ~check_extract prepend info =
+  let expr, prepend =
+    match etyp with
+    | `Unchecked_U32 ->
+      let var = Std.Util.safe_cname ~prefix:expr in
+      let prepend =
+        Printf.sprintf
+          {|#ifndef __cplusplus
+DISABLE_LIMIT_WARNINGS_PUSH()
+enum { %s = (%s) };
+DISABLE_LIMIT_WARNINGS_POP()
+#else
+#define %s (%s)
+#endif
+|}
+          var expr var expr
+      in
+      (var, prepend)
+    | `Any_int | `Int_type _ | `Unchecked_U8 -> (expr, "")
+  in
+  let gen ~etyp prepend info =
     let stringify =
-      if check_extract then "PPXC__SUD01"
-      else if bit32 then "PPXC__SNSTR"
-      else "PPXC__NSTR"
+      match etyp with
+      | `Unchecked_U8 -> "PPXC__SUD00"
+      | `Unchecked_U32 -> "PPXC__SUD03"
+      | `Any_int | `Int_type _ -> "PPXC__NSTR"
     in
     let id = cnt () in
     let ar = int_to_char_array id in
@@ -555,7 +557,7 @@ char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
         {|%s
 %s
 DISABLE_LIMIT_WARNINGS_PUSH()
-char ppx_c_extract_char_array_%d[] = {
+unsigned char ppx_c_extract_char_array_%d[] = {
 'P','P','X','C','_','C','O','N','S','T','_','N','R','_', %s '|',
 %s(%s),
 '|', %s '_','R','N','_','T','S','N','O','C','_','C','X','P','P', '\0' };
@@ -565,27 +567,28 @@ DISABLE_LIMIT_WARNINGS_POP()
     in
     (id, s)
   in
-  let id, res_str1 = gen ~check_extract:false "" expr in
+  let id, res_str1 = gen ~etyp prepend expr in
   let res, src2 =
-    match check with
-    | `Disable -> ({ id; intern = Unchecked_integer }, res_str1)
-    | x -> (
+    match etyp with
+    | `Unchecked_U8 | `Unchecked_U32 ->
+      ({ id; intern = Unchecked_integer }, res_str1)
+    | `Any_int | `Int_type _ -> (
       let s_int = Printf.sprintf "( PPXC_IS_INTEGER_DEF_TRUE(%s) )" expr in
-      let int_size = if bit32 then "32" else "64" in
       let s_min =
-        Printf.sprintf "( (%s) >= 0 || (%s) >= INT%s_MIN )" expr expr int_size
+        Printf.sprintf "( (%s) >= 0 || (%s) >= INT64_MIN )" expr expr
       in
       let s_max =
-        Printf.sprintf "( (%s) <= 0 || (%s) <= UINT%s_MAX )" expr expr int_size
+        Printf.sprintf "( (%s) <= 0 || (%s) <= UINT64_MAX )" expr expr
       in
       let cstr =
         Printf.sprintf
           "(((unsigned)(%s)) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u))"
           s_int s_min s_max
       in
-      match x with
+      match etyp with
+      | `Unchecked_U8 | `Unchecked_U32 -> assert false
       | `Any_int ->
-        let id_x, str = gen ~check_extract:true res_str1 cstr in
+        let id_x, str = gen ~etyp:`Unchecked_U8 res_str1 cstr in
         ({ id; intern = Integer_no_type id_x }, str)
       | `Int_type ctype ->
         let s_user_min =
@@ -597,13 +600,12 @@ DISABLE_LIMIT_WARNINGS_POP()
             expr ctype
         in
         let id_x, str =
-          gen ~check_extract:true res_str1
+          gen ~etyp:`Unchecked_U8 res_str1
           @@ Printf.sprintf
                "( %s | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
                cstr s_user_min s_user_max
         in
-        ({ id; intern = Integer id_x }, str)
-      | `Disable -> assert false )
+        ({ id; intern = Integer id_x }, str) )
   in
   (res, s_check, src2)
 
@@ -736,54 +738,63 @@ type extract_error =
   | Underflow of string
   | Not_an_integer
 
-let normalise_int str =
-  let len = String.length str in
-  if len < 1 then str
-  else
-    let b = Buffer.create len in
-    let start =
-      match str.[0] with
-      | '-' as c ->
-        Buffer.add_char b c;
-        1
-      | _ -> 0
+let normalise_int r str =
+  match String.length str with
+  | 1 -> Char.code str.[0] |> string_of_int
+  | 4 ->
+    let c i = Char.code str.[i] |> Unsigned.UInt32.of_int in
+    let open Unsigned.UInt32.Infix in
+    let e = (c 0 lsl 24) lor (c 1 lsl 16) lor (c 2 lsl 8) lor c 3 in
+    Unsigned.UInt32.to_string e
+  | 9 -> (
+    let c i = Char.code str.[i] |> Unsigned.UInt64.of_int in
+    let open Unsigned.UInt64.Infix in
+    let e =
+      (c 1 lsl 56)
+      lor (c 2 lsl 48)
+      lor (c 3 lsl 40)
+      lor (c 4 lsl 32)
+      lor (c 5 lsl 24)
+      lor (c 6 lsl 16)
+      lor (c 7 lsl 8)
+      lor c 8
     in
-    let rec iter i =
-      if i >= len then Buffer.add_char b '0'
-      else
-        match str.[i] with
-        | '0' -> iter (succ i)
-        | _ -> Buffer.add_substring b str i (len - i)
-    in
-    iter start;
-    Buffer.contents b
+    let e = Unsigned.UInt64.to_string e in
+    match str.[0] with
+    | '-' -> "-" ^ e
+    | '0' -> e
+    | _ -> r.return (Error Info_not_found) )
+  | _ -> r.return (Error Info_not_found)
 
 let extract info htl =
   with_return @@ fun r ->
+  let er er = r.return (Error er) in
   let extract_single id =
     match Hashtbl.find htl id with
-    | exception Not_found -> r.return (Error Info_not_found)
+    | exception Not_found -> er Info_not_found
     | s -> s
   in
   let res = extract_single info.id in
-  match info.intern with
-  | String -> Ok res
-  | Unchecked_integer -> Ok (normalise_int res)
-  | Integer x | Integer_no_type x ->
-    let res = normalise_int res in
-    let int' =
-      match int_of_string @@ extract_single x with
-      | exception Failure _ -> r.return (Error Info_not_found)
-      | x -> x
-    in
-    let er er = r.return (Error er) in
-    if int' land (1 lsl 0) = 0 then er Not_an_integer;
-    if int' land (1 lsl 1) = 0 then er (Underflow res);
-    if int' land (1 lsl 2) = 0 then er (Overflow res);
-    ( match info.intern with
-    | Integer _ ->
-      if int' land (1 lsl 3) = 0 then er (Underflow res);
-      if int' land (1 lsl 4) = 0 then er (Overflow res)
-    | Integer_no_type _ -> ()
-    | String | Unchecked_integer -> assert false );
-    Ok res
+  ( match info.intern with
+  | String -> r.return (Ok res)
+  | Unchecked_integer | Integer _ | Integer_no_type _ -> () );
+  let res = normalise_int r res in
+  let int' =
+    match info.intern with
+    | String -> assert false
+    | Unchecked_integer -> r.return (Ok res)
+    | Integer x | Integer_no_type x ->
+      let s = extract_single x in
+      if String.length s <> 1 then er Info_not_found;
+      Char.code s.[0]
+  in
+  if int' land (1 lsl 0) = 0 then er Not_an_integer;
+  if int' land (1 lsl 1) = 0 then er (Underflow res);
+  if int' land (1 lsl 2) = 0 then er (Overflow res);
+  ( match info.intern with
+  | Integer _ ->
+    if int' land (1 lsl 3) = 0 then er (Underflow res);
+    if int' land (1 lsl 4) = 0 then er (Overflow res)
+  | Integer_no_type _ -> ()
+  | String | Unchecked_integer -> assert false );
+  Ok res

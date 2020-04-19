@@ -20,10 +20,16 @@ type extract_info
 
 val prologue : string
 
+type extract_int =
+  [ `Unchecked_U8
+  | `Unchecked_U32
+  | `Any_int
+  | `Int_type of string
+  ]
+
 val prepare_extract_int :
-  ?bit32:bool ->
   loc:Mparsetree.Ast_cur.Ast_helper.loc ->
-  [ `Disable | `Any_int | `Int_type of string ] ->
+  extract_int ->
   string ->
   extract_info * string * string
 

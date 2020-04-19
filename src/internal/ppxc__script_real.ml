@@ -273,9 +273,9 @@ module Const_phase0 = struct
     | Extract_c.Underflow s -> U.error ~loc "number too small:%s" s
     | Extract_c.Not_an_integer -> U.error ~loc "constant is not an integer"
 
-  let add ~info_str id loc str =
+  let add ~info_str id loc str x =
     assert (!compiled = false);
-    let ri, s1, s2 = Extract_c.prepare_extract_int ~loc `Any_int str in
+    let ri, s1, s2 = Extract_c.prepare_extract_int ~loc x str in
     let exn = U.error_exn "%s" info_str in
     if s1 <> "" then C_content_phase0.add_extract_header s1 loc exn;
     let h s = Hashtbl.replace htl_id_entries id (`Int_no_expr, s) in
@@ -296,36 +296,42 @@ module Const = struct
     | Extract_c_ml.Underflow -> U.error ~loc "number too small: %s" s
     | Extract_c_ml.Expr x -> x
 
-  let add ?bit32 ?(disable_checks = false) ~no_expr id loc t str ~info_str =
-    assert (!compiled = false);
-    let einfo =
-      match Extract_c_ml.prepare t with
-      | None ->
-        (* TODO: fixme. Special case for strings? *)
-        if t == Obj.magic Ctypes.string then `String
-        else
-          U.error "can't extract constants of type %s" (Ctypes.string_of_typ t)
-      | Some i -> `Int i
-    in
-    let rinfo, s1, s2 =
-      match einfo with
-      | `Int einf ->
-        let { Extract_c_ml.ctype; _ } = einf in
-        let check = if disable_checks then `Disable else `Int_type ctype in
-        Extract_c.prepare_extract_int ?bit32 check ~loc str
-      | `String -> Extract_c.prepare_extract_string ~loc str
+  let add ~info_str id loc x str =
+    let (rinfo, s1, s2), einfo =
+      match x with
+      | `Any t -> (
+        match Extract_c_ml.prepare t with
+        | None ->
+          (* TODO: fixme. Special case for strings? *)
+          if t != Obj.magic Ctypes.string then
+            U.error "can't extract constants of type %s"
+              (Ctypes.string_of_typ t);
+          (Extract_c.prepare_extract_string ~loc str, `String)
+        | Some einf ->
+          let { Extract_c_ml.ctype; _ } = einf in
+          (Extract_c.prepare_extract_int ~loc (`Int_type ctype) str, `Int einf)
+        )
+      | `U8 | `U32 | `U32_to_expr | `A64 ->
+        let p =
+          match x with
+          | `U8 -> `Unchecked_U8
+          | `U32 | `U32_to_expr -> `Unchecked_U32
+          | `A64 -> `Any_int
+          | `Any _ -> assert false
+        in
+        (Extract_c.prepare_extract_int ~loc p str, `Int_no_expr)
     in
     let exn = U.error_exn "Failed to extract %s" info_str in
     if s1 <> "" then C_content.add_extract_header s1 loc exn;
     let h s =
       Hashtbl.replace htl_id_entries id (einfo, s);
-      if no_expr = false then
-        match einfo with
-        | `Int einfo ->
-          Extract_c_ml.gen einfo s
-          |> expr_exn loc s
-          |> Hashtbl.replace G.htl_expr id
-        | `String -> U.str_expr s |> Hashtbl.replace G.htl_expr id
+      match x with
+      | `U32_to_expr ->
+        let i64 = Int64.of_string s in
+        if i64 > Int64.of_int max_int then U.error ~loc "number too large: %s" s;
+        let e = U.int_expr ~loc (Int64.to_int i64) in
+        Hashtbl.replace G.htl_expr id e
+      | `U8 | `U32 | `A64 | `Any _ -> ()
     in
     let f obj =
       match Extract_c.extract rinfo obj with
@@ -470,16 +476,14 @@ module type Opaque_result = sig
 end
 
 module Int_alias = struct
-  let is_set r x =
-    let open Unsigned.UInt64.Infix in
-    r land (Unsigned.UInt64.one lsl x) <> Unsigned.UInt64.zero
+  let is_set r x = r land (1 lsl x) <> 0
 
   let int ?(strict = false) ctyp r : (module Ppx_cstubs.Types.Signed) * 'a * 'b
       =
     let emulate = Options.(!mode = Emulate) in
     if not emulate then (
-      if is_set r 62 = false then U.error "type %s is not an integer type" ctyp;
-      if is_set r 63 then U.error "type %s is unsigned" ctyp );
+      if is_set r 28 = false then U.error "type %s is not an integer type" ctyp;
+      if is_set r 29 then U.error "type %s is unsigned" ctyp );
     let g (type a) (t : a Ctypes.typ) (m : (module Signed.S with type t = a)) =
       ( module struct
         include (val m)
@@ -533,22 +537,22 @@ module Int_alias = struct
     in
     let ws64 = Ocaml_config.word_size () = 64 in
     if emulate then f `Int
-    else if is_set r 39 then f `Intnat
-    else if is_set r 31 then f `Int8
-    else if is_set r 32 then f `Int16
-    else if ws64 && is_set r 23 && is_set r 3 then f `Int
+    else if is_set r 23 then f `Intnat
+    else if is_set r 15 then f `Int8
+    else if is_set r 16 then f `Int16
+    else if ws64 && is_set r 8 && is_set r 3 then f `Int
     else if strict = false && ws64 && is_set r 0 && is_set r 3 then f `Int
-    else if is_set r 33 then f `Int32
-    else if is_set r 34 then f `Int64
+    else if is_set r 17 then f `Int32
+    else if is_set r 18 then f `Int64
     else if strict = false && is_set r 1 then f `Int8
     else if strict = false && is_set r 2 then f `Int16
     else if strict = false && is_set r 3 then f `Int32
     else if strict = false && is_set r 4 then f `Int64
-    else if is_set r 20 then f `Schar
-    else if is_set r 22 then f `Short
-    else if is_set r 23 then f `Sint
-    else if is_set r 24 then f `Long
-    else if is_set r 25 then f `Long_long
+    else if is_set r 5 then f `Schar
+    else if is_set r 7 then f `Short
+    else if is_set r 8 then f `Sint
+    else if is_set r 9 then f `Long
+    else if is_set r 10 then f `Long_long
     else if ws64 && is_set r 0 && is_set r 3 then f `Int
     else if is_set r 1 then f `Int8
     else if is_set r 2 then f `Int16
@@ -563,8 +567,8 @@ module Int_alias = struct
     ignore (strict : bool option);
     let emulate = Options.(!mode = Emulate) in
     if not emulate then (
-      if is_set r 62 = false then U.error "type %s is not an integer type" ctyp;
-      if is_set r 63 = false then U.error "type %s is signed" ctyp );
+      if is_set r 28 = false then U.error "type %s is not an integer type" ctyp;
+      if is_set r 29 = false then U.error "type %s is signed" ctyp );
     let g (type a) (t : a Ctypes.typ) (m : (module Unsigned.S with type t = a))
         =
       ( module struct
@@ -614,16 +618,15 @@ module Int_alias = struct
           "Unsigned.ULLong" )
     in
     if emulate then f `Uint
-    else if is_set r 35 then f `Uint8
-    else if is_set r 36 then f `Uint16
-    else if is_set r 37 then f `Uint32
-    else if is_set r 38 then f `Uint64
-    else if is_set r 21 then f `Uchar
-    else if is_set r 26 then f `Ushort
-    else if is_set r 27 then f `Uint
-    else if is_set r 28 then f `Ulong
-    else if is_set r 29 then f `Ullong
-    else if is_set r 30 then f `Size_t
+    else if is_set r 19 then f `Uint8
+    else if is_set r 20 then f `Uint16
+    else if is_set r 21 then f `Uint32
+    else if is_set r 22 then f `Uint64
+    else if is_set r 6 then f `Uchar
+    else if is_set r 11 then f `Ushort
+    else if is_set r 12 then f `Uint
+    else if is_set r 13 then f `Ulong
+    else if is_set r 14 then f `Ullong
     else if is_set r 0 then f `Uint
     else if is_set r 1 then f `Uint8
     else if is_set r 2 then f `Uint16
@@ -636,7 +639,7 @@ module Int_alias = struct
     let r =
       match Const_phase0.extract_single id with
       | None -> U.error "Can't find type info for %S\n" ctyp
-      | Some r -> Unsigned.UInt64.of_string r
+      | Some r -> int_of_string r
     in
     (id, r)
 end
@@ -645,7 +648,7 @@ module Extract_phase0 = struct
   let bound_constant id_loc str =
     let id, loc = U.from_id_loc_param id_loc in
     let info_str = Printf.sprintf "Failed to extract constant %S" str in
-    Const_phase0.add ~info_str id loc str
+    Const_phase0.add ~info_str id loc str `Any_int
 
   let header (s : string) =
     C_content_phase0.add_header s !Ast_helper.default_loc
@@ -671,7 +674,7 @@ struct %s {char c; %s x;};
     let to_extract = Printf.sprintf "PPXC_INTALIAS(%s,%s,%s)" ctyp stru expl in
     let info_str = Printf.sprintf "type info %s" ctyp in
     C_content_phase0.add_extract_header txt loc exn;
-    Const_phase0.add ~info_str id loc to_extract
+    Const_phase0.add ~info_str id loc to_extract `Unchecked_U32
 end
 
 (* Sring comparison relies on Extract_c.normalise_int *)
@@ -779,7 +782,7 @@ module Extract = struct
   let constant id_loc str _ t =
     let id, loc = U.from_id_loc_param id_loc in
     let info_str = Printf.sprintf "constant %S" str in
-    Const.add ~no_expr:true ~info_str id loc t str
+    Const.add ~info_str id loc (`Any t) str
 
   let bound_constant id_loc str t_expr t =
     let id, loc = U.from_id_loc_param id_loc in
@@ -807,8 +810,7 @@ module Extract = struct
         max
     in
     let info_str = Printf.sprintf "constant %S" str in
-    Const.add ~disable_checks:true ~no_expr:true ~bit32:true ~info_str id loc
-      Ctypes.camlint extr;
+    Const.add ~info_str id loc `U8 extr;
     let er () = U.error "constant %S not found" str in
     match Const_phase0.extract_single id with
     | None -> er ()
@@ -940,11 +942,10 @@ DISABLE_CONST_WARNINGS_POP()
         field_name var1 field_name var2
     in
     let info_str = Printf.sprintf "field %s in %s" field_name ctyp in
-    Const.add ~info_str ~bit32:true ~no_expr:true ~disable_checks:true id loc
-      Ctypes.camlint to_extract;
+    Const.add ~info_str id loc `U32 to_extract;
     Ctypes.field stru field_name field_type
 
-  let size_align id_loc_size id_loc_align ~no_expr ctyp =
+  let size_align id_loc_size id_loc_align x ctyp =
     let id_size, loc_size = U.from_id_loc_param id_loc_size in
     let id_align, loc_align = U.from_id_loc_param id_loc_align in
     let size_str = Printf.sprintf "sizeof(%s)" ctyp in
@@ -956,16 +957,14 @@ DISABLE_CONST_WARNINGS_POP()
     let exn = U.error_exn "%s not defined?" ctyp in
     C_content.add_extract_header txt loc_size exn;
     let align_str = Printf.sprintf "offsetof(struct %s,x)" struct_name in
-    Const.add ~bit32:true ~info_str:("size of " ^ ctyp) ~no_expr
-      ~disable_checks:true id_size loc_size Ctypes.camlint size_str;
-    Const.add ~bit32:true ~info_str:("align of " ^ ctyp) ~no_expr
-      ~disable_checks:true id_align loc_align Ctypes.camlint align_str;
+    Const.add ~info_str:("size of " ^ ctyp) id_size loc_size x size_str;
+    Const.add ~info_str:("align of " ^ ctyp) id_align loc_align x align_str;
     struct_name
 
   let seal id_loc_size id_loc_align stru =
     Ctypes.seal stru;
     let ctyp = Gen_c.string_of_typ_exn stru in
-    ignore (size_align id_loc_size id_loc_align ~no_expr:false ctyp : string)
+    ignore (size_align id_loc_size id_loc_align `U32_to_expr ctyp : string)
 
   let get_enum_id = function
     | Marshal_types.E_normal x
@@ -1031,16 +1030,13 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
         let exn = U.error_exn "enum %s not defined?" cname in
         C_content.add_extract_header txt c.ee_loc exn;
         let info_str = "enum constant " ^ cname in
-        Const.add ~no_expr:true ~disable_checks:true ~info_str c.ee_int_id
-          c.ee_loc Ctypes.int64_t cname;
+        Const.add ~info_str c.ee_int_id c.ee_loc `A64 cname;
         let info_str = "type of " ^ c.ee_cname in
         Printf.sprintf "PPXC_ENUM_MEMBER_CHECK(%s,%s)" cname type_str
-        |> Const.add ~bit32:true ~no_expr:true ~disable_checks:true ~info_str
-             c.ee_type_check c.ee_loc Ctypes.camlint);
+        |> Const.add ~info_str c.ee_type_check c.ee_loc `U8);
     let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ type_str ^ ")" in
     let eid = get_enum_id enum_type_id in
-    Const.add ~bit32:true ~no_expr:true ~disable_checks:true ~info_str eid
-      enum_loc Ctypes.camlint str;
+    Const.add ~info_str eid enum_loc `U32 str;
     (* wrong size, but not used inside extraction script *)
     enum_fake_view l enum_is_typedef enum_name Ctypes.int32_t
 
@@ -1059,30 +1055,29 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
   let aint_alias id_loc ~mod_name:_ ?strict ctyp :
       (module Ppx_cstubs.Types.Unkown_signedness) =
     let _, r = Int_alias.id_r id_loc ctyp in
-    if Int_alias.is_set r 63 then
+    if Int_alias.is_set r 29 then
       let md, _, _ = Int_alias.uint ?strict ctyp r in
       md
     else
       let md, _, _ = Int_alias.int ?strict ctyp r in
       (module (val md))
 
-  let common_abstract ~size ~align ~no_expr ctyp =
+  let common_abstract ~size ~align x ctyp =
     let _, loc = U.from_id_loc_param size in
     let cloc = U.cloc_comment loc in
     let var = U.safe_cname ~prefix:ctyp in
     let txt = Printf.sprintf "%s\n%s %s;\n" cloc ctyp var in
     let exn = U.error_exn "%s not defined?" ctyp in
     C_content.add_extract_header txt loc exn;
-    let stru' = size_align size align ~no_expr ctyp in
+    let stru' = size_align size align x ctyp in
     (stru', var)
 
   let opaque ~size ~align ~typ ~mi:_ ctyp : (module Opaque_result) =
-    let stru, var = common_abstract ~size ~align ~no_expr:true ctyp in
+    let stru, var = common_abstract ~size ~align `U32 ctyp in
     let id, loc = U.from_id_loc_param typ in
-    let to_extract = Printf.sprintf "PPXC_OPAQUE(%s, %s, %s)" ctyp stru var in
+    let te = Printf.sprintf "PPXC_OPAQUE(%s, %s, %s)" ctyp stru var in
     let info_str = Printf.sprintf "type info %s" ctyp in
-    Const.add ~info_str ~no_expr:true ~disable_checks:true id loc
-      Ctypes.uint64_t to_extract;
+    Const.add ~info_str id loc `U32 te;
     ( module struct
       type t = [ `a ] Ctypes_static.abstract
 
@@ -1092,7 +1087,7 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
     end )
 
   let abstract ~size ~align ctyp =
-    ignore (common_abstract ~size ~align ~no_expr:false ctyp : string * string);
+    ignore (common_abstract ~size ~align `U32_to_expr ctyp : string * string);
     Ctypes.abstract ~name:ctyp ~size:1 ~alignment:1
 
   let ocaml_funptr _ _ = () (* just to trigger errors early *)
@@ -1107,9 +1102,9 @@ module Build = struct
 
   let extract_single_str id = Const.extract_single id
 
-  let extract_single_int id conv =
+  let extract_single_int id =
     match extract_single_str id with
-    | Some x -> ( try Some (conv x) with Failure _ -> None )
+    | Some x -> ( try Some (int_of_string x) with Failure _ -> None )
     | None -> None
 
   let constant id_loc str t_expr t =
@@ -1140,7 +1135,7 @@ module Build = struct
       match (Const_phase0.extract_single id, Const.extract_single id) with
       | None, Some _ | Some _, None | None, None ->
         U.error ~loc "couldn't extract constant %S" str
-      | Some a, Some b -> (a, Unsigned.UInt64.of_string b)
+      | Some a, Some b -> (a, int_of_string b)
     in
     if Options.(!mode <> Emulate) then (
       if not (is_set ck 0) then Const_phase0.f_er loc (Extract_c.Underflow res);
@@ -1224,7 +1219,7 @@ module Build = struct
 
   let enum_size_unsigned id name =
     let res =
-      match extract_single_int id int_of_string with
+      match extract_single_int id with
       | Some x -> x
       | None -> U.error "can't determine type of enum %s" name
     in
@@ -1294,7 +1289,7 @@ module Build = struct
           let cname = c.ee_cname in
           if Options.(!mode <> Emulate) then (
             let id =
-              match extract_single_int c.ee_type_check int_of_string with
+              match extract_single_int c.ee_type_check with
               | None -> U.error "can't determine type info of %S\n" enum_name
               | Some x -> x
             in
@@ -1366,7 +1361,7 @@ module Build = struct
   let field id_loc stru field_name field_type =
     let id, _ = U.from_id_loc_param id_loc in
     let r =
-      match extract_single_int id int_of_string with
+      match extract_single_int id with
       | Some x -> x
       | None ->
         U.error "couldn't extract info for field %s in %s" field_name
@@ -1440,7 +1435,7 @@ module Build = struct
   let aint_alias id_loc ~mod_name ?strict ctyp :
       (module Ppx_cstubs.Types.Unkown_signedness) =
     let id, r = Int_alias.id_r id_loc ctyp in
-    if is_set r 63 then (
+    if is_set r 29 then (
       let md, expr, alias_mod = Int_alias.uint ?strict ctyp r in
       common_int_alias ~sig_typ:`Any_unsigned id ~mod_name expr ~alias_mod ctyp;
       md )
@@ -1453,7 +1448,7 @@ module Build = struct
     let id_s, _ = U.from_id_loc_param size in
     let id_a, _ = U.from_id_loc_param align in
     let f id =
-      match extract_single_int id int_of_string with
+      match extract_single_int id with
       | Some x -> x
       | None -> U.error "can't find info about %s" name
     in
@@ -1471,9 +1466,9 @@ module Build = struct
         let binding_name = o_binding_name in
         let id_typ, _ = U.from_id_loc_param typ in
         let r =
-          if emu then Unsigned.UInt64.zero
+          if emu then 0
           else
-            match extract_single_int id_typ Unsigned.UInt64.of_string with
+            match extract_single_int id_typ with
             | Some x -> x
             | None -> U.error "can't find info about %s" ctyp
         in
@@ -1512,9 +1507,8 @@ module Build = struct
           in
           Hashtbl.replace G.htl_stri (fst (U.from_id_loc_param size)) r
         in
-        let f (type a) (ctypes_t : a Ctypes.typ) expr s_typ :
+        let f (type a) (ctypes_t : a Ctypes.typ) expr manifest :
             (module Opaque_result) =
-          let manifest = U.mk_typc s_typ in
           g manifest (typedef ~name:ctyp expr);
           ( module struct
             type t = a
@@ -1523,72 +1517,75 @@ module Build = struct
           end )
         in
         let ws64 = Ocaml_config.word_size () = 64 in
-        let usigned = is_set r 5 in
+        let usigned = is_set r 29 in
         let signed = not usigned in
-        if is_set r 39 then
-          f Ctypes.nativeint [%expr Ctypes.nativeint] "nativeint"
-        else if is_set r 31 then f Ctypes.int8_t [%expr Ctypes.int8_t] "int"
-        else if is_set r 32 then f Ctypes.int16_t [%expr Ctypes.int16_t] "int"
-        else if ws64 && is_set r 23 && is_set r 3 then
-          f Ctypes.int [%expr Ctypes.int] "int"
-        else if is_set r 33 then f Ctypes.int32_t [%expr Ctypes.int32_t] "int32"
-        else if is_set r 34 then f Ctypes.int64_t [%expr Ctypes.int64_t] "int64"
-        else if is_set r 20 then f Ctypes.schar [%expr Ctypes.schar] "int"
-        else if is_set r 35 then
-          f Ctypes.uint8_t [%expr Ctypes.uint8_t] "Unsigned.uint8"
-        else if is_set r 36 then
-          f Ctypes.uint16_t [%expr Ctypes.uint16_t] "Unsigned.uint16"
-        else if is_set r 37 then
-          f Ctypes.uint32_t [%expr Ctypes.uint32_t] "Unsigned.uint32"
-        else if is_set r 38 then
-          f Ctypes.uint64_t [%expr Ctypes.uint64_t] "Unsigned.uint64"
+        if is_set r 23 then
+          f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
+        else if is_set r 15 then
+          f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
+        else if is_set r 16 then
+          f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
+        else if ws64 && is_set r 8 && is_set r 3 then
+          f Ctypes.int [%expr Ctypes.int] [%type: int]
+        else if is_set r 17 then
+          f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
+        else if is_set r 18 then
+          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
+        else if is_set r 5 then f Ctypes.schar [%expr Ctypes.schar] [%type: int]
+        else if is_set r 19 then
+          f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
+        else if is_set r 20 then
+          f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
         else if is_set r 21 then
-          f Ctypes.uchar [%expr Ctypes.uchar] "Unsigned.uchar"
+          f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
         else if is_set r 22 then
-          f Ctypes.ushort [%expr Ctypes.ushort] "Unsigned.ushort"
-        else if is_set r 50 || is_set r 51 then
-          f Ctypes.nativeint [%expr Ctypes.nativeint] "nativeint"
-        else if is_set r 52 then f Ctypes.int32_t [%expr Ctypes.int32_t] "int32"
-        else if is_set r 53 || is_set r 54 then
-          f Ctypes.int64_t [%expr Ctypes.int64_t] "int64"
-        else if is_set r 23 then f Ctypes.sint [%expr Ctypes.sint] "Signed.sint"
-        else if is_set r 24 then f Ctypes.long [%expr Ctypes.long] "Signed.long"
-        else if is_set r 25 then
-          f Ctypes.llong [%expr Ctypes.llong] "Signed.llong"
+          f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
+        else if is_set r 6 then
+          f Ctypes.uchar [%expr Ctypes.uchar] [%type: Unsigned.uchar]
+        else if is_set r 7 then
+          f Ctypes.ushort [%expr Ctypes.short] [%type: Signed.short]
         else if is_set r 26 then
-          f Ctypes.ushort [%expr Ctypes.ushort] "Unsigned.ushort"
+          f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
         else if is_set r 27 then
-          f Ctypes.uint [%expr Ctypes.uint] "Unsigned.uint"
-        else if is_set r 28 then
-          f Ctypes.ulong [%expr Ctypes.ulong] "Unsigned.ulong"
-        else if is_set r 29 then
-          f Ctypes.ullong [%expr Ctypes.ullong] "Unsigned.ullong"
-        else if is_set r 30 then
-          f Ctypes.size_t [%expr Ctypes.size_t] "Unsigned.size_t"
-        else if is_set r 40 then f Ctypes.char [%expr Ctypes.char] "char"
-        else if is_set r 41 then f Ctypes.bool [%expr Ctypes.bool] "bool"
+          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
+        else if is_set r 8 then
+          f Ctypes.sint [%expr Ctypes.sint] [%type: Signed.sint]
+        else if is_set r 9 then
+          f Ctypes.long [%expr Ctypes.long] [%type: Signed.long]
+        else if is_set r 10 then
+          f Ctypes.llong [%expr Ctypes.llong] [%type: Signed.llong]
+        else if is_set r 11 then
+          f Ctypes.ushort [%expr Ctypes.ushort] [%type: Unsigned.ushort]
+        else if is_set r 12 then
+          f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
+        else if is_set r 13 then
+          f Ctypes.ulong [%expr Ctypes.ulong] [%type: Unsigned.ulong]
+        else if is_set r 14 then
+          f Ctypes.ullong [%expr Ctypes.ullong] [%type: Unsigned.ullong]
+        else if is_set r 24 then f Ctypes.char [%expr Ctypes.char] [%type: char]
+        else if is_set r 25 then f Ctypes.bool [%expr Ctypes.bool] [%type: bool]
           (* via __builtin_classify_type *)
         else if signed && ws64 && is_set r 0 && is_set r 3 then
-          f Ctypes.int [%expr Ctypes.int] "int"
+          f Ctypes.int [%expr Ctypes.int] [%type: int]
         else if signed && is_set r 1 then
-          f Ctypes.int8_t [%expr Ctypes.int8_t] "int"
+          f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
         else if signed && is_set r 2 then
-          f Ctypes.int16_t [%expr Ctypes.int16_t] "int"
+          f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
         else if signed && is_set r 3 then
-          f Ctypes.int32_t [%expr Ctypes.int32_t] "int32"
+          f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
         else if signed && is_set r 4 then
-          f Ctypes.int64_t [%expr Ctypes.int64_t] "int64"
+          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
         else if usigned && is_set r 0 then
-          f Ctypes.uint [%expr Ctypes.uint] "Unsigned.uint"
+          f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
         else if usigned && is_set r 1 then
-          f Ctypes.uint8_t [%expr Ctypes.uint8_t] "Unsigned.uint8"
+          f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
         else if usigned && is_set r 2 then
-          f Ctypes.uint16_t [%expr Ctypes.uint16_t] "Unsigned.uint16"
+          f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
         else if usigned && is_set r 3 then
-          f Ctypes.uint32_t [%expr Ctypes.uint32_t] "Unsigned.uint32"
+          f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
         else if usigned && is_set r 4 then
-          f Ctypes.uint64_t [%expr Ctypes.uint64_t] "Unsigned.uint64"
-        else if is_set r 60 then (
+          f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
+        else if is_set r 28 then (
           let manifest = [%type: unit Ctypes.ptr] in
           let expr = [%expr Ctypes.ptr Ctypes.void] in
           g manifest @@ typedef expr;
