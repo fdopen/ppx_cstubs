@@ -3,10 +3,10 @@
 default: build
 
 build:
-	@dune build
+	@dune build -p cstubs-demo
 
 test:
-	@dune exec hello
+	@dune exec -p cstubs-demo hello
 
 clean:
-	@dune clean
+	@dune clean -p cstubs-demo

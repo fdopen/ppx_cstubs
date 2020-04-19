@@ -19,6 +19,12 @@ struct passwd {
 };
 *)
 
+(* uid_t must be an integer type, but its size and
+   signedness can differ from platform to platform. *)
+
+module Uid_t = [%c aint "uid_t"]
+module Gid_t = [%c aint "gid_t"]
+
 type%c passwd = {
   pw_name: string;
   (* note: `string` works, because the fields are only set, but never read
@@ -28,8 +34,8 @@ type%c passwd = {
      pw_name. That's not possible, if you use `string` instead of
      `char ptr`. *)
   pw_passwd: string;
-  pw_uid: uint32_t;
-  pw_gid: uint32_t;
+  pw_uid: Uid_t.t;
+  pw_gid: Gid_t.t;
   pw_gecos: string;
   pw_dir: string;
   pw_shell: string } [@@ as_record]
@@ -43,8 +49,8 @@ let print_entry r =
     "name:%S, dir:%S, uid:%s, git:%s, shell:%S\n"
     r.pw_name
     r.pw_dir
-    (Unsigned.UInt32.to_string r.pw_uid)
-    (Unsigned.UInt32.to_string r.pw_gid)
+    (Uid_t.to_string r.pw_uid)
+    (Gid_t.to_string r.pw_gid)
     r.pw_shell
 
 let demo_getpwent () =
