@@ -122,3 +122,5 @@ let ext_obj () = Lazy.force ext_obj
 let version () = Lazy.force version
 
 let system () = Lazy.force system
+
+let use_open_struct () = !Options.use_open_struct && version () >= (4, 8, 0)

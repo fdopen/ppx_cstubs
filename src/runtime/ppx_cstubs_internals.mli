@@ -77,7 +77,7 @@ module Callback : sig
 
     val t : H.real t Ctypes.static_funptr Ctypes.typ
 
-    val fn : fn Ctypes_static.fn
+    val fn : H.real Ctypes_static.fn
 
     val make_pointer : raw_pointer -> H.real t Ctypes.static_funptr
   end
@@ -96,5 +96,9 @@ module Shadow : sig
 
   val returning : 'a Ctypes.typ -> 'a Ctypes.fn
 end
+
+(* only used inside signatures in order to avoid writing too much dummy
+   code: `module type of struct let f = ....  end ` *)
+external obj_magic : 'a -> 'b = "%identity"
 
 (**/**)

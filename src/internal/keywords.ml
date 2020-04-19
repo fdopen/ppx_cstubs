@@ -47,7 +47,7 @@ let () =
       "Ctypes";
       "Ctypes_static";
       "LDouble";
-      "Ppx_cstubs_internals";
+      "Ppx_cstubs";
       "Signed";
       "Unsigned";
     ]

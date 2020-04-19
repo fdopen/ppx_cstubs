@@ -24,7 +24,6 @@ type fun_params = {
   release_runtime_lock : bool;
   noalloc : bool;
   is_inline : bool;
-  mod_path : string list;
   return_errno : bool;
   remove_labels : bool;
   c_name : string;
@@ -82,8 +81,6 @@ type ocaml_funptr = {
   cb_mod_path : string list;
   cb_binding_name : string;
   cb_bottom : id;
-  cb_orig_mod : string;
-  cb_top : id;
   cb_top_mod : string;
   cb_acquire_runtime : bool;
   cb_thread_registration : bool;

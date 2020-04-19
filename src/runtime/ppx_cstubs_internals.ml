@@ -415,7 +415,7 @@ module Callback = struct
 
     val t : H.real t Ctypes.static_funptr Ctypes.typ
 
-    val fn : fn Ctypes.fn
+    val fn : H.real Ctypes.fn
 
     val make_pointer : raw_pointer -> H.real t Ctypes.static_funptr
   end = struct
@@ -469,3 +469,5 @@ module Shadow = struct
     if not (passable a) then raise (Unsupported "Unsupported return type")
     else Returns a
 end
+
+external obj_magic : 'a -> 'b = "%identity"

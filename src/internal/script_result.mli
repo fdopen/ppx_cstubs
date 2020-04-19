@@ -22,8 +22,6 @@ val htl_expr : (Marshal_types.id, expression) Hashtbl.t
 
 val htl_stri : (Marshal_types.id, structure_item) Hashtbl.t
 
-val htl_type : (Marshal_types.id, core_type) Hashtbl.t
-
 val htl_used : (int, unit) Hashtbl.t
 
 val foreign_used : bool ref

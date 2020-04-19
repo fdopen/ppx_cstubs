@@ -33,3 +33,23 @@ val remove_attrib : Parsetree.attribute
 val replace_attr_string : string
 
 val replace_typ_string : string
+
+val open_struct_type_mod_string : string
+
+val open_struct_type_mod_attrib : Parsetree.attribute
+
+val open_struct_body_string : string
+
+val open_struct_body_attrib : Parsetree.attribute
+
+val open_struct_ifthenelse_string : string
+
+val open_struct_ifthenelse_attrib : Parsetree.attribute
+
+val open_struct_openmod_string : string
+
+val open_struct_openmod_attrib : Parsetree.attribute
+
+val manifest_replace_string : string
+
+val manifest_replace_attrib : Parsetree.attribute

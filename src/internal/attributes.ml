@@ -36,3 +36,23 @@ let remove_attrib = h remove_string
 let replace_attr_string = "ppxc__replace_attr"
 
 let replace_typ_string = "ppxc__replace_typ"
+
+let open_struct_type_mod_string = "ppxc__open_struct_type_mod_string"
+
+let open_struct_type_mod_attrib = h open_struct_type_mod_string
+
+let open_struct_body_string = "ppxc__open_struct_body_string"
+
+let open_struct_body_attrib = h open_struct_body_string
+
+let open_struct_ifthenelse_string = "ppxc__ open_struct_ifthenelse_string"
+
+let open_struct_ifthenelse_attrib = h open_struct_ifthenelse_string
+
+let open_struct_openmod_string = "ppxc__open_struct_openmod_string"
+
+let open_struct_openmod_attrib = h open_struct_openmod_string
+
+let manifest_replace_string = "ppxc__manifest_replace_string"
+
+let manifest_replace_attrib = h manifest_replace_string

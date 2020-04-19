@@ -323,11 +323,10 @@ module Ctypes_make : sig
 
     val typ_of_bigarray_kind : ('a, 'b) Bigarray.kind -> 'a typ
 
-    val structure : string -> 's Ctypes_static.structure typ
-
-    val union : string -> 's Ctypes_static.union typ
-
-    (* missing: val field : ('s, [< `Struct | `Union ] as 'b)
+    (* missing:
+       val structure : string -> 's Ctypes_static.structure typ
+       val union : string -> 's Ctypes_static.union typ
+       val field : ('s, [< `Struct | `Union ] as 'b)
        Ctypes_static.structured typ -> string -> 'a typ -> ('a, ('s, 'b)
        Ctypes_static.structured) field val seal : ('a, [< `Struct | `Union ])
        Ctypes_static.structured typ -> unit *)
@@ -510,6 +509,10 @@ module Ctypes_make : sig
     val ppxc__private_ocaml_typ :
       string -> [ `priv ] Ctypes_static.structure Ctypes.typ
 
+    val ppxc__private_structure : string -> 's Ctypes_static.structure typ
+
+    val ppxc__private_union : string -> 's Ctypes_static.union typ
+
     val ppxc__unavailable : string -> 'a
   end
 end
@@ -518,26 +521,6 @@ end
 
 module type Opaque_result = sig
   type t
-
-  val t : t Ctypes.typ
-end
-
-module type Unsigned_result = sig
-  include Unsigned.S
-
-  val t : t Ctypes.typ
-end
-
-module type Signed_result = sig
-  include Signed.S
-
-  val t : t Ctypes.typ
-end
-
-module type Anysigned_result = sig
-  include Unsigned.S
-
-  val min_int : t
 
   val t : t Ctypes.typ
 end
@@ -581,21 +564,21 @@ module Extract : sig
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Signed_result)
+    (module Ppx_cstubs.Types.Signed)
 
   val uint_alias :
     string ->
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Unsigned_result)
+    (module Ppx_cstubs.Types.Unsigned)
 
   val aint_alias :
     string ->
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Anysigned_result)
+    (module Ppx_cstubs.Types.Unkown_signedness)
 
   val opaque :
     size:string ->
@@ -625,14 +608,7 @@ module Build : sig
   val bound_constant : string -> string -> string -> 'a Ctypes.typ -> 'a
 
   val foreign_value :
-    string ->
-    string ->
-    string ->
-    'a Ctypes.typ ->
-    string ->
-    string ->
-    string ->
-    unit
+    string -> string -> 'a Ctypes.typ -> string -> string -> string -> unit
 
   val external' :
     string -> string -> 'a Ctypes.fn -> marshal_info:string -> unit
@@ -640,7 +616,6 @@ module Build : sig
   val enum : 'a list -> string -> 'a Ctypes.typ * 'a list Ctypes.typ
 
   val foreign :
-    string ->
     string ->
     string ->
     ocaml_name:string ->
@@ -651,10 +626,6 @@ module Build : sig
     string ->
     'a Ctypes.fn ->
     unit
-
-  val derive_typ : int -> 'a Ctypes.typ -> string -> 'a Ctypes.typ
-
-  val add_type_ref : 'a Ctypes.typ -> string -> unit
 
   val field :
     string ->
@@ -670,21 +641,21 @@ module Build : sig
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Signed_result)
+    (module Ppx_cstubs.Types.Signed)
 
   val uint_alias :
     string ->
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Unsigned_result)
+    (module Ppx_cstubs.Types.Unsigned)
 
   val aint_alias :
     string ->
     mod_name:string ->
     ?strict:bool ->
     string ->
-    (module Anysigned_result)
+    (module Ppx_cstubs.Types.Unkown_signedness)
 
   val opaque :
     size:string ->
@@ -701,8 +672,6 @@ module Build : sig
     'a Ctypes_static.abstract Ctypes_static.typ
 
   val trace_custom : 'a Ctypes_static.typ -> 'a Ctypes_static.typ
-
-  val add_custom : old:'a Ctypes_static.typ -> new':'b Ctypes_static.typ -> unit
 
   val ocaml_funptr :
     string -> 'a Ctypes_static.static_funptr Ctypes_static.typ -> unit

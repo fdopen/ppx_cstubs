@@ -37,8 +37,7 @@ module Util : sig
 
   val safe_cname : prefix:string -> string
 
-  val safe_mlname :
-    ?capitalize:bool -> ?nowarn:bool -> ?prefix:string -> unit -> string
+  val safe_mlname : ?capitalize:bool -> ?prefix:string -> unit -> string
 
   val with_loc : Ast_helper.loc -> (unit -> 'a) -> 'a
 
@@ -56,14 +55,24 @@ module Util : sig
 
   val mk_lid : ?loc:Ast_helper.loc -> string -> Longident.t Location.loc
 
+  val mk_lid_l : ?loc:Ast_helper.loc -> string list -> Longident.t Location.loc
+
   val mk_pat : string -> Parsetree.pattern
 
   val mk_ident : string -> Parsetree.expression
+
+  val mk_ident_l : string list -> Parsetree.expression
 
   val mk_typc :
     ?attrs:Ast_helper.attrs ->
     ?l:Parsetree.core_type list ->
     string ->
+    Parsetree.core_type
+
+  val mk_typc_l :
+    ?attrs:Ast_helper.attrs ->
+    ?l:Parsetree.core_type list ->
+    string list ->
     Parsetree.core_type
 
   val empty_stri : unit -> Parsetree.structure_item
@@ -76,9 +85,12 @@ module Util : sig
   val no_warn_unused :
     string -> Parsetree.expression -> Parsetree.structure_item
 
+  val no_warn_unused_module :
+    ?loc:Ast_helper.loc -> Parsetree.structure_item -> Parsetree.structure_item
+
   val no_c_comments : string -> string
 
-  val cloc_comment : Mparsetree.Ast_cur.Ast_helper.loc -> string
+  val cloc_comment : Ast_helper.loc -> string
 
   val unsuffixed_file_name : unit -> string
 
@@ -87,7 +99,22 @@ module Util : sig
 
   val ocaml_warning : string -> Parsetree.attribute
 
-  val named_stri : string -> Parsetree.expression -> Parsetree.structure_item
+  val named_stri :
+    ?constr:Parsetree.core_type ->
+    string ->
+    Parsetree.expression ->
+    Parsetree.structure_item
+
+  val alias_type :
+    ?attrs:Ast_helper.attrs -> Parsetree.expression -> Parsetree.expression
+
+  val alias_impl_mod_os : ?alias_name:string -> unit -> Parsetree.structure_item
+
+  val alias_impl_mod_let : Parsetree.expression -> Parsetree.expression
+
+  val lid_unflatten : string list -> Longident.t option
+
+  val mk_pat_pconstr : Parsetree.core_type -> string -> Parsetree.pattern
 end
 
 module Result : sig

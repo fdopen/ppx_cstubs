@@ -28,7 +28,9 @@ type make_result = {
 }
 
 val make :
+  ?constr:core_type ->
   ?main_ref_attrs:attribute list ->
+  retype:bool ->
   string list ->
   string ->
   expression ->
@@ -39,15 +41,5 @@ val replace_expr : expression -> expression
 val replace_stri : structure_item -> structure_item
 
 val get_final_name : t -> string
-
-type ocaml_t
-
-val make_type_alias :
-  ?tdl_attrs:attribute list -> string list -> string -> structure_item * ocaml_t
-
-val create_type_ref_final :
-  ?l:core_type list -> ocaml_t -> string list -> core_type
-
-val replace_typ : core_type -> core_type
 
 val clear : unit -> unit

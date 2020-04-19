@@ -28,3 +28,5 @@ val version : unit -> int * int * int
 val system : unit -> string
 
 val runtime_version : int * int * int
+
+val use_open_struct : unit -> bool

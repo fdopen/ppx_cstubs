@@ -26,7 +26,7 @@ let common_main argv =
   set_binary_mode_out stdout true;
   set_binary_mode_out stderr true;
   set_binary_mode_in stdin true;
-  Ppx_cstubs.init ();
+  Ppx_main.init ();
   Migrate_parsetree.Driver.run_main ~argv ()
 
 let cpp_main () =
@@ -45,7 +45,7 @@ let cpp_main () =
   let arg_set_int v = Arg.Int (na (fun a -> v := a)) in
   let ml_output = ref "" in
   let c_output = ref "" in
-  let pretty_print = ref false in
+  let pretty = ref false in
   let cflags = ref [] in
   let cflags_rest = ref [] in
   let oflags = ref (List.rev Options.ocaml_flags_default) in
@@ -58,6 +58,7 @@ let cpp_main () =
   let verbose = ref 1 in
   let absname = ref false in
   let nopervasives = ref false in
+  let no_openstruct = ref false in
   let set_output_by_suffix s =
     match CCString.Split.right ~by:"." s with
     | None ->
@@ -103,7 +104,7 @@ let cpp_main () =
           "<opt>     use ocamlfind toolchain <opt>" );
         ("-keep-tmp", arg_set keep_tmp, "     Don't delete temporary files");
         ( "-pretty",
-          arg_set pretty_print,
+          arg_set pretty,
           "     Print a human readable ml file instead of the binary ast" );
         ( "-verbose",
           arg_set_int verbose,
@@ -114,6 +115,9 @@ let cpp_main () =
         ( "-absname",
           arg_set absname,
           "     Show absolute filenames in error messages" );
+        ( "-no-openstruct",
+          arg_set no_openstruct,
+          "    Disable hiding through 'open struct'." );
         ("-nopervasives", arg_set nopervasives, "     (undocumented)");
         ( "-cc",
           arg_string (fun s -> cc := Some s),
@@ -181,14 +185,16 @@ let cpp_main () =
   Options.toolchain := !toolchain;
   Options.cma_files := List.rev !cma_files;
   Options.findlib_pkgs := List.rev !findlib_pkgs;
+  Options.use_open_struct := not !no_openstruct;
   Options.verbosity := !verbose;
   Options.cc := !cc;
+  Options.pretty := !pretty;
   (* trigger exceptions *)
   Ocaml_config.init ();
   if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init ();
   let l = if ml_output = "-" then [] else [ "-o"; ml_output ] in
   let l = source :: l in
-  let l = if !pretty_print then l else "--dump-ast" :: l in
+  let l = if !pretty then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
   common_main (Array.of_list l)
 

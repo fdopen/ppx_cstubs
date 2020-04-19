@@ -22,6 +22,8 @@ let keep_tmp = ref false
 
 let nopervasives = ref false
 
+let use_open_struct = ref true
+
 let verbosity = ref 1
 
 let c_flags : string list ref = ref []
@@ -39,6 +41,8 @@ let toolchain : string option ref = ref None
 let findlib_pkgs : string list ref = ref []
 
 let cma_files : string list ref = ref []
+
+let pretty = ref false
 
 (* not yet configurable, but maybe in the future ... *)
 let ocamlfind =
@@ -70,7 +74,9 @@ let reset () =
   ml_input_file := None;
   ml_output_file := None;
   toolchain := None;
+  use_open_struct := true;
   findlib_pkgs := [];
   cma_files := [];
   mode := Regular;
+  pretty := false;
   cc := None

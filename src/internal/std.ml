@@ -26,7 +26,17 @@ let with_return (type a) f =
   end in
   try f { return = (fun x -> raise_notrace (E.E x)) } with E.E r -> r
 
-let finally ~h f = CCFun.finally ~h ~f
+(* Unlike CCFun.finally I want to ensure that h is only called
+   once.*)
+
+let finally ~h f =
+  match f () with
+  | exception exn ->
+    h ();
+    raise exn
+  | r ->
+    h ();
+    r
 
 external identity : 'a -> 'a = "%identity"
 
@@ -55,14 +65,32 @@ module Util = struct
 
   let mk_oloc s = Lo.mkloc (Some s) !Ast_helper.default_loc
 
-  let mk_lid ?(loc = !Ast_helper.default_loc) s =
-    Lo.mkloc (Longident.parse s) loc
+  let mk_lid_c ?(loc = !Ast_helper.default_loc) s = Lo.mkloc s loc
+
+  let mk_lid ?loc s = mk_lid_c ?loc (Longident.parse s)
+
+  let lid_unflatten = function
+    | [] -> None
+    | hd :: tl ->
+      let open Longident in
+      Some (List.fold_left (fun p s -> Ldot (p, s)) (Lident hd) tl)
+
+  let mk_lid_l ?loc l =
+    match lid_unflatten l with
+    | None -> invalid_arg "mk_lid_l"
+    | Some l -> mk_lid_c ?loc l
 
   let mk_pat s = Ast_helper.Pat.var (mk_loc s)
 
-  let mk_typc ?attrs ?(l = []) s = Ast_helper.Typ.constr ?attrs (mk_lid s) l
+  let mk_typc_c ?attrs ?(l = []) s = Ast_helper.Typ.constr ?attrs s l
+
+  let mk_typc ?attrs ?l s = mk_typc_c ?attrs ?l (mk_lid s)
 
   let mk_ident n = Ast_helper.Exp.ident (mk_lid n)
+
+  let mk_typc_l ?attrs ?l s = mk_typc_c ?attrs ?l (mk_lid_l s)
+
+  let mk_ident_l s = Ast_helper.Exp.ident (mk_lid_l s)
 
   let safe_ascii c =
     (c >= 'a' && c <= 'z')
@@ -85,8 +113,17 @@ module Util = struct
     | [] -> ""
     | s :: _ -> safe_ascii_only s
 
+  let make_uniq_cnt () =
+    let htl = Hashtbl.create 128 in
+    fun s ->
+      let i =
+        match Hashtbl.find htl s with exception Not_found -> 0 | n -> n
+      in
+      Hashtbl.replace htl s (succ i);
+      i
+
   let safe_cname =
-    let i = ref (-1) in
+    let cnt = make_uniq_cnt () in
     fun ~prefix ->
       let loc = !Ast_helper.default_loc in
       let name = unsuffixed_file_name () in
@@ -98,13 +135,16 @@ module Util = struct
       (* TODO: there seems to be a limit for msvc *)
       let s = cutmax s 20 in
       let name = cutmax name 40 in
-      incr i;
-      Printf.sprintf "ppxc%x_%s_%x_%x_%s" !i name loc.Lo.loc_start.Le.pos_lnum
-        loc.Lo.loc_start.Le.pos_cnum s
+      let line = loc.Lo.loc_start.Le.pos_lnum in
+      let cnum = loc.Lo.loc_start.Le.pos_cnum in
+      let res = Printf.sprintf "%s_%x_%x_%s" name line cnum s in
+      match cnt res with
+      | 0 -> "ppxc_" ^ res
+      | i -> Printf.sprintf "ppxc%x_%s" i res
 
   let safe_mlname =
-    let i = ref (-1) in
-    fun ?(capitalize = false) ?(nowarn = false) ?prefix () ->
+    let cnt = make_uniq_cnt () in
+    fun ?(capitalize = false) ?prefix () ->
       let s, p =
         match prefix with
         | None -> ("", "")
@@ -112,10 +152,14 @@ module Util = struct
       in
       let loc = !Ast_helper.default_loc in
       let line = loc.Lo.loc_start.Le.pos_lnum in
-      incr i;
-      let nowarn = if nowarn then "_" else "" in
-      let f = if capitalize then 'P' else 'p' in
-      Printf.sprintf "%s%cpxc__%s%sline%d_%d" nowarn f s p line !i
+      let pre =
+        if capitalize then Myconst.private_prefix_capitalized
+        else Myconst.private_prefix
+      in
+      let f = pre.[0] in
+      let pre = String.sub pre 1 (String.length pre - 1) in
+      let res = Printf.sprintf "%c%s%s%sline%d" f pre s p line in
+      match cnt res with 0 -> res | i -> Printf.sprintf "%s_%d" res i
 
   let empty_stri () =
     let vb =
@@ -157,6 +201,14 @@ module Util = struct
   let no_warn_unused name expr =
     no_warn_unused_post406 name expr |> no_warn_unused_pre406
 
+  let no_warn_unused_module ?(loc = !Ast_helper.default_loc) stri =
+    ( [%stri
+        include struct
+          [@@@ocaml.warning "-60"]
+
+          [%%s [ stri ]]
+        end] [@metaloc loc] )
+
   let no_c_comments s =
     CCString.replace ~which:`All ~sub:"/*" ~by:"/ *" s
     |> CCString.replace ~which:`All ~sub:"*/" ~by:"* /"
@@ -178,7 +230,51 @@ module Util = struct
         s
       | _ -> assert false
 
-  let named_stri n expr = [%stri let [%p mk_pat n] = [%e expr]]
+  module A = Ast_helper
+
+  let mk_pat_pconstr t n =
+    if Ocaml_config.version () = (4, 5, 0) && !Options.pretty then
+      A.Pat.constraint_ (mk_pat n) t
+    else A.Pat.constraint_ (mk_pat n) (A.Typ.poly [] t)
+
+  let named_stri ?constr n expr =
+    let p =
+      match constr with None -> mk_pat n | Some t -> mk_pat_pconstr t n
+    in
+    [%stri let [%p p] = [%e expr]]
+
+  let alias_impl_mod () =
+    let m = A.Mod.ident (mk_lid_l [ !Lconst.impl_mod_name ]) in
+    let t = A.Mty.ident (mk_lid_l [ !Lconst.type_modtype_name ]) in
+    A.Mod.constraint_ m t
+
+  let alias_impl_mod_let e =
+    let m = alias_impl_mod () in
+    A.Exp.letmodule (mk_oloc !Lconst.impl_mod_name) m e
+
+  let alias_impl_mod_os ?(alias_name = !Lconst.impl_mod_name) () =
+    let x = alias_impl_mod () in
+    let x = A.Mb.mk (mk_oloc alias_name) x in
+    let x = A.Mod.structure [ A.Str.module_ x ] in
+    A.Str.open_ (A.Opn.mk ~override:Asttypes.Override x)
+
+  (* native compilation is too slow, when the symbols are always
+     resolved through constrained alias modules, although it doesn't matter
+     at runtime. *)
+  let alias_type ?attrs e =
+    let module A = Ast_helper in
+    let module P = Parsetree in
+    let res ?attrs e =
+      match attrs with
+      | None -> e
+      | Some a -> { e with P.pexp_attributes = e.P.pexp_attributes @ a }
+    in
+    if Ocaml_config.use_open_struct () = false then res ?attrs e
+    else
+      let e_constr = alias_impl_mod_let e in
+      let attrs = match attrs with None -> [] | Some l -> l in
+      let attrs = Attributes.open_struct_ifthenelse_attrib :: attrs in
+      res ~attrs [%expr if false then [%e e_constr] else [%e e]]
 end
 
 module Result = struct

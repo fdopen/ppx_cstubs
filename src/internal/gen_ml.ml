@@ -32,7 +32,7 @@ let create_param_name () =
     let loc = !Ast_helper.default_loc in
     let name = U.unsuffixed_file_name () in
     let s =
-      Printf.sprintf "ppxc__%d_%s_%x" !i name
+      Printf.sprintf "%s%d_%s_%x" Myconst.private_prefix !i name
         loc.Location.loc_start.Lexing.pos_lnum
     in
     incr i;
@@ -48,8 +48,6 @@ let mk_ex_pat s = (mk_ex s, U.mk_pat s)
 
 let mk_typ ?attrs ?(l = []) s =
   Typ.constr ~attrs:(mk_attrs attrs) (U.mk_lid s) l
-
-let managed_buffer () = mk_typ "Cstubs_internals.managed_buffer"
 
 let prim_supports_attr :
     type a. a Ctypes_primitive_types.prim -> cinfo:Gen_c.info -> bool =
@@ -91,91 +89,57 @@ let ident_of_ml_prim :
       else mk_typ t
     in
     match t with
-    | ML_char -> mk_typ "char"
-    | ML_bool -> mk_typ "bool"
-    | ML_complex -> mk_typ "Complex.t"
+    | ML_char -> [%type: char]
+    | ML_bool -> [%type: bool]
+    | ML_complex -> [%type: Complex.t]
     | ML_float -> f ~a:"unboxed" "float"
     | ML_int -> f ~a:"untagged" "int"
     | ML_int32 -> f ~a:"unboxed" "int32"
     | ML_int64 -> f ~a:"unboxed" "int64"
-    | ML_llong -> mk_typ "Signed.llong"
-    | ML_long -> mk_typ "Signed.long"
-    | ML_sint -> mk_typ "Signed.sint"
+    | ML_llong -> [%type: Signed.llong]
+    | ML_long -> [%type: Signed.long]
+    | ML_sint -> [%type: Signed.sint]
     | ML_nativeint -> f ~a:"unboxed" "nativeint"
-    | ML_size_t -> mk_typ "Unsigned.size_t"
-    | ML_uchar -> mk_typ "Unsigned.uchar"
-    | ML_uint -> mk_typ "Unsigned.uint"
-    | ML_uint16 -> mk_typ "Unsigned.uint16"
-    | ML_uint32 -> mk_typ "Unsigned.uint32"
-    | ML_uint64 -> mk_typ "Unsigned.uint64"
-    | ML_uint8 -> mk_typ "Unsigned.uint8"
-    | ML_ullong -> mk_typ "Unsigned.ullong"
-    | ML_ulong -> mk_typ "Unsigned.ulong"
-    | ML_ushort -> mk_typ "Unsigned.ushort"
-    | ML_ldouble -> mk_typ "LDouble.t"
-    | ML_complexld -> mk_typ "ComplexL.t"
+    | ML_size_t -> [%type: Unsigned.size_t]
+    | ML_uchar -> [%type: Unsigned.uchar]
+    | ML_uint -> [%type: Unsigned.uint]
+    | ML_uint16 -> [%type: Unsigned.uint16]
+    | ML_uint32 -> [%type: Unsigned.uint32]
+    | ML_uint64 -> [%type: Unsigned.uint64]
+    | ML_uint8 -> [%type: Unsigned.uint8]
+    | ML_ullong -> [%type: Unsigned.ullong]
+    | ML_ulong -> [%type: Unsigned.ulong]
+    | ML_ushort -> [%type: Unsigned.ushort]
+    | ML_ldouble -> [%type: LDouble.t]
+    | ML_complexld -> [%type: ComplexL.t]
 
-let mk_struct_typ s =
-  let v = Rf.tag (U.mk_loc s) true [] in
-  let v = Typ.variant [ v ] Asttypes.Closed None in
-  mk_typ ~l:[ Typ.any (); v ] "Ctypes.structured"
-
-let mk_ocaml_typ s = mk_typ ~l:[ mk_typ s ] "Ctypes.ocaml"
-
-let rec typ_of_ctyp : type a. mod_path:string list -> a typ -> 'b =
+let rec typ_of_ctyp : type a. a typ -> 'b =
   let open Ctypes_static in
-  fun ~mod_path t ->
-    match Created_types.get_core_type t mod_path with
-    | `Complete s -> (`Complete, s)
-    | `Funptr f -> (
-      match t with
-      | Funptr x ->
-        let i, l = typ_of_fn ~mod_path x in
-        (i, f l)
-      | _ -> assert false )
-    | `Unknown -> (
-      match t with
-      | Void -> (`Complete, mk_typ "unit")
-      | Primitive p ->
-        ( `Complete,
-          ident_of_ml_prim ~no_attr:true (Ctypes_primitive_types.ml_prim p) )
-      | Pointer x ->
-        let i, l = typ_of_ctyp ~mod_path x in
-        (i, mk_typ ~l:[ l ] "Ctypes.ptr")
-      | Funptr _ ->
-        (* TODO: Allow abstraction or wrap any funptr for a callback in a view? *)
-        (`Incomplete, mk_typ ~l:[ Typ.any () ] "Ctypes.static_funptr")
-      | Struct _ -> (`Incomplete, mk_struct_typ "Struct")
-      | Union _ -> (`Incomplete, mk_struct_typ "Union")
-      | Abstract _ -> (`Incomplete, mk_struct_typ "Abstract")
-      | View _ -> (`Incomplete, Typ.any ())
-      | Array (x, _) ->
-        let i, l = typ_of_ctyp ~mod_path x in
-        (i, mk_typ ~l:[ l ] "Ctypes.carray")
-      | Bigarray _ -> (`Incomplete, Typ.any ())
-      | OCaml String -> (`Complete, mk_ocaml_typ "string")
-      | OCaml Bytes -> (`Complete, mk_ocaml_typ "bytes")
-      | OCaml FloatArray ->
-        ( `Complete,
-          mk_typ ~l:[ mk_typ ~l:[ mk_typ "float" ] "array" ] "Ctypes.ocaml" ) )
+  function
+  | Void -> (`Complete, [%type: unit])
+  | Primitive p ->
+    ( `Complete,
+      ident_of_ml_prim ~no_attr:true (Ctypes_primitive_types.ml_prim p) )
+  | Pointer x ->
+    let i, l = typ_of_ctyp x in
+    (i, [%type: [%t l] Ctypes.ptr])
+  | Funptr _ -> (`Incomplete, [%type: _ Ctypes.static_funptr])
+  | Struct _ -> (`Incomplete, [%type: _ Ctypes.structure])
+  | Union _ -> (`Incomplete, [%type: _ Ctypes.union])
+  | Abstract _ -> (`Incomplete, [%type: _ Ctypes.abstract])
+  | View _ -> (`Incomplete, Typ.any ())
+  | Array (x, _) ->
+    let i, l = typ_of_ctyp x in
+    (i, [%type: [%t l] Ctypes.carray])
+  | Bigarray _ -> (`Incomplete, Typ.any ())
+  | OCaml String -> (`Complete, [%type: string Ctypes.ocaml])
+  | OCaml Bytes -> (`Complete, [%type: bytes Ctypes.ocaml])
+  | OCaml FloatArray -> (`Complete, [%type: float array Ctypes.ocaml])
 
-and typ_of_fn : type a. mod_path:string list -> a fn -> 'b =
- fun ~mod_path -> function
-  | CS.Returns a -> typ_of_ctyp ~mod_path a
-  | CS.Function (a, b) ->
-    let i1, a = typ_of_ctyp ~mod_path a in
-    let i2, b = typ_of_fn ~mod_path b in
-    ( (if i1 = `Complete && i2 = `Complete then `Complete else `Incomplete),
-      Typ.arrow Asttypes.Nolabel a b )
+let constraint_of_typ t = [%type: [%t snd (typ_of_ctyp t)] Ctypes.typ]
 
-let constraint_of_typ ~mod_path t =
-  let _, s = typ_of_ctyp ~mod_path t in
-  U.mk_typc ~l:[ s ] "Ctypes.typ"
-
-let ml_typ_of_arg_typ ~mod_path:_ ~cinfo t =
-  let sptr () =
-    (`Incomplete, mk_typ ~l:[ Typ.any () ] "Cstubs_internals.fatptr")
-  in
+let ml_typ_of_arg_typ ~cinfo t =
+  let sptr () = (`Incomplete, [%type: _ Cstubs_internals.fatptr]) in
   let rec iter : type a. bool -> a typ -> 'b =
     let open Ctypes_static in
     fun inside_view -> function
@@ -186,7 +150,7 @@ let ml_typ_of_arg_typ ~mod_path:_ ~cinfo t =
       | Union _ when inside_view -> (`Incomplete, Typ.any ())
       | Abstract _ when inside_view -> (`Incomplete, Typ.any ())
       | OCaml _ when inside_view -> (`Incomplete, Typ.any ())
-      | Void -> (`Complete, mk_typ "unit")
+      | Void -> (`Complete, [%type: unit])
       | Primitive p ->
         if inside_view && prim_supports_attr p ~cinfo = false then
           (`Incomplete, Typ.any ())
@@ -195,8 +159,7 @@ let ml_typ_of_arg_typ ~mod_path:_ ~cinfo t =
             ident_of_ml_prim ~no_attr:false (Ctypes_primitive_types.ml_prim p)
           )
       | Pointer _ -> sptr ()
-      | Funptr _ ->
-        (`Incomplete, mk_typ ~l:[ Typ.any () ] "Cstubs_internals.fatfunptr")
+      | Funptr _ -> (`Incomplete, [%type: _ Cstubs_internals.fatfunptr])
       | Struct _ -> sptr ()
       | Union _ -> sptr ()
       | Abstract _ -> sptr ()
@@ -210,12 +173,9 @@ let ml_typ_of_arg_typ ~mod_path:_ ~cinfo t =
       | Bigarray _ as a ->
         U.error "Unexpected bigarray in an argument type: %s"
           (Ctypes.string_of_typ a)
-      | OCaml String -> (`Complete, mk_ocaml_typ "string")
-      | OCaml Bytes -> (`Complete, mk_ocaml_typ "bytes")
-      | OCaml FloatArray ->
-        let float = mk_typ "float" in
-        let array = mk_typ ~l:[ float ] "array" in
-        (`Complete, mk_typ ~l:[ array ] "Ctypes.ocaml")
+      | OCaml String -> (`Complete, [%type: string Ctypes.ocaml])
+      | OCaml Bytes -> (`Complete, [%type: bytes Ctypes.ocaml])
+      | OCaml FloatArray -> (`Complete, [%type: float array Ctypes.ocaml])
   in
   iter false t
 
@@ -224,24 +184,21 @@ let rec ml_typ_of_return_typ :
     =
   let open Ctypes_static in
   let mk_ptr cinfo =
-    let attrs =
-      if cinfo.Gen_c.return_errno = false && Ocaml_config.version () >= (4, 3, 0)
-      then Some "unboxed"
-      else None
-    in
-    mk_typ ?attrs "nativeint"
+    if cinfo.Gen_c.return_errno = false && Ocaml_config.version () >= (4, 3, 0)
+    then [%type: (nativeint[@unboxed])]
+    else [%type: nativeint]
   in
   fun t ~inside_view ~cinfo ->
     match t with
-    | Void -> if inside_view then Typ.any () else mk_typ "unit"
+    | Void -> if inside_view then Typ.any () else [%type: unit]
     | Primitive p ->
       if inside_view && prim_supports_attr p ~cinfo = false then Typ.any ()
       else
         ident_of_ml_prim ~no_attr:cinfo.Gen_c.return_errno
           (Ctypes_primitive_types.ml_prim p)
-    | Struct _ -> managed_buffer ()
-    | Union _ -> managed_buffer ()
-    | Abstract _ -> managed_buffer ()
+    | Struct _ -> [%type: Cstubs_internals.managed_buffer]
+    | Union _ -> [%type: Cstubs_internals.managed_buffer]
+    | Abstract _ -> [%type: Cstubs_internals.managed_buffer]
     | Pointer _ -> mk_ptr cinfo
     | Funptr _ -> mk_ptr cinfo
     | View { ty = Struct { tag; _ }; format_typ = Some ft; _ }
@@ -344,50 +301,35 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support passing %s as parameter" x
   in
-  let mptr w =
+  let mptr ?(f = fun x -> x) w =
     let n = param_name () in
-    let e = U.mk_ident n in
-    let f x = x in
+    let e = U.mk_ident_l [ n ] in
     match w with
     | `Ptr -> In_ptr_bind ([%pat? Ctypes_static.CPointer [%p U.mk_pat n]], e, f)
     | `Fptr ->
       In_fptr_bind ([%pat? Ctypes_static.Static_funptr [%p U.mk_pat n]], e, f)
   in
   let structured () =
-    match mptr `Ptr with
-    | In_ptr_bind (p, e, f) ->
-      let f e =
-        let x = U.mk_lid "Ctypes_static.structured" in
-        f (Exp.field e x)
-      in
-      In_ptr_bind (p, e, f)
-    | In_ident | In_trans _ | In_fptr_bind _ -> assert false
+    mptr ~f:(fun e -> [%expr [%e e].Ctypes_static.structured]) `Ptr
   in
   let rec iter : type a. a typ -> ?type_expr:Parsetree.expression -> bool -> 'b
       =
     let open Ctypes_static in
     fun t ?type_expr inside_view ->
+      let ce p = if inside_view then Some p else None in
       match t with
       | Void -> (None, In_ident)
       | Primitive p -> (cond_expand_prim p inside_view cinfo, In_ident)
-      | Pointer _ ->
-        let pat =
-          if inside_view then Some [%pat? Ctypes_static.Pointer _] else None
-        in
-        (pat, mptr `Ptr)
-      | Funptr _ ->
-        let pat =
-          if inside_view then Some [%pat? Ctypes_static.Funptr _] else None
-        in
-        (pat, mptr `Fptr)
-      | Struct _ -> (Some [%pat? Ctypes_static.Struct _], structured ())
-      | Union _ -> (Some [%pat? Ctypes_static.Union _], structured ())
-      | Abstract _ -> (Some [%pat? Ctypes_static.Abstract _], structured ())
+      | Pointer _ -> (ce [%pat? Ctypes_static.Pointer _], mptr `Ptr)
+      | Funptr _ -> (ce [%pat? Ctypes_static.Funptr _], mptr `Fptr)
+      | Struct _ -> (ce [%pat? Ctypes_static.Struct _], structured ())
+      | Union _ -> (ce [%pat? Ctypes_static.Union _], structured ())
+      | Abstract _ -> (ce [%pat? Ctypes_static.Abstract _], structured ())
       | OCaml _ -> (None, In_ident)
       | View { format_typ = Some ft; _ } when ft == Evil_hack.format_typ ->
         (None, In_ident)
       | View { ty; _ } -> (
-        match inline_view t ty ?type_expr inside_view with
+        match inline_view ty ?type_expr inside_view with
         | Some s -> s
         | None ->
           let f, p = mk_ex_pat @@ param_name () in
@@ -418,31 +360,21 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
       | Bigarray _ -> error t
   (* various dirty tricks to reduce the lines of boilerplate code *)
   and inline_view :
-      type a b. a typ -> b typ -> ?type_expr:Parsetree.expression -> bool -> 'c
-      =
-   fun tparent tchild ?type_expr inside_view ->
+      type a. a typ -> ?type_expr:Parsetree.expression -> bool -> 'c =
+   fun tchild ?type_expr inside_view ->
     if inside_view then None
-    else if Created_types.is_typedef_struct tparent then
-      match iter tchild ?type_expr inside_view with
-      | Some p, (In_trans _ as trans) ->
-        let p = [%pat? Ctypes_static.View { Ctypes_static.ty = [%p p]; _ }] in
-        Some (Some p, trans)
-      | _ -> None
     else
       match (tchild, type_expr) with
       | CS.Pointer _, Some x -> (
         match extract_pointer_opt x with
-        | Some orig_expr -> (
-          match mptr `Ptr with
-          | In_ptr_bind (p, e, _) ->
-            let f e =
-              [%expr
-                match [%e e] with
-                | None -> Ctypes.from_voidp [%e orig_expr] Ctypes.null
-                | Some x -> x]
-            in
-            Some (None, In_ptr_bind (p, e, f))
-          | In_ident | In_trans _ | In_fptr_bind _ -> assert false )
+        | Some orig_expr ->
+          let f e =
+            [%expr
+              match [%e e] with
+              | None -> Ctypes.from_voidp [%e orig_expr] Ctypes.null
+              | Some x -> x]
+          in
+          Some (None, mptr ~f `Ptr)
         | None -> None )
       | _ -> None
   in
@@ -491,7 +423,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
       let f e expr =
         [%expr
           Cstubs_internals.make_ptr [%e e]
-            (Ppx_cstubs_internals.to_voidp [%e expr])]
+            (Ppx_cstubs.Ppx_cstubs_internals.to_voidp [%e expr])]
       in
       let e =
         match type_expr with None -> None | Some e -> extract_pointer e
@@ -506,7 +438,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
       let f expr =
         [%expr
           Cstubs_internals.make_fun_ptr [%e e]
-            (Ppx_cstubs_internals.to_voidp [%e expr])]
+            (Ppx_cstubs.Ppx_cstubs_internals.to_voidp [%e expr])]
       in
       (Some [%pat? Ctypes_static.Funptr [%p p]], Some f)
     | Struct _ -> structured `Struct
@@ -514,7 +446,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
     | View { format_typ = Some ft; _ } when ft == Evil_hack.format_typ ->
       (None, None)
     | View { ty; _ } -> (
-      match inline_view ?type_expr t ty inside_view with
+      match inline_view ?type_expr ty inside_view with
       | Some s -> s
       | None ->
         let s = param_name () in
@@ -543,20 +475,15 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
     | Array _ -> error t
     | Bigarray _ -> error t
   and inline_view :
-      type a b.
+      type a.
       ?type_expr:Parsetree.expression ->
       a typ ->
-      b typ ->
       bool ->
       ( Parsetree.pattern option
       * (Parsetree.expression -> Parsetree.expression) option )
       option =
-   fun ?type_expr tparent tchild inside_view ->
+   fun ?type_expr tchild inside_view ->
     if inside_view then None
-    else if Created_types.is_typedef_struct tparent then
-      match iter ?type_expr tchild inside_view with
-      | (None, _) as x -> Some x
-      | _ -> None
     else
       match (tchild, type_expr) with
       | CS.Pointer _, Some x -> (
@@ -569,7 +496,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
               | ppxc__not_null ->
                 Some
                   (Cstubs_internals.make_ptr [%e orig_expr]
-                     (Ppx_cstubs_internals.to_voidp ppxc__not_null))]
+                     (Ppx_cstubs.Ppx_cstubs_internals.to_voidp ppxc__not_null))]
           in
           Some (None, Some f)
         | None -> None )
@@ -662,7 +589,8 @@ let build_fun param_infos ret_info ~ext_fun =
       (ListLabels.fold_right ~init:fb param_infos ~f:(fun a ac ->
            Exp.fun_ a.label None a.fun_pat ac))
 
-let poly_prefix pos = "ppxc__t_" ^ string_of_int pos
+let poly_prefix pos =
+  String.concat "" [ Myconst.private_prefix; "t_"; string_of_int pos ]
 
 let ctypes_typ_constr expr i ct =
   let expr =
@@ -674,17 +602,18 @@ let ctypes_typ_constr expr i ct =
     | _ -> Exp.constraint_ expr ct
   in
   let t = Typ.var (poly_prefix i) in
-  let t = U.mk_typc ~l:[ t ] "Ctypes.typ" in
+  let t = [%type: [%t t] Ctypes.typ] in
   Exp.constraint_ expr t
 
 let stdlib_fun s =
-  let prefix =
+  let l = [ s ] in
+  let l =
     let ver = Ocaml_config.version () in
-    if ver >= (4, 8, 0) then "Stdlib."
-    else if ver >= (4, 7, 0) then "Stdlib.Pervasives."
-    else "Pervasives."
+    if ver >= (4, 8, 0) then "Stdlib" :: l
+    else if ver >= (4, 7, 0) then "Stdlib" :: "Pervasives" :: l
+    else "Pervasives" :: l
   in
-  U.mk_ident (prefix ^ s)
+  U.mk_ident_l l
 
 let ignore_fun () = stdlib_fun "ignore"
 
@@ -711,7 +640,7 @@ let build_ignore_expr (el, params) (retexpr, ret_info) =
   match e with None -> None | Some s -> Some [%expr if false then [%e s]]
 
 let match_nw expr case =
-  let ic = [%expr Ppx_cstubs_internals.invalid_code ()] in
+  let ic = [%expr Ppx_cstubs.Ppx_cstubs_internals.invalid_code ()] in
   let any = Exp.case (Pat.any ()) ic in
   Exp.match_ ~attrs:[ U.ocaml_warning "-4" ] expr [ case; any ]
 
@@ -768,7 +697,7 @@ let build_pattern fn_expr patterns ~func =
   | None -> None
   | Some pat -> Some (match_nw fn_expr (Exp.case pat func))
 
-let collect_info fn ~mod_path cinfo lexpr =
+let collect_info fn cinfo lexpr =
   let param_name = create_param_name () in
   let rec iter :
       type a.
@@ -812,7 +741,7 @@ let collect_info fn ~mod_path cinfo lexpr =
       in
       let rannot_needed = rmatch_pat <> None && res_trans <> None in
       (* ?? *)
-      let rconstr_ptype = constraint_of_typ ~mod_path t in
+      let rconstr_ptype = constraint_of_typ t in
       ( List.rev accu,
         { rext_ptype; rmatch_pat; rannot_needed; res_trans; rconstr_ptype } )
     | CS.Function (a, b) ->
@@ -820,10 +749,10 @@ let collect_info fn ~mod_path cinfo lexpr =
       let match_pat, param_trans =
         pat_expand_in ~cinfo ?type_expr a param_name
       in
-      let type_info, ext_ptype = ml_typ_of_arg_typ a ~cinfo ~mod_path in
+      let type_info, ext_ptype = ml_typ_of_arg_typ a ~cinfo in
       let label = Asttypes.Nolabel in
       let annot_needed = type_info <> `Complete in
-      let constr_ptype = constraint_of_typ ~mod_path a in
+      let constr_ptype = constraint_of_typ a in
       let i =
         {
           ext_ptype;
@@ -858,27 +787,26 @@ let build_fun_constraint params ~return_errno =
   let start =
     match return_errno with
     | false -> vl
-    | true -> Typ.tuple [ vl; mk_typ "Signed.sint" ]
+    | true -> [%type: [%t vl] * Signed.sint]
   in
   let t = arrow true start in
   let fn = arrow false vl in
-  let fn = U.mk_typc ~l:[ fn ] "Ctypes.fn" in
-  (t, fn)
+  (t, [%type: [%t fn] Ctypes.fn])
 
 type result = {
   extern : Parsetree.structure_item;
   intern : Parsetree.structure_item;
 }
 
-let common ~mod_path fn ext_name cinfo common =
+let common fn ext_name cinfo common =
   let param_infos, ret_info =
     match common with
     | `Extern (el, ret) ->
       let exprl = List.rev (ret :: List.rev_map el ~f:snd) in
-      let param_infos, ret_info = collect_info ~mod_path fn cinfo exprl in
+      let param_infos, ret_info = collect_info fn cinfo exprl in
       ( List.map2 el param_infos ~f:(fun (l, _) p -> { p with label = l }),
         ret_info )
-    | `Foreign_value _ | `Foreign _ -> collect_info ~mod_path fn cinfo []
+    | `Foreign_value _ | `Foreign _ -> collect_info fn cinfo []
   in
   let extern = build_external ~ocaml_name:ext_name param_infos ret_info cinfo in
   let ext_fun = mk_ex ext_name in
@@ -889,8 +817,7 @@ let common ~mod_path fn ext_name cinfo common =
   let build_stri already_constrained res =
     let ext_fun_pat = U.mk_pat ext_name in
     let ext_fun_pat_c =
-      (* Migrate parsetree doesn't seem to capture it *)
-      if Ocaml_config.version () >= (4, 6, 0) then
+      if Ocaml_config.version () <> (4, 5, 0) || not !Options.pretty then
         Pat.constraint_ ext_fun_pat (Typ.poly [] typ)
       else ext_fun_pat
     in
@@ -963,15 +890,14 @@ let common ~mod_path fn ext_name cinfo common =
   in
   { extern; intern }
 
-let external' fn ~mod_path name el retexpr cinfo =
-  common fn ~mod_path name cinfo (`Extern (el, retexpr))
+let external' fn name el retexpr cinfo =
+  common fn name cinfo (`Extern (el, retexpr))
 
-let foreign_value fn ~mod_path name retexpr cinfo =
+let foreign_value fn name retexpr cinfo =
   let el = [ (Asttypes.Nolabel, [%expr void]) ] in
-  common fn ~mod_path name cinfo (`Foreign_value (el, retexpr))
+  common fn name cinfo (`Foreign_value (el, retexpr))
 
-let foreign fn ~mod_path name cinfo fn_expr =
-  common fn ~mod_path name cinfo (`Foreign fn_expr)
+let foreign fn name cinfo fn_expr = common fn name cinfo (`Foreign fn_expr)
 
 type cb_param_info = {
   cb_fun_pat : pattern;
@@ -1050,8 +976,6 @@ let ocaml_funptr mof callback_fn =
     cb_top_mod;
     cb_acquire_runtime = _;
     cb_thread_registration = _;
-    cb_orig_mod;
-    cb_top;
     cb_user_fun;
     cb_init_fun;
   } =
@@ -1059,31 +983,16 @@ let ocaml_funptr mof callback_fn =
   in
   let mod_path = cb_mod_path in
   let param_infos, ret_info = collect_info_cb callback_fn in
-  let fn_n = String.concat "." (mod_path @ [ cb_top_mod; "fn" ]) in
-  let fn_typ = U.mk_typc fn_n in
+  let mpath s = mod_path @ [ cb_top_mod; s ] in
+  let fn_l = mpath "fn" in
+  let fn_typ = U.mk_typc_l fn_l in
   let user_fun = Exp.constraint_ cb_user_fun fn_typ in
   let fun' = build_cb_fun param_infos ret_info ~user_fun in
-  let fn_ref = U.mk_ident fn_n in
-  let e = U.mk_ident (cb_orig_mod ^ ".make_pointer") in
-  let mod_type_name = U.safe_mlname ~capitalize:true ~prefix:cb_orig_mod () in
+  let fn_ref = U.mk_ident_l fn_l in
   let pat_binding_name = U.mk_pat cb_binding_name in
-  let typ =
-    U.sig_from_mod_type
-      [%stri
-        module type X = sig
-          include module type of struct
-            let [%p pat_binding_name] = [%e e] (Obj.magic 0n)
-          end
-        end]
-  in
-  let mt = Mtd.mk ~typ:(Mty.signature typ) (U.mk_loc mod_type_name) in
-  let mod_typ = Str.modtype mt in
-  Hashtbl.replace Script_result.htl_stri cb_top mod_typ;
   let prim_name = U.safe_mlname () in
   let external' =
-    let pointer =
-      String.concat "." (mod_path @ [ cb_top_mod; "raw_pointer" ]) |> U.mk_typc
-    in
+    let pointer = U.mk_typc_l (mpath "raw_pointer") in
     let typ =
       ListLabels.fold_right param_infos ~init:(Typ.any ()) ~f:(fun _ acc ->
           Typ.arrow Asttypes.Nolabel (Typ.any ()) acc)
@@ -1092,12 +1001,9 @@ let ocaml_funptr mof callback_fn =
     let p = Val.mk ~prim:[ cb_init_fun ] (U.mk_loc prim_name) typ in
     Str.primitive p
   in
+  let mk_pointer = U.mk_ident_l (mpath "make_pointer") in
   let f e =
-    let mk_pointer =
-      String.concat "." (mod_path @ [ cb_top_mod; "make_pointer" ])
-      |> U.mk_ident
-    in
-    let f = U.mk_ident prim_name in
+    let f = U.mk_ident_l [ prim_name ] in
     [%expr [%e mk_pointer] ([%e f] [%e e])]
   in
   let expr =
@@ -1113,110 +1019,164 @@ let ocaml_funptr mof callback_fn =
   in
   let stri = [%stri let [%p pat_binding_name] = [%e expr]] in
   let m = Mod.structure [ external'; stri ] in
-  let path = String.concat "." (mod_path @ [ mod_type_name ]) in
-  let mt = Mty.ident (U.mk_lid path) in
+  let e =
+    [%expr [%e mk_pointer] (Ppx_cstubs.Ppx_cstubs_internals.obj_magic 0n)]
+  in
+  let e =
+    if Ocaml_config.use_open_struct () then U.alias_impl_mod_let e
+    else
+      let n = !Lconst.impl_mod_name in
+      Exp.letmodule (U.mk_oloc n) (Mod.ident (U.mk_lid n)) e
+  in
+  let mt =
+    U.sig_from_mod_type
+      [%stri
+        module type X = sig
+          include module type of struct
+            let [%p pat_binding_name] = [%e e]
+          end
+        end]
+  in
+  let mt = Mty.signature mt in
   let stri = Str.include_ (Incl.mk (Mod.constraint_ m mt)) in
   Hashtbl.replace Script_result.htl_stri cb_bottom stri
 
 type record_stris = {
-  r_modul : structure_item;
-  r_include_top : structure_item;
-  r_include_bottom : structure_item;
+  r_stri_top : structure_item list;
+  r_stri_bottom : structure_item list;
+  r_stri_type_mod : structure_item list;
 }
 
 let gen_record_stris ~mod_path ~type_name l =
-  let types =
-    List.mapi l ~f:(fun i _ ->
-        let n = U.mk_loc ("x" ^ string_of_int i) in
-        let t = Type.mk ~kind:Ptype_abstract n in
-        Sig.type_ Asttypes.Recursive [ t ])
+  let sig_shared_name = U.safe_mlname ~prefix:"S" () in
+  let sig_shared_name_lid = U.mk_lid_l [ sig_shared_name ] in
+  let stri_sig_shared =
+    let types =
+      List.mapi l ~f:(fun i _ ->
+          let n = U.mk_loc ("x" ^ string_of_int i) in
+          let t = Type.mk ~kind:Ptype_abstract n in
+          Sig.type_ Asttypes.Recursive [ t ])
+    in
+    let typ = Mty.signature types in
+    let s = Mtd.mk ~typ (U.mk_loc sig_shared_name) in
+    Str.modtype s
   in
-  let typ = Mty.signature types in
-  let sig_name = U.safe_mlname ~capitalize:true ~prefix:"S_" () in
-  let s = Mtd.mk ~typ (U.mk_loc sig_name) in
-  let s1 = Str.modtype s in
-  let fields =
-    List.mapi l ~f:(fun i (name, loc, _) ->
-        let t = U.mk_typc ("M.x" ^ string_of_int i) in
-        let n = Location.mkloc name loc in
-        Type.field n t)
+  let functor_param = U.safe_mlname ~capitalize:true ~prefix:"M" () in
+  let make_type ?attrs ?manifest mod_path =
+    let fields =
+      List.mapi l ~f:(fun i (name, loc, _) ->
+          let l = mod_path @ [ functor_param; "x" ^ string_of_int i ] in
+          let t = U.mk_typc_l l in
+          let n = Location.mkloc name loc in
+          Type.field n t)
+    in
+    let n = U.mk_loc type_name in
+    let t = Type.mk ?attrs ?manifest ~kind:(Ptype_record fields) n in
+    Str.type_ Asttypes.Recursive [ t ]
   in
-  let n = U.mk_loc type_name in
-  let typ' = Type.mk ~kind:(Ptype_record fields) n in
-  let stri = Str.type_ Asttypes.Recursive [ typ' ] in
-  let pmod = Mod.structure [ stri ] in
-  let sig_lid = U.mk_lid sig_name in
-  let pmod = Mod.functor_ (Named (U.mk_oloc "M", Mty.ident sig_lid)) pmod in
-  let fr_name = U.safe_mlname ~capitalize:true ~prefix:"F_" () in
-  let m = U.mk_oloc fr_name in
-  let s2 = Str.module_ (Mb.mk m pmod) in
-  let pl1, pl2 =
-    List.mapi l ~f:(fun i _ ->
-        let i = string_of_int i in
-        let n = U.mk_lid ("x" ^ i) in
-        ((n, Typ.var ("t" ^ i)), (n, U.mk_typc ("t" ^ i))))
-    |> List.split
+  let unpacked_module =
+    let pl1, pl2 =
+      List.mapi l ~f:(fun i _ ->
+          let i = string_of_int i in
+          let n = U.mk_lid_l [ "x" ^ i ] in
+          ((n, Typ.var ("t" ^ i)), (n, U.mk_typc_l [ "t" ^ i ])))
+      |> List.split
+    in
+    let ppat = Typ.package sig_shared_name_lid pl1 in
+    let pexpr = Typ.package sig_shared_name_lid pl2 in
+    let pl_len = List.length l - 1 in
+    let x, constr_pat, constr_expr =
+      ListLabels.fold_right ~init:(pl_len, ppat, pexpr) l
+        ~f:(fun _ (i, last_pat, last_expr) ->
+          let si = string_of_int i in
+          let var = Typ.var ("t" ^ si) in
+          let t = [%type: [%t var] Ctypes.typ] in
+          let t_pat = Typ.arrow Asttypes.Nolabel t last_pat in
+          let var = U.mk_typc_l [ "t" ^ si ] in
+          let t = [%type: [%t var] Ctypes.typ] in
+          let t_expr = Typ.arrow Asttypes.Nolabel t last_expr in
+          (pred i, t_pat, t_expr))
+    in
+    assert (x = -1);
+    let types =
+      List.mapi l ~f:(fun i (_, loc, _) ->
+          U.with_loc loc @@ fun () ->
+          let i = string_of_int i in
+          let manifest = U.mk_typc_l [ "t" ^ i ] in
+          let t = Type.mk ~manifest ~kind:Ptype_abstract (U.mk_loc ("x" ^ i)) in
+          Str.type_ Asttypes.Recursive [ t ])
+    in
+    let pmod = Mod.structure types in
+    let init = Exp.pack pmod in
+    let init =
+      ListLabels.fold_right ~init l ~f:(fun _ ac ->
+          Exp.fun_ Asttypes.Nolabel None (Pat.any ()) ac)
+    in
+    let init = Exp.constraint_ init constr_expr in
+    let x, expr =
+      ListLabels.fold_right ~init:(pl_len, init) l ~f:(fun _ (i, last) ->
+          let n = U.mk_loc ("t" ^ string_of_int i) in
+          (pred i, Exp.newtype n last))
+    in
+    assert (x = -1);
+    let sl = List.mapi l ~f:(fun i _ -> U.mk_loc ("t" ^ string_of_int i)) in
+    let t = Typ.poly sl constr_pat in
+    let fun_name = U.safe_mlname () in
+    let p = Pat.var (U.mk_loc fun_name) in
+    let p = Pat.constraint_ p t in
+    let vb = Vb.mk p expr in
+    let lexpr = List.map l ~f:(fun (_, _, l) -> (Asttypes.Nolabel, l)) in
+    let lexpr = Exp.apply (U.mk_ident_l [ fun_name ]) lexpr in
+    let w = Exp.let_ Asttypes.Nonrecursive [ vb ] lexpr in
+    Mod.unpack w
   in
-  let ppat = Typ.package sig_lid pl1 in
-  let pexpr = Typ.package sig_lid pl2 in
-  let pl_len = List.length l - 1 in
-  let x, constr_pat, constr_expr =
-    ListLabels.fold_right ~init:(pl_len, ppat, pexpr) l
-      ~f:(fun _ (i, last_pat, last_expr) ->
-        let si = string_of_int i in
-        let var = Typ.var ("t" ^ si) in
-        let t = U.mk_typc ~l:[ var ] "Ctypes.typ" in
-        let t_pat = Typ.arrow Asttypes.Nolabel t last_pat in
-        let var = U.mk_typc ("t" ^ si) in
-        let t = U.mk_typc ~l:[ var ] "Ctypes.typ" in
-        let t_expr = Typ.arrow Asttypes.Nolabel t last_expr in
-        (pred i, t_pat, t_expr))
-  in
-  assert (x = -1);
-  let types =
-    List.mapi l ~f:(fun i (_, loc, _) ->
-        U.with_loc loc @@ fun () ->
-        let i = string_of_int i in
-        let manifest = U.mk_typc ("t" ^ i) in
-        let t = Type.mk ~manifest ~kind:Ptype_abstract (U.mk_loc ("x" ^ i)) in
-        Str.type_ Asttypes.Recursive [ t ])
-  in
-  let pmod = Mod.structure types in
-  let init = Exp.pack pmod in
-  let init =
-    ListLabels.fold_right ~init l ~f:(fun _ ac ->
-        Exp.fun_ Asttypes.Nolabel None (Pat.any ()) ac)
-  in
-  let init = Exp.constraint_ init constr_expr in
-  let x, expr =
-    ListLabels.fold_right ~init:(pl_len, init) l ~f:(fun _ (i, last) ->
-        let n = U.mk_loc ("t" ^ string_of_int i) in
-        (pred i, Exp.newtype n last))
-  in
-  assert (x = -1);
-  let sl = List.mapi l ~f:(fun i _ -> U.mk_loc ("t" ^ string_of_int i)) in
-  let t = Typ.poly sl constr_pat in
-  let fun_name = U.safe_mlname () in
-  let p = Pat.var (U.mk_loc fun_name) in
-  let p = Pat.constraint_ p t in
-  let vb = Vb.mk p expr in
-  let lexpr = List.map l ~f:(fun (_, _, l) -> (Asttypes.Nolabel, l)) in
-  let lexpr = Exp.apply (U.mk_ident fun_name) lexpr in
-  let w = Exp.let_ Asttypes.Nonrecursive [ vb ] lexpr in
-  let m = Mod.unpack w in
-  let m = Mod.apply (Mod.ident (U.mk_lid fr_name)) m in
-  let n = U.mk_oloc "R" in
-  let s3 = Str.module_ (Mb.mk n m) in
-  let s = Mod.structure [ s1; s2; s3 ] in
-  let mod_name = CCString.capitalize_ascii type_name ^ "__typ" in
-  let n = U.mk_oloc mod_name in
-  let r_modul = Str.module_ (Mb.mk n s) in
-  let mk l =
-    let s = String.concat "." l in
-    let m = Mod.ident (U.mk_lid s) in
-    let idl = Incl.mk m in
-    Str.include_ idl
-  in
-  let r_include_top = mk [ mod_name; "R" ] in
-  let r_include_bottom = mk (mod_path @ [ mod_name; "R" ]) in
-  { r_modul; r_include_top; r_include_bottom }
+  if Ocaml_config.use_open_struct () = false then
+    let functor_name = U.safe_mlname ~capitalize:true ~prefix:"F" () in
+    let pmod =
+      let p1 = Named (U.mk_oloc functor_param, Mty.ident sig_shared_name_lid) in
+      Mod.functor_ p1 (Mod.structure [ make_type [] ])
+    in
+    let nf = Ocaml_config.version () <= (4, 3, 0) && !Options.pretty in
+    let mod_name_typ = CCString.capitalize_ascii type_name ^ "__typ" in
+    let m =
+      let x = if nf then Mod.ident (U.mk_lid functor_name) else pmod in
+      Mod.apply x unpacked_module
+    in
+    let stri_typ = Str.module_ (Mb.mk (U.mk_oloc mod_name_typ) m) in
+    let mk l = Str.include_ (Incl.mk (Mod.ident (U.mk_lid_l l))) in
+    let incl_top = mk [ mod_name_typ ] in
+    let incl_bottom = mk (mod_path @ [ mod_name_typ ]) in
+    let r_stri_top =
+      if nf then
+        let functor' = Str.module_ (Mb.mk (U.mk_oloc functor_name) pmod) in
+        [ stri_sig_shared; functor'; stri_typ; incl_top ]
+      else [ stri_sig_shared; stri_typ; incl_top ]
+    in
+    let r_stri_bottom = [ incl_bottom ] in
+    { r_stri_top; r_stri_bottom; r_stri_type_mod = [] }
+  else
+    let make_module e = Str.module_ (Mb.mk (U.mk_oloc functor_param) e) in
+    let m = make_module unpacked_module in
+    let typ' = make_type [] in
+    let r_stri_top = [ stri_sig_shared; m; typ' ] in
+    let alias_name = !Lconst.impl_mod_name ^ "_a" in
+    let os = U.alias_impl_mod_os ~alias_name () in
+    let manifest = U.mk_typc_l (mod_path @ [ type_name ]) in
+    let t1 = make_type ~manifest mod_path in
+    let os_path = alias_name :: List.tl mod_path in
+    let f attrs =
+      [%str
+        include (
+          struct
+            [%%s [ t1 ]]
+          end :
+            sig
+              include module type of struct
+                [%%s [ os ]]
+
+                [%%s [ make_type ?attrs ~manifest os_path ]]
+              end
+            end )]
+    in
+    let attrs = Some [ Attributes.manifest_replace_attrib ] in
+    { r_stri_top; r_stri_bottom = f attrs; r_stri_type_mod = f None }

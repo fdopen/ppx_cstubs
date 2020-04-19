@@ -1,5 +1,5 @@
 (library
- (name ppx_cstubs_internals)
+ (name ppx_cstubs)
  (public_name ppx_cstubs)
  (libraries ctypes integers)
  (synopsis "ppx_cstubs runtime lib"))

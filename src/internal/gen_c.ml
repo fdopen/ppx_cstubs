@@ -533,7 +533,7 @@ let extract =
   fun ~all_float ~user_noalloc ~locs a ->
     let i = ref 0 in
     let name () =
-      let res = Printf.sprintf "ppxc__%x" !i in
+      let res = Printf.sprintf "%s%x" Myconst.private_prefix !i in
       incr i;
       res
     in
@@ -912,7 +912,10 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc el =
           | Asttypes.Labelled s -> s
         in
         if Hashtbl.mem htl_names r then U.error "labels must be unique";
-        let s = Printf.sprintf "ppxc__var%d_%s" i (U.safe_ascii_only r) in
+        let s =
+          Printf.sprintf "%svar%d_%s" Myconst.private_prefix i
+            (U.safe_ascii_only r)
+        in
         Hashtbl.replace htl_names r s;
         s)
   in
@@ -950,7 +953,7 @@ module Callback = struct
     fun a fun_name ->
       let i = ref 0 in
       let name () =
-        let res = Printf.sprintf "ppxc__%x" !i in
+        let res = Printf.sprintf "%s%x" Myconst.private_prefix !i in
         incr i;
         res
       in
@@ -1000,7 +1003,13 @@ let gen_callback_fun fn mof =
       {|
 #ifndef PPX_CSTUBS_CTYPES_THREAD_REGISTER_DECLARED
 #define PPX_CSTUBS_CTYPES_THREAD_REGISTER_DECLARED 1
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern int ( *ctypes_thread_register)(void);
+#ifdef __cplusplus
+}
+#endif
 #endif
 |};
   Printf.bprintf buf "static value %s = Val_unit;\n" global_callback_var;
@@ -1031,12 +1040,14 @@ extern int ( *ctypes_thread_register)(void);
   in
   ( if List.length alloc_params > 6 then (
     Buffer.add_string buf "  CAMLparam0();\n";
-    Printf.bprintf buf "  CAMLlocalN(ppxc__buf, %d);\n" params_length;
+    Printf.bprintf buf "  CAMLlocalN(%sbuf, %d);\n" Myconst.private_prefix
+      params_length;
     List.iteri params ~f:(fun i s ->
-        Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc ());
+        Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
+        @@ s.inj_alloc ());
     Buffer.add_string buf "  CAMLdrop;\n";
-    Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, ppxc__buf);\n"
-      ret.ocaml_param global_callback_var params_length )
+    Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, %sbuf);\n"
+      ret.ocaml_param global_callback_var params_length Myconst.private_prefix )
   else
     let g p s =
       Printf.bprintf buf "  %s%s = %s;\n" p s.ocaml_ret_var @@ s.inj_alloc ()
@@ -1067,15 +1078,19 @@ extern int ( *ctypes_thread_register)(void);
       g_val hd;
       Buffer.add_string buf "  CAMLdrop;\n" );
     if params_length > 3 then (
-      Printf.bprintf buf "  value ppxc__buf[%d];\n" params_length;
+      Printf.bprintf buf "  value %sbuf[%d];\n" Myconst.private_prefix
+        params_length;
       List.iteri params ~f:(fun i s ->
           match s.r_noalloc_typ with
           | Noalloc_never | Noalloc_opt ->
-            Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i s.ocaml_ret_var
+            Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
+              s.ocaml_ret_var
           | Noalloc_always ->
-            Printf.bprintf buf "  ppxc__buf[%d] = %s;\n" i @@ s.inj_alloc ());
-      Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, ppxc__buf);\n"
-        ret.ocaml_param global_callback_var params_length )
+            Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
+            @@ s.inj_alloc ());
+      Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, %sbuf);\n"
+        ret.ocaml_param global_callback_var params_length Myconst.private_prefix
+      )
     else (
       List.iter params ~f:(fun s ->
           match s.r_noalloc_typ with
@@ -1112,12 +1127,12 @@ value %s (value);
 }
 #endif
 value %s (value p) {
-    if ( %s != Val_unit ) {
-       caml_failwith("API abuse ppx_cstubs: OCaml function pointer not static");
-    }
-    %s = p;
-    caml_register_generational_global_root(&%s);
-    return (CTYPES_FROM_PTR(&%s));
+  if ( %s != Val_unit ) {
+    caml_failwith("API abuse ppx_cstubs: OCaml function pointer not static");
+  }
+  %s = p;
+  caml_register_generational_global_root(&%s);
+  return (CTYPES_FROM_PTR(&%s));
 }
 
 |}

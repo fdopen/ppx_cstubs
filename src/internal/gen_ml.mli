@@ -26,30 +26,15 @@ type result = {
 
 val external' :
   'a Ctypes.fn ->
-  mod_path:string list ->
   string ->
   (Asttypes.arg_label * expression) list ->
   expression ->
   Gen_c.info ->
   result
 
-val foreign :
-  'a Ctypes.fn ->
-  mod_path:string list ->
-  string ->
-  Gen_c.info ->
-  expression ->
-  result
+val foreign : 'a Ctypes.fn -> string -> Gen_c.info -> expression -> result
 
-val foreign_value :
-  'a Ctypes.fn ->
-  mod_path:string list ->
-  string ->
-  expression ->
-  Gen_c.info ->
-  result
-
-val constraint_of_typ : mod_path:string list -> 'a Ctypes.typ -> core_type
+val foreign_value : 'a Ctypes.fn -> string -> expression -> Gen_c.info -> result
 
 val ocaml_funptr : Marshal_types.ocaml_funptr -> 'a Ctypes.fn -> unit
 
@@ -57,9 +42,9 @@ val ocaml_funptr : Marshal_types.ocaml_funptr -> 'a Ctypes.fn -> unit
 val stdlib_fun : string -> expression
 
 type record_stris = {
-  r_modul : structure_item;
-  r_include_top : structure_item;
-  r_include_bottom : structure_item;
+  r_stri_top : structure_item list;
+  r_stri_bottom : structure_item list;
+  r_stri_type_mod : structure_item list;
 }
 
 val gen_record_stris :
