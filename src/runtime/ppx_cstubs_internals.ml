@@ -243,6 +243,10 @@ module Signed = struct
       let ( lsl ) = shift_left
 
       let ( lsr ) = shift_right_logical
+
+      [@@@ocaml.warning "-32"]
+
+      let ( asr ) = shift_right
     end
 
     external of_nativeint : t -> t = "%identity"
@@ -324,6 +328,10 @@ module Signed = struct
       let ( lsl ) = shift_left
 
       let ( lsr ) = shift_right_logical
+
+      [@@@ocaml.warning "-32"]
+
+      let ( asr ) = shift_right
     end
 
     let lognot x = lnot x
