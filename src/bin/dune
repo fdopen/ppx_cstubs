@@ -1,7 +1,12 @@
+(rule
+ (targets link_flags.sexp)
+ (deps (:config config/config.exe))
+ (action (run %{config} %{ocaml_where} link_flags.sexp %{ocaml_version})))
+
 (executable
  (name exec)
  (modes byte)
- (link_flags (-linkall))
+ (link_flags (:include link_flags.sexp))
  (libraries ppx_cstubs.internal)
 )
 (install

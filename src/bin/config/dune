@@ -1,0 +1,4 @@
+(executable
+ (name config)
+ (libraries containers)
+)
