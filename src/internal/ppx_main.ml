@@ -226,7 +226,7 @@ end = struct
 
   let constant_string e =
     match e.pexp_desc with
-    | Pexp_constant (Pconst_string (s, _)) -> Some s
+    | Pexp_constant (Pconst_string (s, _, _)) -> Some s
     | _ -> None
 
   let get_cname ~def l =
@@ -240,7 +240,10 @@ end = struct
                   {
                     pstr_desc =
                       Pstr_eval
-                        ( { pexp_desc = Pexp_constant (Pconst_string (x, _)); _ },
+                        ( {
+                            pexp_desc = Pexp_constant (Pconst_string (x, _, _));
+                            _;
+                          },
                           [] );
                     _;
                   };

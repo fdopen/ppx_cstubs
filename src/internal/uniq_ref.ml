@@ -115,7 +115,10 @@ let get_remove_string_exn name attr =
                 {
                   pstr_desc =
                     Pstr_eval
-                      ( { pexp_desc = Pexp_constant (Pconst_string (s, _)); _ },
+                      ( {
+                          pexp_desc = Pexp_constant (Pconst_string (s, _, _));
+                          _;
+                        },
                         _ );
                   _;
                 };
