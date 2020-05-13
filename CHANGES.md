@@ -1,3 +1,11 @@
+0.4.1 (13/05/2020)
+------------------
+
+- bump internally used AST version to 4.11
+
+- fix linking for older OCaml versions
+
+
 0.4.0 (30/04/2020)
 ------------------
 
@@ -10,6 +18,7 @@
   versa.
 
 - bump internally used AST version to 4.10
+
 
 0.3.0 (26/01/2020)
 ------------------
