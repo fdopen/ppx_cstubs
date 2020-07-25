@@ -127,4 +127,6 @@ end
 
 module Various : sig
   val use_threads : unit -> bool
+
+  val split_findlib_pkgs : string -> string list
 end

@@ -2636,7 +2636,9 @@ let init top =
         [
           ( "-pkg",
             Arg.String
-              (fun s -> Options.findlib_pkgs := s :: !Options.findlib_pkgs),
+              (fun s ->
+                Options.findlib_pkgs :=
+                  Std.Various.split_findlib_pkgs s @ !Options.findlib_pkgs),
             "<opt>     import types from findlib package <opt>" );
         ]
   in

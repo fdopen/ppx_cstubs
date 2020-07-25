@@ -244,4 +244,8 @@ module Various = struct
       List.exists
         (function "threads" | "threads.posix" -> true | _ -> false)
         pkgs
+
+  let rex = Re.Perl.re "[,\\s]+" |> Re.compile
+
+  let split_findlib_pkgs s = Re.split rex s |> List.filter (( <> ) "")
 end

@@ -102,7 +102,8 @@ let cpp_main top =
               anon_is_target := false),
           "<dir>     Add <dir> to the list of include directories" );
         ( "-pkg",
-          arg_string (fun s -> findlib_pkgs := s :: !findlib_pkgs),
+          arg_string (fun s ->
+              findlib_pkgs := Std.Various.split_findlib_pkgs s @ !findlib_pkgs),
           "<opt>     import types from findlib package <opt>" );
         ( "-toolchain",
           arg_string (fun s -> toolchain := Some s),
