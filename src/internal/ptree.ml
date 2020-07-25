@@ -349,7 +349,7 @@ module Topscript = struct
     let last_loc = ref !Ast_helper.default_loc in
     fun s ->
       let loc = !Ast_helper.default_loc in
-      if !last_loc <> loc then (
+      if !last_loc <> loc || true then (
         last_loc := loc;
         let loc = U.marshal_to_str_expr loc in
         f [%stri let () = Ppxc__script.set_loc [%e loc]] );
@@ -361,56 +361,64 @@ module Topscript = struct
 
   let add_extract_phase0 = add_help Structure_extract_phase0.add_entry
 
-  let run () =
+  let run top =
     let extract_phase0_entries = Structure_extract_phase0.get_entries () in
     let extract_entries = Structure_extract.get_entries () in
     let build_entries = Structure_build_external.get_entries () in
-    let ctypes =
-      let ws = Ocaml_config.word_size () in
-      if ws = Sys.word_size then
-        [%stri
-          module Ctypes =
-            Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info)]
-      else if ws = 32 then
-        [%stri
-          module Ctypes =
-            Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info32)]
-      else
-        [%stri
-          module Ctypes =
-            Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info64)]
-    in
-    let expr =
-      [%expr
-        let module M : sig end = struct
-          [@@@ocaml.warning "-60"]
+    if extract_phase0_entries = [] && extract_entries = [] && build_entries = []
+    then ()
+    else
+      let ctypes =
+        let ws = Ocaml_config.word_size () in
+        if ws = Sys.word_size then
+          [%stri
+            module Ctypes =
+              Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info)]
+        else if ws = 32 then
+          [%stri
+            module Ctypes =
+              Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info32)]
+        else
+          [%stri
+            module Ctypes =
+              Ppxc__script.Ctypes_make.Ctypes (Ppxc__script.Ctypes_make.Info64)]
+      in
+      let expr =
+        [%expr
+          let module M : sig end = struct
+            [@@@ocaml.warning "-60"]
 
-          let () =
-            let module Extract_phase0 : sig end = struct
-              [%%s extract_phase0_entries]
-            end in
-            ()
+            let () =
+              let module Extract_phase0 : sig end = struct
+                [%%s extract_phase0_entries]
+              end in
+              ()
 
-          open! Ppxc__script.Run_environment [@@ocaml.warning "-33-66"]
+            open! Ppxc__script.Run_environment [@@ocaml.warning "-33-66"]
 
-          [%%s [ ctypes ]]
+            [%%s [ ctypes ]]
 
-          open! Ctypes [@@ocaml.warning "-33-66"]
+            open! Ctypes [@@ocaml.warning "-33-66"]
 
-          let () =
-            let module Extract_c_consts : sig end = struct
-              [%%s extract_entries]
-            end in
-            ()
+            let () =
+              let module Extract_c_consts : sig end = struct
+                [%%s extract_entries]
+              end in
+              ()
 
-          module Build_externals : sig end = struct
-            [%%s build_entries]
-          end
-        end in
-        (Ppxc__script.Main.run () : unit)]
-    in
-    Toplevel.init ();
-    ignore (Toplevel.eval_expression expr : Obj.t)
+            module Build_externals : sig end = struct
+              [%%s build_entries]
+            end
+          end in
+          (Ppxc__script.Main.run () : unit)]
+      in
+      let expr =
+        let xst1 = Ast_helper.Str.eval expr in
+        Versions.(
+          (migrate Mparsetree.ast_version ocaml_current).copy_structure [ xst1 ])
+      in
+      Toplevel.init top;
+      top#eval expr
 end
 
 module Mod_structure = struct

@@ -1,0 +1,15 @@
+(rule
+ (targets ppx_cstubs_custom.ml)
+ (deps (:f ppx_cstubs_custom.cppo.ml))
+ (action
+  (chdir %%{project_root}
+   (run %{bin:cppo} -V OCAML:%{ocaml_version} %{f} -o %{targets}))))
+
+
+(library
+ (name ppx_cstubs_custom)
+ (synopsis "custom ppx_cstubs preprocessors")
+ (public_name ppx_cstubs.custom)
+ (libraries ppx_cstubs.internal compiler-libs.bytecomp compiler-libs.toplevel findlib.top)
+ (modes byte)
+)

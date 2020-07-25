@@ -43,3 +43,9 @@ val replace_stri : structure_item -> structure_item
 val get_final_name : t -> string
 
 val clear : unit -> unit
+
+type merlin_state
+
+val merlin_save : unit -> merlin_state
+
+val merlin_restore : merlin_state -> unit

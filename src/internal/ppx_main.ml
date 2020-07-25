@@ -1637,6 +1637,8 @@ end = struct
   let structure s l = union_struct "structure" Extract.Struct_normal s l
 end
 
+let own_extensions = [ "c"; "c_union"; "c_bitmask"; "cb" ]
+
 module Scan () : sig
   val structure_item : mapper -> structure_item -> structure_item
 
@@ -1761,8 +1763,6 @@ end = struct
     let check s =
       if !depth > 0 then U.error "%s is not possible in this context" s
   end
-
-  let own_extensions = [ "c"; "c_union"; "c_bitmask"; "cb" ]
 
   let mark_empty a =
     if a.pvb_attributes <> [] || a.pvb_pat.ppat_attributes <> [] then a
@@ -2211,6 +2211,9 @@ end = struct
       default_mapper.module_expr mapper m
     | Pmod_apply _ | Pmod_unpack _ | Pmod_functor _ ->
       Static_level.disable @@ fun () -> default_mapper.module_expr mapper m
+    | Pmod_extension ({ txt; loc }, _)
+      when List.mem ~eq:CCString.equal txt own_extensions ->
+      error ~loc "extension '%s' is not allowed here" txt
     | Pmod_extension _ ->
       Static_level.disable @@ fun () ->
       Save_position.disable @@ fun () -> default_mapper.module_expr mapper m
@@ -2241,19 +2244,19 @@ module Replace : sig
 
   val type_declaration : mapper -> type_declaration -> type_declaration
 end = struct
-  let remove_attrib attr l = List.filter l ~f:(fun x -> x.attr_name.txt != attr)
+  let remove_attrib attr l = List.filter l ~f:(fun x -> x.attr_name.txt <> attr)
 
   let get_usage_id_from_attribs_exn attr =
     let pl =
       let s =
         List.find attr ~f:(fun x ->
-            x.attr_name.txt == Attributes.replace_attr_string)
+            x.attr_name.txt = Attributes.replace_attr_string)
       in
       s.attr_payload
     in
     let attr =
       List.filter attr ~f:(fun x ->
-          x.attr_name.txt != Attributes.replace_attr_string)
+          x.attr_name.txt <> Attributes.replace_attr_string)
     in
     let id =
       match pl with
@@ -2307,8 +2310,8 @@ end = struct
           pstr_loc;
           _;
         }
-        when List.exists l ~f:(fun x ->
-                 x.attr_name.txt == Attributes.tdl_string) -> (
+        when List.exists l ~f:(fun x -> x.attr_name.txt = Attributes.tdl_string)
+        -> (
         match Hashtbl.find_all htl_tdl_entries @@ int_of_string s with
         | exception Failure _ ->
           error ~loc:pstr_loc "fatal: type info not found"
@@ -2320,7 +2323,7 @@ end = struct
     let remove_empty accu el =
       match el.pstr_desc with
       | Pstr_value (Nonrecursive, [ { pvb_attributes = [ x ]; _ } ])
-        when x.attr_name.txt == Attributes.remove_string ->
+        when x.attr_name.txt = Attributes.remove_string ->
         accu
       | _ -> el :: accu
     in
@@ -2330,9 +2333,9 @@ end = struct
         match hd.pstr_desc with
         | Pstr_open { popen_attributes = _ :: _ as l; _ }
           when List.exists l ~f:(fun x ->
-                   x.attr_name.txt == Attributes.open_struct_body_string
-                   || x.attr_name.txt == Attributes.open_struct_type_mod_string
-                   || x.attr_name.txt == Attributes.open_struct_openmod_string)
+                   x.attr_name.txt = Attributes.open_struct_body_string
+                   || x.attr_name.txt = Attributes.open_struct_type_mod_string
+                   || x.attr_name.txt = Attributes.open_struct_openmod_string)
           ->
           remove_end_open tl
         | _ -> l )
@@ -2365,7 +2368,7 @@ end = struct
      _;
     }
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.replace_expr_string) -> (
+               x.attr_name.txt = Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
       with Not_found -> error "fatal error: external not found" )
     | {
@@ -2379,7 +2382,7 @@ end = struct
         _;
       } as stri
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.replace_attr_string) ->
+               x.attr_name.txt = Attributes.replace_attr_string) ->
       mark_if_used mapper stri pvb pexp
     | {
         pstr_desc =
@@ -2400,14 +2403,14 @@ end = struct
         _;
       } as stri
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.replace_attr_string) ->
+               x.attr_name.txt = Attributes.replace_attr_string) ->
       mark_if_used ~pexp_outer:(pexp_outer, ct) mapper stri pvb pexp
     | {
         pstr_desc = Pstr_module ({ pmb_attributes = _ :: _ as l; _ } as w2);
         pstr_loc = loc;
       } as w1
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.replace_attr_string) ->
+               x.attr_name.txt = Attributes.replace_attr_string) ->
       let pmb_attributes, id = get_usage_id_from_attribs_exn l in
       let pstr_desc = Pstr_module { w2 with pmb_attributes } in
       let w1 = { w1 with pstr_desc } in
@@ -2421,7 +2424,7 @@ end = struct
       else U.no_warn_unused_module ~loc w
     | { pstr_desc = Pstr_open { popen_attributes = _ :: _ as l; _ }; _ }
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.open_struct_type_mod_string)
+               x.attr_name.txt = Attributes.open_struct_type_mod_string)
            && OSTypes.delete_os_inside_type_mod () ->
       U.empty_stri ()
     | stri -> default_mapper.structure_item mapper stri
@@ -2435,7 +2438,7 @@ end = struct
      _;
     }
       when List.exists attribs ~f:(fun x ->
-               x.attr_name.txt == Attributes.replace_expr_string) -> (
+               x.attr_name.txt = Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_expr (int_of_string s)
       with Not_found -> error "fatal: constant not found" )
     | {
@@ -2444,7 +2447,7 @@ end = struct
         _;
       } as w
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.open_struct_ifthenelse_string) ->
+               x.attr_name.txt = Attributes.open_struct_ifthenelse_string) ->
       let a = remove_attrib Attributes.open_struct_ifthenelse_string l in
       let e =
         if OSTypes.remove_alias_types () then
@@ -2462,7 +2465,7 @@ end = struct
         _;
       } as w
       when List.exists l ~f:(fun x ->
-               x.attr_name.txt == Attributes.manifest_replace_string) ->
+               x.attr_name.txt = Attributes.manifest_replace_string) ->
       let a = remove_attrib Attributes.manifest_replace_string l in
       let txt =
         if Ptree.type_mod_is_used () = false then txt
@@ -2479,7 +2482,38 @@ end = struct
     | t -> default_mapper.type_declaration mapper t
 end
 
-let mapper _config _cookies =
+module Check_extensions : sig
+  val structure_item : mapper -> structure_item -> structure_item
+
+  val expr : mapper -> expression -> expression
+
+  val module_expr : mapper -> module_expr -> module_expr
+end = struct
+  let error loc =
+    error ~loc
+      "please run ppx_cstubs preprocessor manually first, ppx_cstubs.merlin is only intended for editor integration"
+
+  let structure_item mapper = function
+    | { pstr_desc = Pstr_extension (({ txt; loc }, _), _); _ }
+      when List.mem ~eq:CCString.equal txt own_extensions ->
+      error loc
+    | stri -> default_mapper.structure_item mapper stri
+
+  let expr mapper = function
+    | { pexp_desc = Pexp_extension ({ txt; loc }, _); _ }
+      when List.mem ~eq:CCString.equal txt own_extensions ->
+      error loc
+    | pexp -> default_mapper.expr mapper pexp
+
+  let module_expr mapper m =
+    match m.pmod_desc with
+    | Pmod_extension ({ txt; loc }, _)
+      when List.mem ~eq:CCString.equal txt own_extensions ->
+      error loc
+    | _ -> default_mapper.module_expr mapper m
+end
+
+let mapper top _config _cookies =
   let module P = struct
     (* currently the AST is traversed twice.*)
     type t =
@@ -2500,13 +2534,6 @@ let mapper _config _cookies =
     Ptree.clear ()
   in
 
-  let convert_ctypes_exeptions f =
-    try f () with
-    | Ctypes_static.ModifyingSealedType s -> error "%s is already sealed" s
-    | Ctypes_static.Unsupported s -> error "ctypes error: %s" s
-    | Ctypes_static.IncompleteType -> error "Incomplete Type"
-  in
-
   let structure mapper str =
     match !phase with
     | Replace -> Replace.structure mapper str
@@ -2518,11 +2545,11 @@ let mapper _config _cookies =
         clear ();
         Ast_helper.default_loc := orig_log;
         Lconst.init (U.unsuffixed_file_name ());
-        convert_ctypes_exeptions @@ fun () ->
+        U.convert_ctypes_exeptions @@ fun () ->
         is_outer_structure := false;
         let st = default_mapper.structure mapper str in
         Ast_helper.default_loc := orig_log;
-        Ptree.Topscript.run ();
+        Ptree.Topscript.run top;
         let ppx_main = Ptree.all_top_modules () in
         let st = ppx_main @ st in
         phase := Replace;
@@ -2584,7 +2611,22 @@ let mapper _config _cookies =
     type_declaration;
   }
 
-let init () =
-  let () = Ppxc__script_real._init () in
+let mapper top conf cookies =
+  if
+    ( match !Options.mode with
+    | Options.Regular -> false
+    | Options.Emulate -> true )
+    && CCString.find ~sub:"merlin" conf.Migrate_parsetree.Driver.tool_name < 0
+  then
+    {
+      default_mapper with
+      structure_item = Check_extensions.structure_item;
+      module_expr = Check_extensions.module_expr;
+      expr = Check_extensions.expr;
+    }
+  else mapper top conf cookies
+
+let init top =
+  let () = Ppxc__script_real._init None in
   Migrate_parsetree.Driver.register ~name:"ppx_cstubs" Mparsetree.ast_version
-    mapper
+    (mapper top)

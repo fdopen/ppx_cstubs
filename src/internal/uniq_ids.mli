@@ -16,9 +16,20 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val init : Ppxc__script_real.top_run -> unit
+val safe_ascii : char -> bool
 
-(* doesn't belong here, but keep the cppo mess to one file ... *)
-val set_absname : bool -> unit
+val safe_ascii_only : string -> string
 
-val serialize_location_error : Location.error -> Location.t * string
+val safe_ascii_only_ml : string -> string
+
+val unsuffixed_file_name : unit -> string
+
+val safe_cname : prefix:string -> string
+
+val safe_mlname : ?capitalize:bool -> ?prefix:string -> unit -> string
+
+type merlin_state
+
+val merlin_save : unit -> merlin_state
+
+val merlin_restore : merlin_state -> unit

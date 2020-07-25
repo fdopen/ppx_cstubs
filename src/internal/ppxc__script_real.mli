@@ -689,4 +689,14 @@ end
 
 val set_loc : string -> unit
 
-val _init : unit -> unit
+type top_run =
+  < init :
+      nopervasives:bool ->
+      pkgs:string list ->
+      use_threads:bool ->
+      cma_files:string list ->
+      unit ->
+      unit
+  ; eval : Parsetree.structure -> unit >
+
+val _init : top_run option -> unit

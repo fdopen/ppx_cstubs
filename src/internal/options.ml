@@ -44,6 +44,36 @@ let cma_files : string list ref = ref []
 
 let pretty = ref false
 
+type merlin_state = {
+  noperv : bool;
+  uos : bool;
+  verb : int;
+  oflags : string list;
+  tlc : string option;
+  cmas : string list;
+  fpkgs : string list;
+}
+
+let merlin_save () =
+  {
+    noperv = !nopervasives;
+    uos = !use_open_struct;
+    verb = !verbosity;
+    oflags = !ocaml_flags;
+    cmas = !cma_files;
+    tlc = !toolchain;
+    fpkgs = !findlib_pkgs;
+  }
+
+let merlin_restore { noperv; uos; verb; oflags; cmas; tlc; fpkgs } =
+  nopervasives := noperv;
+  use_open_struct := uos;
+  verbosity := verb;
+  ocaml_flags := oflags;
+  cma_files := cmas;
+  toolchain := tlc;
+  findlib_pkgs := fpkgs
+
 (* not yet configurable, but maybe in the future ... *)
 let ocamlfind =
   match Sys.win32 with true -> "ocamlfind.exe" | false -> "ocamlfind"
@@ -64,7 +94,7 @@ let toolchain_used () =
     | "" -> false
     | _ -> true
 
-let reset () =
+(*let reset () =
   keep_tmp := false;
   nopervasives := false;
   verbosity := 1;
@@ -80,3 +110,4 @@ let reset () =
   mode := Regular;
   pretty := false;
   cc := None
+ *)

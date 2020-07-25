@@ -16,9 +16,48 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val init : Ppxc__script_real.top_run -> unit
+val ocaml_flags_default : string list
 
-(* doesn't belong here, but keep the cppo mess to one file ... *)
-val set_absname : bool -> unit
+val keep_tmp : bool ref
 
-val serialize_location_error : Location.error -> Location.t * string
+val nopervasives : bool ref
+
+val use_open_struct : bool ref
+
+val verbosity : int ref
+
+val c_flags : string list ref
+
+val ocaml_flags : string list ref
+
+val c_output_file : string option ref
+
+val ml_input_file : string option ref
+
+val ml_output_file : string option ref
+
+val toolchain : string option ref
+
+val findlib_pkgs : string list ref
+
+val cma_files : string list ref
+
+val pretty : bool ref
+
+val ocamlfind : string
+
+type mode =
+  | Regular
+  | Emulate
+
+val mode : mode ref
+
+val cc : string option ref
+
+val toolchain_used : unit -> bool
+
+type merlin_state
+
+val merlin_save : unit -> merlin_state
+
+val merlin_restore : merlin_state -> unit

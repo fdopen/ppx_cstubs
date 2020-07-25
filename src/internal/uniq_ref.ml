@@ -107,7 +107,7 @@ let get_remove_string_exn name attr =
   let res = ref None in
   let attribs =
     List.filter attr ~f:(fun x ->
-        if x.attr_name.txt != name then true
+        if x.attr_name.txt <> name then true
         else
           match x.attr_payload with
           | PStr
@@ -147,7 +147,7 @@ let get_final_name t =
 let replace_expr = function
   | { pexp_desc = Pexp_ident _ as orig; pexp_attributes = _ :: _ as attribs; _ }
     as expr
-    when List.exists attribs ~f:(fun x -> x.attr_name.txt == a_reference_string)
+    when List.exists attribs ~f:(fun x -> x.attr_name.txt = a_reference_string)
     ->
     let s, pexp_attributes = get_remove_string_exn a_reference_string attribs in
     let id_ref, single_ref = CCString.Split.left_exn ~by:"|" s in
@@ -166,7 +166,7 @@ let replace_stri = function
           (Nonrecursive, [ ({ pvb_attributes = _ :: _ as attribs; _ } as a) ]);
       _;
     } as stri ->
-    if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_orig_name) then
+    if List.exists attribs ~f:(fun x -> x.attr_name.txt = a_orig_name) then
       let s, pvb_attributes = get_remove_string_exn a_orig_name attribs in
       let pvb_pat =
         match is_uniq_ctype s with
@@ -179,8 +179,7 @@ let replace_stri = function
       in
       let a = { a with pvb_attributes; pvb_pat } in
       { stri with pstr_desc = Pstr_value (Nonrecursive, [ a ]) }
-    else if List.exists attribs ~f:(fun x -> x.attr_name.txt == a_inmod_ref)
-    then
+    else if List.exists attribs ~f:(fun x -> x.attr_name.txt = a_inmod_ref) then
       let s, pvb_attributes = get_remove_string_exn a_inmod_ref attribs in
       if is_uniq_ctype s then U.empty_stri ()
       else
@@ -191,3 +190,11 @@ let replace_stri = function
   | stri -> stri
 
 let clear () = Hashtbl.clear htl_ctypes
+
+type merlin_state = string list
+
+let merlin_save () = CCHashtbl.Poly.to_list htl_ctypes |> List.split |> fst
+
+let merlin_restore l =
+  clear ();
+  List.iter l ~f:(fun x -> Hashtbl.add htl_ctypes x ())

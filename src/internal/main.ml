@@ -16,20 +16,25 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
+open Std.Result
+
 let executable = Filename.basename Sys.executable_name
 
 let error_exit s =
   Printf.eprintf "%s: %s Try %s --help\n" executable s executable;
   exit 1
 
-let common_main argv =
+let set_binary () =
   set_binary_mode_out stdout true;
   set_binary_mode_out stderr true;
-  set_binary_mode_in stdin true;
-  Ppx_main.init ();
+  set_binary_mode_in stdin true
+
+let common_main top argv =
+  set_binary ();
+  Ppx_main.init top;
   Migrate_parsetree.Driver.run_main ~argv ()
 
-let cpp_main () =
+let cpp_main top =
   let usage =
     Printf.sprintf "%s [<file>] -o-ml my_module.ml -o-c my_module_stubs.c"
       executable
@@ -191,17 +196,39 @@ let cpp_main () =
   Options.pretty := !pretty;
   (* trigger exceptions *)
   Ocaml_config.init ();
-  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init ();
+  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init top;
   let l = if ml_output = "-" then [] else [ "-o"; ml_output ] in
   let l = source :: l in
   let l = if !pretty then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
-  common_main (Array.of_list l)
+  common_main top (Array.of_list l)
 
-let merlin_main () =
+let merlin_main top =
   Options.mode := Options.Emulate;
-  common_main Sys.argv
+  common_main top Sys.argv
 
-let init () =
-  if CCArray.exists (( = ) "--as-ppx") Sys.argv then merlin_main ()
-  else cpp_main ()
+let merlin_run_top top =
+  set_binary ();
+  let p1, script = Marshal.from_channel stdin in
+  close_in stdin;
+  Merlin_state.from_parent p1;
+  Options.mode := Emulate;
+  Toplevel.init top;
+  top#eval script;
+  Merlin_state.to_parent ()
+
+let merlin_run_top top =
+  let r =
+    try Ok (Std.Util.convert_ctypes_exeptions (fun () -> merlin_run_top top))
+    with x -> Error (Merlin_state.to_error x)
+  in
+  Marshal.to_channel stdout r [];
+  flush stdout;
+  exit 0
+
+let init top =
+  let flags_ppx = [ "--as-ppx"; "--impl"; "--dump-ast" ] in
+  if CCArray.exists (( = ) "--run-merlin-top") Sys.argv then merlin_run_top top
+  else if List.exists (fun s -> CCArray.exists (( = ) s) Sys.argv) flags_ppx
+  then merlin_main top
+  else cpp_main top

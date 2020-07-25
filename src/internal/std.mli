@@ -115,6 +115,8 @@ module Util : sig
   val lid_unflatten : string list -> Longident.t option
 
   val mk_pat_pconstr : Parsetree.core_type -> string -> Parsetree.pattern
+
+  val convert_ctypes_exeptions : (unit -> 'a) -> 'a
 end
 
 module Result : sig

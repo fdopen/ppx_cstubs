@@ -92,74 +92,7 @@ module Util = struct
 
   let mk_ident_l s = Ast_helper.Exp.ident (mk_lid_l s)
 
-  let safe_ascii c =
-    (c >= 'a' && c <= 'z')
-    || (c >= 'A' && c <= 'Z')
-    || c = '_'
-    || (c >= '0' && c <= '9')
-
-  let safe_ascii_only s =
-    CCString.filter_map (fun c -> if safe_ascii c then Some c else None) s
-
-  let safe_ascii_only_ml s =
-    CCString.filter_map
-      (fun c -> if safe_ascii c || c = '\'' then Some c else None)
-      s
-
-  let unsuffixed_file_name () =
-    let loc = !Ast_helper.default_loc in
-    let name = Filename.basename loc.Lo.loc_start.Le.pos_fname in
-    match CCString.split_on_char '.' name with
-    | [] -> ""
-    | s :: _ -> safe_ascii_only s
-
-  let make_uniq_cnt () =
-    let htl = Hashtbl.create 128 in
-    fun s ->
-      let i =
-        match Hashtbl.find htl s with exception Not_found -> 0 | n -> n
-      in
-      Hashtbl.replace htl s (succ i);
-      i
-
-  let safe_cname =
-    let cnt = make_uniq_cnt () in
-    fun ~prefix ->
-      let loc = !Ast_helper.default_loc in
-      let name = unsuffixed_file_name () in
-      let s = safe_ascii_only prefix in
-      let cutmax s maxlen =
-        let len = String.length s in
-        if len > maxlen then String.sub s 0 maxlen else s
-      in
-      (* TODO: there seems to be a limit for msvc *)
-      let s = cutmax s 20 in
-      let name = cutmax name 40 in
-      let line = loc.Lo.loc_start.Le.pos_lnum in
-      let cnum = loc.Lo.loc_start.Le.pos_cnum in
-      let res = Printf.sprintf "%s_%x_%x_%s" name line cnum s in
-      match cnt res with
-      | 0 -> "ppxc_" ^ res
-      | i -> Printf.sprintf "ppxc%x_%s" i res
-
-  let safe_mlname =
-    let cnt = make_uniq_cnt () in
-    fun ?(capitalize = false) ?prefix () ->
-      let s, p =
-        match prefix with
-        | None -> ("", "")
-        | Some s -> (safe_ascii_only_ml s, "_")
-      in
-      let loc = !Ast_helper.default_loc in
-      let line = loc.Lo.loc_start.Le.pos_lnum in
-      let pre =
-        if capitalize then Myconst.private_prefix_capitalized
-        else Myconst.private_prefix
-      in
-      let f = pre.[0] in
-      let pre = String.sub pre 1 (String.length pre - 1) in
-      let res = Printf.sprintf "%c%s%s%sline%d" f pre s p line in
-      match cnt res with 0 -> res | i -> Printf.sprintf "%s_%d" res i
+  include Uniq_ids
 
   let empty_stri () =
     let vb =
@@ -275,6 +208,12 @@ module Util = struct
       let attrs = match attrs with None -> [] | Some l -> l in
       let attrs = Attributes.open_struct_ifthenelse_attrib :: attrs in
       res ~attrs [%expr if false then [%e e_constr] else [%e e]]
+
+  let convert_ctypes_exeptions f =
+    try f () with
+    | Ctypes_static.ModifyingSealedType s -> error "%s is already sealed" s
+    | Ctypes_static.Unsupported s -> error "ctypes error: %s" s
+    | Ctypes_static.IncompleteType -> error "Incomplete Type"
 end
 
 module Result = struct

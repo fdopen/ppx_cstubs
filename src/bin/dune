@@ -7,7 +7,7 @@
  (name exec)
  (modes byte)
  (link_flags (:include link_flags.sexp))
- (libraries ppx_cstubs.internal)
+ (libraries ppx_cstubs.custom)
 )
 (install
  (section bin)

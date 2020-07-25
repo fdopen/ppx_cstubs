@@ -43,3 +43,21 @@ let init usf =
       match usf with
       | "" -> "Ppxc_private_types"
       | s -> String.concat "_" [ "Ppxc"; s; "types" ] )
+
+type merlin_state = {
+  ximpl_mod_name : string;
+  xtype_mod_name : string;
+  xtype_modtype_name : string;
+}
+
+let merlin_save () =
+  {
+    ximpl_mod_name = !impl_mod_name;
+    xtype_mod_name = !type_mod_name;
+    xtype_modtype_name = !type_modtype_name;
+  }
+
+let merlin_restore { ximpl_mod_name; xtype_mod_name; xtype_modtype_name } =
+  impl_mod_name := ximpl_mod_name;
+  type_mod_name := xtype_mod_name;
+  type_modtype_name := xtype_modtype_name

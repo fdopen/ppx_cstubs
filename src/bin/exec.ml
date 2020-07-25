@@ -1,1 +1,1 @@
-let () = Ppxc__script._init ()
+let () = Ppx_cstubs_custom.init ()

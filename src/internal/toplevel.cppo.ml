@@ -16,115 +16,29 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-let toplevel_env = ref Env.empty
-
-let flib_protect f a =
-  try f a with Fl_package_base.No_such_package (s, s') ->
-    if s' = "" then Printf.eprintf "error: findlib package %s not found\n%!" s
-    else Printf.eprintf "error: findlib package %s (%S) not found\n%!" s s' ;
-    exit 2
-
-let init =
-  lazy
-    ( if !Options.nopervasives then Clflags.nopervasives := true ;
-      Toploop.set_paths ();
-      toplevel_env := Compmisc.initial_env () ;
-      Topfind.log := ignore ;
-      let l = [ "integers"; "ctypes"; "ppx_cstubs" ; "ppx_cstubs.internal" ] in
-      CCListLabels.iter l ~f:(fun p ->
-        Topdirs.dir_directory @@ flib_protect Findlib.package_directory p);
-      if !Options.findlib_pkgs <> [] then (
-        Topfind.add_predicates ["byte"];
-        flib_protect Topfind.don't_load_deeply ["ppx_cstubs.internal"];
-        if Std.Various.use_threads () then (
-          Topfind.add_predicates ["mt";"mt_posix"];
-          flib_protect Topfind.load_deeply ["threads"]);
-        flib_protect Topfind.load_deeply !Options.findlib_pkgs ) ;
-      ListLabels.iter !Options.cma_files ~f:(fun s ->
-          let dir = Filename.dirname s in
-          if dir <> "." then Topdirs.dir_directory dir ;
-          let b = Topdirs.load_file Format.str_formatter s in
-          let msg = Format.flush_str_formatter () in
-          if not b then (
-            Printf.eprintf "fatal:failed to load %s (%s)\n%!" s msg ;
-            exit 2 ) ) )
-
-let init () = Lazy.force init
-
-let eval_expression =
-  let module M = Migrate_parsetree in
-  let module A = Mparsetree.Ast_cur in
-  let module P = A.Parsetree in
-  let to_current = M.Versions.(migrate Mparsetree.ast_version ocaml_current) in
-  (* see OCaml's toplevel/toploop.ml for details *)
-  fun expr ->
-    let loc = !A.Ast_helper.default_loc in
-    let str = [{P.pstr_desc = P.Pstr_eval (expr, []); P.pstr_loc = loc}] in
-    let st = to_current.M.Versions.copy_structure str in
-    Typecore.reset_delayed_checks () ;
-#if OCAML_VERSION >= (4, 8, 0)
-    let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st loc in
-#else
-    let str, _sg, newenv = Typemod.type_structure !toplevel_env st loc in
-#endif
-    let lam = Translmod.transl_toplevel_definition str in
-    Warnings.check_fatal () ;
-    let init_code, fun_code = Bytegen.compile_phrase lam in
-#if OCAML_VERSION >= (4, 8, 0)
-    let code, reloc, events =
-      Emitcode.to_memory init_code fun_code
-    in
-#elif OCAML_VERSION >= (4, 3, 0)
-    let code, code_size, reloc, events =
-      Emitcode.to_memory init_code fun_code
-    in
-    Meta.add_debug_info code code_size [|events|] ;
-#else
-    let code,code_size,reloc = Emitcode.to_memory init_code fun_code in
-#endif
-    let can_free = fun_code = [] in
-    let initial_symtable = Symtable.current_state () in
-    Symtable.patch_object code reloc ;
-    Symtable.check_global_initialized reloc ;
-    Symtable.update_global_table () ;
-#if OCAML_VERSION >= (4, 8, 0)
-    let bytecode, closure = Meta.reify_bytecode code [| events |] None in
-    try
-      let retval = closure () in
-      if can_free then Meta.release_bytecode bytecode;
-      toplevel_env := newenv ;
-      retval
-    with
-    | x ->
-      if can_free then Meta.release_bytecode bytecode;
-      Symtable.restore_state initial_symtable ;
-      raise x
-#else
-    let free =
-      let called = ref false in
-      fun () ->
-        if can_free && !called = false then (
-          called := true ;
-#if OCAML_VERSION >= (4, 3, 0)
-          Meta.remove_debug_info code;
-#endif
-          Meta.static_release_bytecode code code_size ;
-          Meta.static_free code )
-    in
-    try
-      let res = (Meta.reify_bytecode code code_size) () in
-      free () ;
-      toplevel_env := newenv ;
-      res
-    with x ->
-      free () ;
-      Symtable.restore_state initial_symtable ;
-      raise x
-#endif
+let init top =
+  let module O = Options in
+  top#init
+    ~nopervasives:!O.nopervasives
+    ~pkgs:!O.findlib_pkgs
+    ~use_threads:(Std.Various.use_threads ())
+    ~cma_files:!O.cma_files ()
 
 let set_absname x =
 #if OCAML_VERSION >= (4, 8, 0)
   Clflags.absname := x
 #else
   Location.absname := x
+#endif
+
+let serialize_location_error x =
+#if OCAML_VERSION >= (4, 8, 0)
+  let main = x.Location.main in
+  let b = Buffer.create 128 in
+  let fmt = Format.formatter_of_buffer b in
+  Format.fprintf fmt "@[%t@]" main.Location.txt;
+  Format.pp_print_flush fmt ();
+  (main.Location.loc, Buffer.contents b)
+#else
+  x.Location.loc, x.Location.msg
 #endif

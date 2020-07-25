@@ -16,9 +16,4 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val init : Ppxc__script_real.top_run -> unit
-
-(* doesn't belong here, but keep the cppo mess to one file ... *)
-val set_absname : bool -> unit
-
-val serialize_location_error : Location.error -> Location.t * string
+val init : unit -> unit

@@ -32,3 +32,28 @@ let clear () =
   Hashtbl.clear htl_used;
   foreign_used := false;
   c_source := None
+
+type merlin_state = {
+  hexpr : (Marshal_types.id * Mparsetree.Ast_cur.Parsetree.expression) list;
+  hstri : (Marshal_types.id * Mparsetree.Ast_cur.Parsetree.structure_item) list;
+  hused : (int * unit) list;
+  fused : bool;
+}
+
+let merlin_save () =
+  {
+    hexpr = CCHashtbl.Poly.to_list htl_expr;
+    hused = CCHashtbl.Poly.to_list htl_used;
+    hstri = CCHashtbl.Poly.to_list htl_stri;
+    fused = !foreign_used;
+  }
+
+let merlin_restore { hexpr; hused; hstri; fused } =
+  let set htl l =
+    Hashtbl.clear htl;
+    List.iter (fun (a, b) -> Hashtbl.add htl a b) l
+  in
+  set htl_expr hexpr;
+  set htl_used hused;
+  set htl_stri hstri;
+  foreign_used := fused

@@ -16,9 +16,18 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val init : Ppxc__script_real.top_run -> unit
+val type_mod_name : string ref
 
-(* doesn't belong here, but keep the cppo mess to one file ... *)
-val set_absname : bool -> unit
+val impl_mod_name : string ref
 
-val serialize_location_error : Location.error -> Location.t * string
+val type_modtype_name : string ref
+
+val clear : unit -> unit
+
+val init : string -> unit
+
+type merlin_state
+
+val merlin_save : unit -> merlin_state
+
+val merlin_restore : merlin_state -> unit

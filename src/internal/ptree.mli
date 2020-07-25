@@ -124,7 +124,7 @@ module Topscript : sig
 
   val add_extract_phase0 : Parsetree.structure_item -> unit
 
-  val run : unit -> unit
+  val run : Ppxc__script_real.top_run -> unit
 end
 
 val all_top_modules : unit -> Parsetree.structure_item list

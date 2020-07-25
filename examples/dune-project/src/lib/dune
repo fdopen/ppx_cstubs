@@ -17,6 +17,11 @@
  (name namelib)
  (c_names namelib_stubs)
  (c_flags (:include c_flags.sexp))
+ ; the following preprocess step is only for merlin support in your
+ ; editor. You can conditionally enable it during development. It will
+ ; do nothing during the "real" compilation step, except checking that
+ ; the file was already preprocessed earlier.
+ (preprocess (pps ppx_cstubs.merlin))
  (c_library_flags (:include c_library_flags.sexp))
  (libraries unix ctypes ppx_cstubs)
  (synopsis "dummy lib"))

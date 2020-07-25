@@ -16,9 +16,20 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val init : Ppxc__script_real.top_run -> unit
+type to_child
 
-(* doesn't belong here, but keep the cppo mess to one file ... *)
-val set_absname : bool -> unit
+type from_child
 
-val serialize_location_error : Location.error -> Location.t * string
+val to_child : unit -> to_child
+
+val from_parent : to_child -> unit
+
+val to_parent : unit -> from_child
+
+val from_child : from_child -> unit
+
+type error
+
+val to_error : exn -> error
+
+val raise_error : error -> 'a
