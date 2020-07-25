@@ -22,14 +22,25 @@ let () =
   List.iter
     (fun k -> Hashtbl.replace htl k ())
     [
+      "abstract";
+      "aint";
+      "constant";
       "field";
+      "foreign";
+      "foreign_value";
       "funptr";
       "funptr_opt";
+      "header";
+      "int";
+      "opaque";
       "ptr";
       "ptr_opt";
       "returning";
       "seal";
       "static_funptr";
+      "structure";
+      "uint";
+      "union";
       "@->";
     ]
 
