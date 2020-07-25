@@ -2628,5 +2628,17 @@ let mapper top conf cookies =
 
 let init top =
   let () = Ppxc__script_real._init None in
-  Migrate_parsetree.Driver.register ~name:"ppx_cstubs" Mparsetree.ast_version
-    (mapper top)
+  let args =
+    match !Options.mode with
+    | Options.Regular -> None
+    | Options.Emulate ->
+      Some
+        [
+          ( "-pkg",
+            Arg.String
+              (fun s -> Options.findlib_pkgs := s :: !Options.findlib_pkgs),
+            "<opt>     import types from findlib package <opt>" );
+        ]
+  in
+  Migrate_parsetree.Driver.register ?args ~name:"ppx_cstubs"
+    Mparsetree.ast_version (mapper top)
