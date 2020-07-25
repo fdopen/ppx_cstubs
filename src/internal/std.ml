@@ -67,7 +67,16 @@ module Util = struct
 
   let mk_lid_c ?(loc = !Ast_helper.default_loc) s = Lo.mkloc s loc
 
-  let mk_lid ?loc s = mk_lid_c ?loc (Longident.parse s)
+  let mk_lid ?loc s =
+    let s =
+      match CCString.split_on_char '.' s with
+      | [] -> Longident.Lident ""
+      | hd :: tl ->
+        CCListLabels.fold_left
+          ~f:(fun p s -> Longident.Ldot (p, s))
+          ~init:(Longident.Lident hd) tl
+    in
+    mk_lid_c ?loc s
 
   let lid_unflatten = function
     | [] -> None
