@@ -1,3 +1,11 @@
+0.4.2 (26/07/2020)
+------------------
+
+- support for OCaml 4.11.0+beta
+
+- better dune support for ppx_cstubs.merlin
+
+
 0.4.1 (13/05/2020)
 ------------------
 

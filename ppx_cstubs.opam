@@ -6,7 +6,7 @@ homepage: "https://fdopen.github.io/ppx_cstubs/"
 dev-repo: "git+https://github.com/fdopen/ppx_cstubs.git"
 doc: "https://fdopen.github.io/ppx_cstubs/"
 bug-reports: "https://github.com/fdopen/ppx_cstubs/issues"
-
+version: "0.4.2"
 build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
