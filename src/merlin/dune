@@ -4,5 +4,4 @@
  (kind ppx_rewriter)
  (modules ppx_cstubs_merlin)
  (libraries ppx_cstubs.internal)
- (ppx_runtime_libraries re.perl unix integers containers num ctypes findlib ppx_tools_versioned ppx_cstubs.internal)
 )
