@@ -56,13 +56,17 @@ let init ~nopervasives ~pkgs ~use_threads ~cma_files () =
      ()
 
 let eval st =
+#if OCAML_VERSION < (4, 12, 0)
     let loc =
       match st with
       | a::_ -> a.Parsetree.pstr_loc
       | [] -> ! Ast_helper.default_loc
     in
+#endif
     Typecore.reset_delayed_checks () ;
-#if OCAML_VERSION >= (4, 8, 0)
+#if OCAML_VERSION >= (4, 12, 0)
+    let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st in
+#elif OCAML_VERSION >= (4, 8, 0)
     let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st loc in
 #else
     let str, _sg, newenv = Typemod.type_structure !toplevel_env st loc in
