@@ -144,12 +144,13 @@ module Util = struct
     no_warn_unused_post406 name expr |> no_warn_unused_pre406
 
   let no_warn_unused_module ?(loc = !Ast_helper.default_loc) stri =
-    ( [%stri
-        include struct
-          [@@@ocaml.warning "-60"]
+    ([%stri
+       include struct
+         [@@@ocaml.warning "-60"]
 
-          [%%s [ stri ]]
-        end] [@metaloc loc] )
+         [%%s [ stri ]]
+       end]
+    [@metaloc loc])
 
   let no_c_comments s =
     CCString.replace ~which:`All ~sub:"/*" ~by:"/ *" s

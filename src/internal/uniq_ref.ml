@@ -175,7 +175,7 @@ let replace_stri = function
           let n = CCString.Split.right_exn ~by:"." s |> snd |> U.mk_pat in
           match a.pvb_pat.ppat_desc with
           | Ppat_constraint (_, c) -> Pat.constraint_ n c
-          | _ -> n )
+          | _ -> n)
       in
       let a = { a with pvb_attributes; pvb_pat } in
       { stri with pstr_desc = Pstr_value (Nonrecursive, [ a ]) }

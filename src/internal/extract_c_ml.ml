@@ -65,7 +65,7 @@ let rec prepare : type a. a Ctypes_static.typ -> info option =
   | C.View { ty; _ } as t -> (
     match prepare ty with
     | None -> None
-    | Some x -> Some { x with ctype = Gen_c.string_of_typ_exn t } )
+    | Some x -> Some { x with ctype = Gen_c.string_of_typ_exn t })
   | C.Primitive p as t -> (
     let f info =
       (* bool/_Bool leads to ugly compiler warnings.
@@ -105,7 +105,7 @@ let rec prepare : type a. a Ctypes_static.typ -> info option =
     | LDouble -> None
     | Complex32 -> None
     | Complex64 -> None
-    | Complexld -> None )
+    | Complexld -> None)
 
 let int8_max = Big_int.big_int_of_int 127
 

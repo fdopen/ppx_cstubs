@@ -74,7 +74,7 @@ let cpp_main top =
       match CCChar.lowercase_ascii suf.[0] with
       | 'r' | 'm' -> ml_output := s
       | 'c' -> c_output := s
-      | _ -> raise (Arg.Bad s) )
+      | _ -> raise (Arg.Bad s))
   in
   let spec =
     Arg.align
@@ -141,7 +141,7 @@ let cpp_main top =
             let a = Filename.concat d a in
             if Sys.file_exists a then (
               cma_files := a :: !cma_files;
-              true )
+              true)
             else false)
       in
       if c = false then Printf.sprintf "%S doesn't exist\n" a |> error_exit
@@ -153,13 +153,13 @@ let cpp_main top =
       let la = CCString.lowercase_ascii a in
       if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo" then (
         anon_is_target := false;
-        add_cma_file a )
+        add_cma_file a)
       else if !anon_is_target then (
         anon_is_target := false;
-        set_output_by_suffix a )
+        set_output_by_suffix a)
       else (
         if !source <> None then raise (Arg.Bad a);
-        source := Some a ))
+        source := Some a))
     usage;
   let source =
     match !source with
@@ -180,7 +180,7 @@ let cpp_main top =
   if CCString.lowercase_ascii c_output <> "none" then (
     if h ml_output = h c_output then
       error_exit "filenames must differ, not only their suffix";
-    Options.c_output_file := Some c_output );
+    Options.c_output_file := Some c_output);
   Options.ocaml_flags := List.rev !oflags;
   Options.c_flags := List.rev !cflags @ List.rev !cflags_rest;
   Options.keep_tmp := !keep_tmp;

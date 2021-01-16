@@ -107,7 +107,7 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
       p.state <- Open
     in
     let out p_out_write p_out_read out =
-      ( match out with
+      (match out with
       | `Stdout ->
         if Sys.win32 then p_out_write.fd <- Unix.stdout
         else comm p_out_write Unix.stdout
@@ -119,18 +119,18 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
         p_out_write.fd <- fd;
         p_out_write.state <- Open
       | `Fd fd -> comm p_out_write fd
-      | _ -> pipe p_out_read p_out_write );
+      | _ -> pipe p_out_read p_out_write);
       if p_out_read.state = Open then Unix.set_close_on_exec p_out_read.fd
     in
     out p_stdout_write p_stdout_read stdout;
     out p_stderr_write p_stderr_read stderr;
-    ( match stdin with
+    (match stdin with
     | `Null ->
       let fd = eintr3 Unix.openfile dev_null [ Unix.O_RDONLY ] 0o400 in
       p_stdin_read.fd <- fd;
       p_stdin_read.state <- Open
     | `Fd fd -> comm p_stdin_read fd
-    | _ -> pipe p_stdin_read p_stdin_write );
+    | _ -> pipe p_stdin_read p_stdin_write);
     if p_stdin_write.state = Open then Unix.set_close_on_exec p_stdin_write.fd
   in
   let pid =
@@ -145,7 +145,7 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
       if r = p_stderr_read.fd then false
       else (
         assert (r = p_stdout_read.fd);
-        true )
+        true)
     in
     let x = try eintr4 Unix.read r tmp_str 0 str_buffer_len with _ -> -1 in
     if x <= 0 then
@@ -184,7 +184,7 @@ let run ?(env = Unix.environment ()) ?(stdin = `Null) ?(stderr = `Stderr)
       let n_written = eintr4 Unix.write_substring fd !to_write 0 str_len in
       if n_written >= str_len then (
         to_write := "";
-        close_pipe p_stdin_write )
+        close_pipe p_stdin_write)
       else to_write := String.sub !to_write n_written (str_len - n_written)
     | _ -> assert false
   done;

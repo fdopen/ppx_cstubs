@@ -70,18 +70,18 @@ let build_enum :
       let to_string =
         match typ with
         | Ctypes_static.Primitive p ->
-          ( match p with
-            | Ctypes_primitive_types.Int8_t -> string_of_int
-            | Ctypes_primitive_types.Int32_t -> (Int32.to_string : a -> string)
-            | Ctypes_primitive_types.Int16_t -> string_of_int
-            | Ctypes_primitive_types.Int -> string_of_int
-            | Ctypes_primitive_types.Int64_t -> Int64.to_string
-            | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_string
-            | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_string
-            | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_string
-            | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_string
-            | _ -> fail typ
-            : a -> string )
+          (match p with
+           | Ctypes_primitive_types.Int8_t -> string_of_int
+           | Ctypes_primitive_types.Int32_t -> (Int32.to_string : a -> string)
+           | Ctypes_primitive_types.Int16_t -> string_of_int
+           | Ctypes_primitive_types.Int -> string_of_int
+           | Ctypes_primitive_types.Int64_t -> Int64.to_string
+           | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_string
+           | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_string
+           | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_string
+           | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_string
+           | _ -> fail typ
+            : a -> string)
         | _ -> fail typ
       in
       fun k ->
@@ -91,18 +91,18 @@ let build_enum :
       let to_int64 =
         match typ with
         | Ctypes_static.Primitive p ->
-          ( match p with
-            | Ctypes_primitive_types.Int8_t -> Int64.of_int
-            | Ctypes_primitive_types.Int32_t -> Int64.of_int32
-            | Ctypes_primitive_types.Int16_t -> Int64.of_int
-            | Ctypes_primitive_types.Int -> Int64.of_int
-            | Ctypes_primitive_types.Int64_t -> identity
-            | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_int64
-            | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_int64
-            | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_int64
-            | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_int64
-            | _ -> fail typ
-            : a -> int64 )
+          (match p with
+           | Ctypes_primitive_types.Int8_t -> Int64.of_int
+           | Ctypes_primitive_types.Int32_t -> Int64.of_int32
+           | Ctypes_primitive_types.Int16_t -> Int64.of_int
+           | Ctypes_primitive_types.Int -> Int64.of_int
+           | Ctypes_primitive_types.Int64_t -> identity
+           | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_int64
+           | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_int64
+           | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_int64
+           | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_int64
+           | _ -> fail typ
+            : a -> int64)
         | _ -> fail typ
       in
       fun k -> f (to_int64 k)
@@ -128,22 +128,22 @@ let build_enum_bitmask :
   let lor', land', zero, lnot' =
     match typ with
     | Ctypes_static.Primitive p ->
-      ( match p with
-        | Ctypes_primitive_types.Int8_t -> (( lor ), ( land ), 0, lnot)
-        | Ctypes_primitive_types.Int16_t -> (( lor ), ( land ), 0, lnot)
-        | Ctypes_primitive_types.Int -> (( lor ), ( land ), 0, lnot)
-        | Ctypes_primitive_types.Int32_t -> Int32.(logor, logand, zero, lognot)
-        | Ctypes_primitive_types.Int64_t -> Int64.(logor, logand, zero, lognot)
-        | Ctypes_primitive_types.Uint8_t ->
-          Unsigned.UInt8.(logor, logand, zero, lognot)
-        | Ctypes_primitive_types.Uint16_t ->
-          Unsigned.UInt16.(logor, logand, zero, lognot)
-        | Ctypes_primitive_types.Uint32_t ->
-          Unsigned.UInt32.(logor, logand, zero, lognot)
-        | Ctypes_primitive_types.Uint64_t ->
-          Unsigned.UInt64.(logor, logand, zero, lognot)
-        | _ -> fail typ
-        : (a -> a -> a) * (a -> a -> a) * a * (a -> a) )
+      (match p with
+       | Ctypes_primitive_types.Int8_t -> (( lor ), ( land ), 0, lnot)
+       | Ctypes_primitive_types.Int16_t -> (( lor ), ( land ), 0, lnot)
+       | Ctypes_primitive_types.Int -> (( lor ), ( land ), 0, lnot)
+       | Ctypes_primitive_types.Int32_t -> Int32.(logor, logand, zero, lognot)
+       | Ctypes_primitive_types.Int64_t -> Int64.(logor, logand, zero, lognot)
+       | Ctypes_primitive_types.Uint8_t ->
+         Unsigned.UInt8.(logor, logand, zero, lognot)
+       | Ctypes_primitive_types.Uint16_t ->
+         Unsigned.UInt16.(logor, logand, zero, lognot)
+       | Ctypes_primitive_types.Uint32_t ->
+         Unsigned.UInt32.(logor, logand, zero, lognot)
+       | Ctypes_primitive_types.Uint64_t ->
+         Unsigned.UInt64.(logor, logand, zero, lognot)
+       | _ -> fail typ
+        : (a -> a -> a) * (a -> a -> a) * a * (a -> a))
     | _ -> fail typ
   in
   let unexpected =
@@ -152,18 +152,18 @@ let build_enum_bitmask :
       let to_string =
         match typ with
         | Ctypes_static.Primitive p ->
-          ( match p with
-            | Ctypes_primitive_types.Int8_t -> string_of_int
-            | Ctypes_primitive_types.Int32_t -> (Int32.to_string : a -> string)
-            | Ctypes_primitive_types.Int16_t -> string_of_int
-            | Ctypes_primitive_types.Int -> string_of_int
-            | Ctypes_primitive_types.Int64_t -> Int64.to_string
-            | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_string
-            | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_string
-            | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_string
-            | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_string
-            | _ -> fail typ
-            : a -> string )
+          (match p with
+           | Ctypes_primitive_types.Int8_t -> string_of_int
+           | Ctypes_primitive_types.Int32_t -> (Int32.to_string : a -> string)
+           | Ctypes_primitive_types.Int16_t -> string_of_int
+           | Ctypes_primitive_types.Int -> string_of_int
+           | Ctypes_primitive_types.Int64_t -> Int64.to_string
+           | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_string
+           | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_string
+           | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_string
+           | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_string
+           | _ -> fail typ
+            : a -> string)
         | _ -> fail typ
       in
       fun _ k ->
@@ -173,18 +173,18 @@ let build_enum_bitmask :
       let to_int64 =
         match typ with
         | Ctypes_static.Primitive p ->
-          ( match p with
-            | Ctypes_primitive_types.Int8_t -> Int64.of_int
-            | Ctypes_primitive_types.Int32_t -> Int64.of_int32
-            | Ctypes_primitive_types.Int16_t -> Int64.of_int
-            | Ctypes_primitive_types.Int -> Int64.of_int
-            | Ctypes_primitive_types.Int64_t -> identity
-            | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_int64
-            | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_int64
-            | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_int64
-            | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_int64
-            | _ -> fail typ
-            : a -> int64 )
+          (match p with
+           | Ctypes_primitive_types.Int8_t -> Int64.of_int
+           | Ctypes_primitive_types.Int32_t -> Int64.of_int32
+           | Ctypes_primitive_types.Int16_t -> Int64.of_int
+           | Ctypes_primitive_types.Int -> Int64.of_int
+           | Ctypes_primitive_types.Int64_t -> identity
+           | Ctypes_primitive_types.Uint8_t -> Unsigned.UInt8.to_int64
+           | Ctypes_primitive_types.Uint16_t -> Unsigned.UInt16.to_int64
+           | Ctypes_primitive_types.Uint32_t -> Unsigned.UInt32.to_int64
+           | Ctypes_primitive_types.Uint64_t -> Unsigned.UInt64.to_int64
+           | _ -> fail typ
+            : a -> int64)
         | _ -> fail typ
       in
       fun a k -> f a (to_int64 k)
@@ -396,13 +396,13 @@ module Signed = struct
     include Signed.S with type t = int
   end
 
-  module Short = ( val match Ctypes.sizeof Ctypes.short with
-                       | 1 -> (module Int8)
-                       | 2 -> (module Int16)
-                       | 4 when Ctypes.sizeof Ctypes.int = 4 ->
-                         if Sys.word_size = 64 then (module Int32)
-                         else (module Signed.Int)
-                       | _ -> failwith "invalid size of short" : Short )
+  module Short = (val match Ctypes.sizeof Ctypes.short with
+                      | 1 -> (module Int8)
+                      | 2 -> (module Int16)
+                      | 4 when Ctypes.sizeof Ctypes.int = 4 ->
+                        if Sys.word_size = 64 then (module Int32)
+                        else (module Signed.Int)
+                      | _ -> failwith "invalid size of short" : Short)
 
   module Schar = Int8
 end
@@ -443,12 +443,12 @@ module Callback = struct
   end
 
   let make (type a) (fn : a Ctypes.fn) =
-    ( module struct
+    (module struct
       type real = a
 
       let real = fn
     end : Info
-      with type real = a )
+      with type real = a)
 end
 
 module Shadow = struct

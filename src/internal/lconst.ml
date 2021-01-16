@@ -36,13 +36,13 @@ let init usf =
   let name = match usf with "" -> "Ppxc_private" | s -> "Ppxc_" ^ s in
   if use_open_struct then (
     (impl_mod_name := match usf with "" -> "Ppxc__private" | s -> "Ppxc__" ^ s);
-    type_mod_name := name )
+    type_mod_name := name)
   else (
     impl_mod_name := name;
     type_mod_name :=
       match usf with
       | "" -> "Ppxc_private_types"
-      | s -> String.concat "_" [ "Ppxc"; s; "types" ] )
+      | s -> String.concat "_" [ "Ppxc"; s; "types" ])
 
 type merlin_state = {
   ximpl_mod_name : string;

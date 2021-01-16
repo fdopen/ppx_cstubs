@@ -136,8 +136,7 @@ module C_content_make (E : Empty) = struct
   let add_function_place id = entries := Function id :: !entries
 
   let get_extract_source () =
-    List.fold_left ~init:[] !entries ~f:(fun a ->
-      function
+    List.fold_left ~init:[] !entries ~f:(fun a -> function
       | Header (h, _) | Extract_source (h, _, _, _) | Extract_header (h, _, _)
         ->
         h :: a
@@ -218,8 +217,7 @@ module Const_common (C_content : Const_common_s) = struct
        compilation is slow. Therefore I first try to find the error in
        other source parts that have been created for this purpose *)
     let l =
-      List.fold_left !C_content.entries ~init:[] ~f:(fun ac ->
-        function
+      List.fold_left !C_content.entries ~init:[] ~f:(fun ac -> function
         | C_content.Header (s, l) -> (s, `Header l) :: ac
         | C_content.Extract_header (s, l, e) -> (s, `Eheader (l, e)) :: ac
         | C_content.Extract_source _ | C_content.Function _ -> ac)
@@ -230,8 +228,7 @@ module Const_common (C_content : Const_common_s) = struct
     if n < len then fail ~emsg l n
     else
       let l =
-        List.fold_left !C_content.entries ~init:[] ~f:(fun ac ->
-          function
+        List.fold_left !C_content.entries ~init:[] ~f:(fun ac -> function
           | C_content.Header (s, l) -> (s, `Header l) :: ac
           | C_content.Extract_header (s, l, e)
           | C_content.Extract_source (s, l, e, _) ->
@@ -260,7 +257,7 @@ module Const_common (C_content : Const_common_s) = struct
           List.iter (List.rev !C_content.entries) ~f:(function
             | Header _ | Extract_header _ | Function _ -> ()
             | Extract_source (_, _, _, f) -> f obj)
-        | Error _ -> find_failing ebuf )
+        | Error _ -> find_failing ebuf)
 
   let extract_single_einfo id =
     extract_all ();
@@ -319,8 +316,7 @@ module Const = struct
           (Extract_c.prepare_extract_string ~loc str, `String)
         | Some einf ->
           let { Extract_c_ml.ctype; _ } = einf in
-          (Extract_c.prepare_extract_int ~loc (`Int_type ctype) str, `Int einf)
-        )
+          (Extract_c.prepare_extract_int ~loc (`Int_type ctype) str, `Int einf))
       | `U8 | `U32 | `U32_to_expr | `A64 ->
         let p =
           match x with
@@ -493,13 +489,13 @@ module Int_alias = struct
     let emulate = Options.(!mode = Emulate) in
     if not emulate then (
       if is_set r 28 = false then U.error "type %s is not an integer type" ctyp;
-      if is_set r 29 then U.error "type %s is unsigned" ctyp );
+      if is_set r 29 then U.error "type %s is unsigned" ctyp);
     let g (type a) (t : a Ctypes.typ) (m : (module Signed.S with type t = a)) =
-      ( module struct
+      (module struct
         include (val m)
 
         let t = Ctypes.typedef t ctyp
-      end : Ppx_cstubs.Types.Signed )
+      end : Ppx_cstubs.Types.Signed)
     in
     let f :
         _ -> (module Ppx_cstubs.Types.Signed) * Parsetree.expression * string =
@@ -578,16 +574,16 @@ module Int_alias = struct
     let emulate = Options.(!mode = Emulate) in
     if not emulate then (
       if is_set r 28 = false then U.error "type %s is not an integer type" ctyp;
-      if is_set r 29 = false then U.error "type %s is signed" ctyp );
+      if is_set r 29 = false then U.error "type %s is signed" ctyp);
     let g (type a) (t : a Ctypes.typ) (m : (module Unsigned.S with type t = a))
         =
-      ( module struct
+      (module struct
         include (val m)
 
         let min_int = zero
 
         let t = Ctypes.typedef t ctyp
-      end : Ppx_cstubs.Types.Unkown_signedness )
+      end : Ppx_cstubs.Types.Unkown_signedness)
     in
     let f = function
       | `Uint8 ->
@@ -697,7 +693,7 @@ let typed_int_of_string ~verify t res =
     try Int64.of_string res
     with Failure _ -> (
       try Unsigned.UInt64.of_string res |> Unsigned.UInt64.to_int64
-      with Failure _ -> er () )
+      with Failure _ -> er ())
   in
   let int () =
     if not verify then int64_of_string res |> Int64.to_int
@@ -784,7 +780,7 @@ let typed_int_of_string ~verify t res =
       | Cp.LDouble -> ef t
       | Cp.Complex32 -> ef t
       | Cp.Complex64 -> ef t
-      | Cp.Complexld -> ef t )
+      | Cp.Complexld -> ef t)
   in
   f t
 
@@ -826,9 +822,9 @@ module Extract = struct
     | None -> er ()
     | Some res ->
       let t_expr = Marshal.from_string t_expr 0 in
-      ( match Extract_c_ml.gen_ext t res t_expr with
+      (match Extract_c_ml.gen_ext t res t_expr with
       | None -> er ()
-      | Some x -> Const.expr_exn loc res x |> Hashtbl.replace G.htl_expr id );
+      | Some x -> Const.expr_exn loc res x |> Hashtbl.replace G.htl_expr id);
       typed_int_of_string ~verify:false t res
 
   let register_fun_place id_loc_external =
@@ -859,7 +855,7 @@ module Extract = struct
         match iter ty with
         | `Struct_empty -> `Typedef_struct_empty
         | `Union_empty -> `Typedef_union_empty
-        | x -> x )
+        | x -> x)
       | View { ty; _ } -> iter ty
       | Pointer _ -> assert false
       | Funptr _ -> assert false
@@ -871,7 +867,7 @@ module Extract = struct
       | Abstract _ -> assert false
     in
     let x = iter stru in
-    ( match x with
+    (match x with
     | `Typedef_struct_empty | `Typedef_union_empty ->
       let t, ass =
         if x = `Typedef_struct_empty then ("struct", "PPXC_ASSERT_STRUCT")
@@ -922,7 +918,7 @@ module Extract = struct
     | `Struct | `Union ->
       let txt = Printf.sprintf "%s\n%s;\n" com_loc var1_typed in
       let e = U.error_exn "%s unavailable" ctyp in
-      C_content.add_extract_header txt loc e );
+      C_content.add_extract_header txt loc e);
     let txt =
       Printf.sprintf
         {|
@@ -1088,13 +1084,13 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
     let te = Printf.sprintf "PPXC_OPAQUE(%s, %s, %s)" ctyp stru var in
     let info_str = Printf.sprintf "type info %s" ctyp in
     Const.add ~info_str id loc `U32 te;
-    ( module struct
+    (module struct
       type t = [ `a ] Ctypes_static.abstract
 
       let t =
         Ctypes.view ~read:Internals.identity ~write:Internals.identity
           (Ctypes.abstract ~name:ctyp ~size:1 ~alignment:1)
-    end )
+    end)
 
   let abstract ~size ~align ctyp =
     ignore (common_abstract ~size ~align `U32_to_expr ctyp : string * string);
@@ -1114,7 +1110,7 @@ module Build = struct
 
   let extract_single_int id =
     match extract_single_str id with
-    | Some x -> ( try Some (int_of_string x) with Failure _ -> None )
+    | Some x -> ( try Some (int_of_string x) with Failure _ -> None)
     | None -> None
 
   let constant id_loc str t_expr t =
@@ -1133,7 +1129,7 @@ module Build = struct
       if x_new.Extract_c_ml.ctype <> x_old.Extract_c_ml.ctype then fail ();
       match Extract_c_ml.gen_ext t res t_expr with
       | None -> fail ()
-      | Some x -> Const.expr_exn loc res x |> Hashtbl.replace G.htl_expr id )
+      | Some x -> Const.expr_exn loc res x |> Hashtbl.replace G.htl_expr id)
     | `Int_no_expr, _ | `String, Some _ | `Int _, None -> fail ()
 
   let is_set = Int_alias.is_set
@@ -1149,7 +1145,7 @@ module Build = struct
     in
     if Options.(!mode <> Emulate) then (
       if not (is_set ck 0) then Const_phase0.f_er loc (Extract_c.Underflow res);
-      if not (is_set ck 1) then Const_phase0.f_er loc (Extract_c.Overflow res) );
+      if not (is_set ck 1) then Const_phase0.f_er loc (Extract_c.Overflow res));
     typed_int_of_string ~verify:true t res
 
   let foreign_value id_loc_external id_loc_stri_expr ctypes_t foreign_value name
@@ -1308,7 +1304,7 @@ module Build = struct
             if id land (1 lsl 1) = 0 then
               U.error "%s is not of type %s" cname enum_name;
             if (not enum_is_int_bitmask) && id land (1 lsl 2) = 0 then
-              U.error "%s is not of type %s" cname enum_name );
+              U.error "%s is not of type %s" cname enum_name);
           let i_str =
             match extract_single_str c.ee_int_id with
             | Some x -> x
@@ -1321,16 +1317,16 @@ module Build = struct
             | Extract_c_ml.Expr s -> s
           in
           let integer = f typ in
-          ( match additional_check with
+          (match additional_check with
           | None -> ()
-          | Some t -> ignore (f t : Marshal_types.expr) );
+          | Some t -> ignore (f t : Marshal_types.expr));
           [%expr ([%e c.ee_expr], [%e integer]) :: [%e ac]])
     in
     let name = U.str_expr enum_name in
     let typedef =
       match enum_is_typedef with true -> [%expr true] | false -> [%expr false]
     in
-    ( match enum_type_id with
+    (match enum_type_id with
     | Marshal_types.E_normal id | Marshal_types.E_normal_bitmask (id, _) ->
       let e =
         [%expr
@@ -1338,8 +1334,8 @@ module Build = struct
             ~typedef:[%e typedef] ?unexpected:[%e enum_unexpected] [%e list]]
       in
       Hashtbl.replace G.htl_expr id e
-    | Marshal_types.E_bitmask _ -> () );
-    ( match enum_type_id with
+    | Marshal_types.E_bitmask _ -> ());
+    (match enum_type_id with
     | Marshal_types.E_bitmask id | Marshal_types.E_normal_bitmask (_, id) ->
       let e =
         [%expr
@@ -1348,7 +1344,7 @@ module Build = struct
             ?unexpected:[%e enum_unexpected_bits] [%e list]]
       in
       Hashtbl.replace G.htl_expr id e
-    | Marshal_types.E_normal _ -> () );
+    | Marshal_types.E_normal _ -> ());
     live_res
 
   let foreign id_loc_external id_loc_stri_expr ~ocaml_name ~typ_expr
@@ -1448,7 +1444,7 @@ module Build = struct
     if is_set r 29 then (
       let md, expr, alias_mod = Int_alias.uint ?strict ctyp r in
       common_int_alias ~sig_typ:`Any_unsigned id ~mod_name expr ~alias_mod ctyp;
-      md )
+      md)
     else
       let md, expr, alias_mod = Int_alias.int ?strict ctyp r in
       common_int_alias ~sig_typ:`Any_signed id ~mod_name expr ~alias_mod ctyp;
@@ -1467,167 +1463,166 @@ module Build = struct
   let opaque =
     let module Const_orig = Const in
     let open Ast_helper in
-    fun ~size ~align ~typ ~mi ctyp ->
-      ( let emu = Options.(!mode = Emulate) in
-        let { Marshal_types.o_uniq_ref_id; o_binding_name } =
-          Marshal.from_string mi 0
-        in
-        let uniq_ref_id = o_uniq_ref_id in
-        let binding_name = o_binding_name in
-        let id_typ, _ = U.from_id_loc_param typ in
-        let r =
-          if emu then 0
-          else
-            match extract_single_int id_typ with
-            | Some x -> x
-            | None -> U.error "can't find info about %s" ctyp
-        in
-        let g manifest expr =
-          let loc_binding_name = U.mk_loc binding_name in
-          let t = Type.mk ~kind:Ptype_abstract loc_binding_name ~manifest in
-          let t_abstr = Type.mk ~kind:Ptype_abstract loc_binding_name in
-          let stris = [ Str.type_ Asttypes.Recursive [ t ] ] in
-          let sigs = [ Sig.type_ Asttypes.Recursive [ t_abstr ] ] in
-          let loc_binding_name = U.mk_loc binding_name in
-          let real_binding_name = Uniq_ref.get_final_name uniq_ref_id in
-          let pat = U.mk_pat real_binding_name in
-          let constr = [%type: [%t U.mk_typc binding_name] Ctypes.typ] in
-          let val' = Val.mk (U.mk_loc real_binding_name) constr in
-          let stris = [%stri let [%p pat] = [%e expr]] :: stris in
-          let sigs = Sig.value val' :: sigs in
-          let stris, sigs =
-            if real_binding_name = binding_name then (stris, sigs)
-            else
-              let expr = U.mk_ident real_binding_name in
-              let val' = Val.mk loc_binding_name constr in
-              let nwa = Sig.attribute (U.ocaml_warning "-32") in
-              let p = U.mk_pat binding_name in
-              ( [%stri let [%p p] = [%e expr]] :: stris,
-                Sig.value val' :: nwa :: sigs )
-          in
-          let r =
-            [%stri
-              include (
-                struct
-                  [%%s List.rev stris]
-                end :
-                  sig
-                    [%%s List.rev sigs]
-                  end )]
-          in
-          Hashtbl.replace G.htl_stri (fst (U.from_id_loc_param size)) r
-        in
-        let f (type a) (ctypes_t : a Ctypes.typ) expr manifest :
-            (module Opaque_result) =
-          g manifest (typedef ~name:ctyp expr);
-          ( module struct
-            type t = a
-
-            let t = Ctypes.typedef ctypes_t ctyp
-          end )
-        in
-        let ws64 = Ocaml_config.word_size () = 64 in
-        let usigned = is_set r 29 in
-        let signed = not usigned in
-        if is_set r 23 then
-          f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
-        else if is_set r 15 then
-          f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
-        else if is_set r 16 then
-          f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
-        else if ws64 && is_set r 8 && is_set r 3 then
-          f Ctypes.int [%expr Ctypes.int] [%type: int]
-        else if is_set r 17 then
-          f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
-        else if is_set r 18 then
-          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
-        else if is_set r 5 then f Ctypes.schar [%expr Ctypes.schar] [%type: int]
-        else if is_set r 19 then
-          f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
-        else if is_set r 20 then
-          f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
-        else if is_set r 21 then
-          f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
-        else if is_set r 22 then
-          f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
-        else if is_set r 6 then
-          f Ctypes.uchar [%expr Ctypes.uchar] [%type: Unsigned.uchar]
-        else if is_set r 7 then
-          f Ctypes.ushort [%expr Ctypes.short] [%type: Signed.short]
-        else if is_set r 26 then
-          f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
-        else if is_set r 27 then
-          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
-        else if is_set r 8 then
-          f Ctypes.sint [%expr Ctypes.sint] [%type: Signed.sint]
-        else if is_set r 9 then
-          f Ctypes.long [%expr Ctypes.long] [%type: Signed.long]
-        else if is_set r 10 then
-          f Ctypes.llong [%expr Ctypes.llong] [%type: Signed.llong]
-        else if is_set r 11 then
-          f Ctypes.ushort [%expr Ctypes.ushort] [%type: Unsigned.ushort]
-        else if is_set r 12 then
-          f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
-        else if is_set r 13 then
-          f Ctypes.ulong [%expr Ctypes.ulong] [%type: Unsigned.ulong]
-        else if is_set r 14 then
-          f Ctypes.ullong [%expr Ctypes.ullong] [%type: Unsigned.ullong]
-        else if is_set r 24 then f Ctypes.char [%expr Ctypes.char] [%type: char]
-        else if is_set r 25 then f Ctypes.bool [%expr Ctypes.bool] [%type: bool]
-          (* via __builtin_classify_type *)
-        else if signed && ws64 && is_set r 0 && is_set r 3 then
-          f Ctypes.int [%expr Ctypes.int] [%type: int]
-        else if signed && is_set r 1 then
-          f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
-        else if signed && is_set r 2 then
-          f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
-        else if signed && is_set r 3 then
-          f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
-        else if signed && is_set r 4 then
-          f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
-        else if usigned && is_set r 0 then
-          f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
-        else if usigned && is_set r 1 then
-          f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
-        else if usigned && is_set r 2 then
-          f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
-        else if usigned && is_set r 3 then
-          f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
-        else if usigned && is_set r 4 then
-          f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
-        else if is_set r 28 then (
-          let manifest = [%type: unit Ctypes.ptr] in
-          let expr = [%expr Ctypes.ptr Ctypes.void] in
-          g manifest @@ typedef expr;
-          ( module struct
-            type t = unit Ctypes_static.ptr
-
-            let t : t Ctypes.typ =
-              Ctypes.view ~read:Internals.identity ~write:Internals.identity
-                ~format_typ:(fun k fmt -> Format.fprintf fmt "%s%t" ctyp k)
-                (Ctypes.ptr Ctypes.void)
-          end ) )
+    fun ~size ~align ~typ ~mi ctyp : (module Opaque_result) ->
+      let emu = Options.(!mode = Emulate) in
+      let { Marshal_types.o_uniq_ref_id; o_binding_name } =
+        Marshal.from_string mi 0
+      in
+      let uniq_ref_id = o_uniq_ref_id in
+      let binding_name = o_binding_name in
+      let id_typ, _ = U.from_id_loc_param typ in
+      let r =
+        if emu then 0
         else
-          let manifest = [%type: [ `a ] Ctypes.abstract] in
-          let size, alignment = g_size_align ~size ~align ctyp in
-          let expr =
-            [%expr
-              Ctypes_static.Abstract
-                {
-                  Ctypes_static.aname = [%e U.str_expr ctyp];
-                  Ctypes_static.asize = [%e U.int_expr size];
-                  Ctypes_static.aalignment = [%e U.int_expr alignment];
-                }]
-          in
-          g manifest @@ typedef expr;
-          ( module struct
-            type t = [ `a ] Ctypes.abstract
+          match extract_single_int id_typ with
+          | Some x -> x
+          | None -> U.error "can't find info about %s" ctyp
+      in
+      let g manifest expr =
+        let loc_binding_name = U.mk_loc binding_name in
+        let t = Type.mk ~kind:Ptype_abstract loc_binding_name ~manifest in
+        let t_abstr = Type.mk ~kind:Ptype_abstract loc_binding_name in
+        let stris = [ Str.type_ Asttypes.Recursive [ t ] ] in
+        let sigs = [ Sig.type_ Asttypes.Recursive [ t_abstr ] ] in
+        let loc_binding_name = U.mk_loc binding_name in
+        let real_binding_name = Uniq_ref.get_final_name uniq_ref_id in
+        let pat = U.mk_pat real_binding_name in
+        let constr = [%type: [%t U.mk_typc binding_name] Ctypes.typ] in
+        let val' = Val.mk (U.mk_loc real_binding_name) constr in
+        let stris = [%stri let [%p pat] = [%e expr]] :: stris in
+        let sigs = Sig.value val' :: sigs in
+        let stris, sigs =
+          if real_binding_name = binding_name then (stris, sigs)
+          else
+            let expr = U.mk_ident real_binding_name in
+            let val' = Val.mk loc_binding_name constr in
+            let nwa = Sig.attribute (U.ocaml_warning "-32") in
+            let p = U.mk_pat binding_name in
+            ( [%stri let [%p p] = [%e expr]] :: stris,
+              Sig.value val' :: nwa :: sigs )
+        in
+        let r =
+          [%stri
+            include (
+              struct
+                [%%s List.rev stris]
+              end :
+                sig
+                  [%%s List.rev sigs]
+                end)]
+        in
+        Hashtbl.replace G.htl_stri (fst (U.from_id_loc_param size)) r
+      in
+      let f (type a) (ctypes_t : a Ctypes.typ) expr manifest :
+          (module Opaque_result) =
+        g manifest (typedef ~name:ctyp expr);
+        (module struct
+          type t = a
 
-            let t : t Ctypes.typ =
-              Ctypes.view ~read:Internals.identity ~write:Internals.identity
-                (Ctypes.abstract ~name:ctyp ~size ~alignment)
-          end )
-        : (module Opaque_result) )
+          let t = Ctypes.typedef ctypes_t ctyp
+        end)
+      in
+      let ws64 = Ocaml_config.word_size () = 64 in
+      let usigned = is_set r 29 in
+      let signed = not usigned in
+      if is_set r 23 then
+        f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
+      else if is_set r 15 then
+        f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
+      else if is_set r 16 then
+        f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
+      else if ws64 && is_set r 8 && is_set r 3 then
+        f Ctypes.int [%expr Ctypes.int] [%type: int]
+      else if is_set r 17 then
+        f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
+      else if is_set r 18 then
+        f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
+      else if is_set r 5 then f Ctypes.schar [%expr Ctypes.schar] [%type: int]
+      else if is_set r 19 then
+        f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
+      else if is_set r 20 then
+        f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
+      else if is_set r 21 then
+        f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
+      else if is_set r 22 then
+        f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
+      else if is_set r 6 then
+        f Ctypes.uchar [%expr Ctypes.uchar] [%type: Unsigned.uchar]
+      else if is_set r 7 then
+        f Ctypes.ushort [%expr Ctypes.short] [%type: Signed.short]
+      else if is_set r 26 then
+        f Ctypes.nativeint [%expr Ctypes.nativeint] [%type: nativeint]
+      else if is_set r 27 then
+        f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
+      else if is_set r 8 then
+        f Ctypes.sint [%expr Ctypes.sint] [%type: Signed.sint]
+      else if is_set r 9 then
+        f Ctypes.long [%expr Ctypes.long] [%type: Signed.long]
+      else if is_set r 10 then
+        f Ctypes.llong [%expr Ctypes.llong] [%type: Signed.llong]
+      else if is_set r 11 then
+        f Ctypes.ushort [%expr Ctypes.ushort] [%type: Unsigned.ushort]
+      else if is_set r 12 then
+        f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
+      else if is_set r 13 then
+        f Ctypes.ulong [%expr Ctypes.ulong] [%type: Unsigned.ulong]
+      else if is_set r 14 then
+        f Ctypes.ullong [%expr Ctypes.ullong] [%type: Unsigned.ullong]
+      else if is_set r 24 then f Ctypes.char [%expr Ctypes.char] [%type: char]
+      else if is_set r 25 then f Ctypes.bool [%expr Ctypes.bool] [%type: bool]
+        (* via __builtin_classify_type *)
+      else if signed && ws64 && is_set r 0 && is_set r 3 then
+        f Ctypes.int [%expr Ctypes.int] [%type: int]
+      else if signed && is_set r 1 then
+        f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
+      else if signed && is_set r 2 then
+        f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
+      else if signed && is_set r 3 then
+        f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]
+      else if signed && is_set r 4 then
+        f Ctypes.int64_t [%expr Ctypes.int64_t] [%type: int64]
+      else if usigned && is_set r 0 then
+        f Ctypes.uint [%expr Ctypes.uint] [%type: Unsigned.uint]
+      else if usigned && is_set r 1 then
+        f Ctypes.uint8_t [%expr Ctypes.uint8_t] [%type: Unsigned.uint8]
+      else if usigned && is_set r 2 then
+        f Ctypes.uint16_t [%expr Ctypes.uint16_t] [%type: Unsigned.uint16]
+      else if usigned && is_set r 3 then
+        f Ctypes.uint32_t [%expr Ctypes.uint32_t] [%type: Unsigned.uint32]
+      else if usigned && is_set r 4 then
+        f Ctypes.uint64_t [%expr Ctypes.uint64_t] [%type: Unsigned.uint64]
+      else if is_set r 28 then (
+        let manifest = [%type: unit Ctypes.ptr] in
+        let expr = [%expr Ctypes.ptr Ctypes.void] in
+        g manifest @@ typedef expr;
+        (module struct
+          type t = unit Ctypes_static.ptr
+
+          let t : t Ctypes.typ =
+            Ctypes.view ~read:Internals.identity ~write:Internals.identity
+              ~format_typ:(fun k fmt -> Format.fprintf fmt "%s%t" ctyp k)
+              (Ctypes.ptr Ctypes.void)
+        end))
+      else
+        let manifest = [%type: [ `a ] Ctypes.abstract] in
+        let size, alignment = g_size_align ~size ~align ctyp in
+        let expr =
+          [%expr
+            Ctypes_static.Abstract
+              {
+                Ctypes_static.aname = [%e U.str_expr ctyp];
+                Ctypes_static.asize = [%e U.int_expr size];
+                Ctypes_static.aalignment = [%e U.int_expr alignment];
+              }]
+        in
+        g manifest @@ typedef expr;
+        (module struct
+          type t = [ `a ] Ctypes.abstract
+
+          let t : t Ctypes.typ =
+            Ctypes.view ~read:Internals.identity ~write:Internals.identity
+              (Ctypes.abstract ~name:ctyp ~size ~alignment)
+        end)
 
   let abstract ~size ~align name =
     let size, alignment = g_size_align ~size ~align name in

@@ -219,12 +219,12 @@ module Ppx_mod_top_parsetree = struct
   let add_from_sub k s l =
     if Hashtbl.mem Keywords.htl_modules s then
       error "module name %S is reserved" s;
-    ( match k with
+    (match k with
     | `Let_cont | `Anon_module | `Open_struct -> ()
     | `Module | `Let_module ->
       let pre = Myconst.private_prefix_capitalized in
       if CCString.prefix ~pre s then
-        error "module prefix %s is reserved (%S)" pre s );
+        error "module prefix %s is reserved (%S)" pre s);
     let ms = Mod.structure (List.rev l) in
     let r = Str.module_ (Mb.mk (U.mk_oloc s) ms) in
     match k with
@@ -352,7 +352,7 @@ module Topscript = struct
       if !last_loc <> loc || true then (
         last_loc := loc;
         let loc = U.marshal_to_str_expr loc in
-        f [%stri let () = Ppxc__script.set_loc [%e loc]] );
+        f [%stri let () = Ppxc__script.set_loc [%e loc]]);
       f s
 
   let add_build_external = add_help Structure_build_external.add_entry
@@ -478,7 +478,7 @@ module Mod_structure = struct
           if M.cur_is_empty () = false then closable := false);
       if !closable then (
         already_closed := true;
-        close_all loc )
+        close_all loc)
     in
     let mexpr = Std.finally ~h fmexpr in
     (mexpr, fexpr ())
@@ -536,17 +536,17 @@ module Order = struct
   let reg_abstract () =
     with_new_pos @@ fun id ->
     incr n_abstract_types;
-    ( match !first_abstract_type with
+    (match !first_abstract_type with
     | None -> first_abstract_type := id
-    | Some _ -> () );
+    | Some _ -> ());
     last_abstract_type := id
 
   let reg_derived () =
     with_new_pos @@ fun id ->
     incr n_derived_types;
-    ( match !first_derived_type with
+    (match !first_derived_type with
     | None -> first_derived_type := id
-    | Some _ -> () );
+    | Some _ -> ());
     last_derived_type := id
 
   let reg_expr () = with_new_pos @@ fun id -> last_expr := id
@@ -560,11 +560,11 @@ module Order = struct
       match !first_types_hidden_pos with
       | None -> false
       | Some hidden_pos -> (
-        ( match !last_expr with
+        (match !last_expr with
         | None -> false
-        | Some last_expr -> last_expr > hidden_pos )
+        | Some last_expr -> last_expr > hidden_pos)
         ||
-        match !last_derived_type with None -> false | Some x -> x > hidden_pos )
+        match !last_derived_type with None -> false | Some x -> x > hidden_pos)
 
   let remove_alias_types () = !n_derived_types = 0 && !n_abstract_types = 0
 
@@ -610,16 +610,16 @@ module OSTypes = struct
     if Ocaml_config.use_open_struct () = false then None
     else (
       Type_mod.add_entry (OSTypes_all.open_last ());
-      Some (OSTypes_visible.open_last ()) )
+      Some (OSTypes_visible.open_last ()))
 
   let add_s x =
     OSTypes_visible.add_simple x;
     OSTypes_all.add_simple x
 
   let add_abstract ?sub_module x =
-    ( match sub_module with
+    (match sub_module with
     | None -> add_s x
-    | Some s -> with_open_module s (fun () -> add_s x) );
+    | Some s -> with_open_module s (fun () -> add_s x));
     O.reg_abstract ();
     ret ()
 
@@ -697,7 +697,7 @@ module Modules = struct
           let l = OSTypes_visible.get_cur_mod () in
           if l <> [] then (
             visible_types := l;
-            if (not is_prim) && name.txt <> None then types_hidden () );
+            if (not is_prim) && name.txt <> None then types_hidden ());
           res)
         ~fexpr:(fun () ->
           if !types_all_added then
@@ -738,10 +738,10 @@ module Modules = struct
           if !types_visible_added && x.pmb_name.txt <> None then types_hidden ();
           res)
     in
-    ( match !new_types with
+    (match !new_types with
     | [] -> ()
     | l ->
-      List.rev l |> List.flatten |> OSTypes_all.open_wl |> Type_mod.add_entry );
+      List.rev l |> List.flatten |> OSTypes_all.open_wl |> Type_mod.add_entry);
     lres
 
   let added_in_scope let_struct f =
@@ -770,7 +770,7 @@ module Modules = struct
           | `Struct -> Ov.open_declaration_s l
           | `Let -> Ov.open_declaration_e l
         in
-        (res, Some n) )
+        (res, Some n))
 
   let added_in_scope_l f =
     match added_in_scope `Struct f with

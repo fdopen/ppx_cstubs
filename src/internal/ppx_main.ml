@@ -215,10 +215,10 @@ end = struct
     | Ptyp_arrow (l, t1, t2) ->
       check_no_attribs_t typ;
       let t1', found' = type_conf is_inline t1 in
-      ( match l with
+      (match l with
       | Nolabel | Labelled _ -> ()
       | Optional _ ->
-        error ~loc:t1.ptyp_loc "optional parameters are not supported" );
+        error ~loc:t1.ptyp_loc "optional parameters are not supported");
       fun_def is_inline ~lookup ((l, t1') :: accu) (found' || found) t2
     | _ -> unsupported_typ typ.ptyp_loc
 
@@ -392,7 +392,7 @@ end = struct
           | false -> (
             match with_record with
             | true -> Struct_both
-            | false -> Struct_normal ) )
+            | false -> Struct_normal))
       in
       let lookup =
         if rec' <> Asttypes.Recursive then None
@@ -418,7 +418,7 @@ module C_content = struct
         | "-" -> output_string stdout source
         | _ ->
           CCIO.with_out ~flags:[ Open_creat; Open_trunc; Open_binary ] fln
-            (fun ch -> output_string ch source) )
+            (fun ch -> output_string ch source))
       | Some _, None ->
         prerr_endline
           "no c file necessary, remove it from the command-line invocation and update your build instructions";
@@ -602,11 +602,11 @@ end = struct
 
   let bound_constant name = function
     | [ (Nolabel, str_expr); (Nolabel, type_expr) ] ->
-      ( match Extract.constant_string str_expr with
+      (match Extract.constant_string str_expr with
       | Some _ -> ()
       | None ->
         U.error ~loc:str_expr.pexp_loc
-          "'let%%c ... = constant' requires a string literal" );
+          "'let%%c ... = constant' requires a string literal");
       let id = Id.get () in
       Topscript.add_extract_phase0
         [%stri
@@ -659,9 +659,9 @@ end = struct
 
   let header = function
     | [ (Nolabel, x) ] ->
-      ( match Extract.constant_string x with
+      (match Extract.constant_string x with
       | Some _ -> ()
-      | None -> error "'header' requires a string literal" );
+      | None -> error "'header' requires a string literal");
       Topscript.add_extract_phase0
         [%stri
           let () =
@@ -734,11 +734,11 @@ end = struct
       | '!' | '#' | '$' | '%' | '&' | '*' | '+' | '-' | '/' | '<' | '=' | '>'
       | '?' | '@' | '^' | '|' | '~' ->
         true
-      | _ -> false )
+      | _ -> false)
 
   let rec build_ctypes_fn params ret =
     match params with
-    | [] -> ( [%expr returning [%e ret]] [@metaloc ret.pexp_loc] )
+    | [] -> [%expr returning [%e ret]] [@metaloc ret.pexp_loc]
     | hd :: tl ->
       let e = build_ctypes_fn tl ret in
       ([%expr [%e hd] @-> [%e e]] [@metaloc hd.pexp_loc])
@@ -762,7 +762,7 @@ end = struct
       if U.safe_ascii_only c_name <> c_name || (c >= '0' && c <= '9') then
         error "invalid identifier for c function:%S" c_name;
       if remove_labels then
-        error ~loc:v.pval_loc "remove_labels only supported for inline code" );
+        error ~loc:v.pval_loc "remove_labels only supported for inline code");
     let remove_labels =
       remove_labels || (is_inline && is_ocaml_operator name)
     in
@@ -775,20 +775,20 @@ end = struct
       Impl_mod.add_external ~name_check:(not rec') id_stri_ext.Id.stri
         id_stri_expr.Id.stri ~name:name_impl
     in
-    ( if rec' then
-      let mp = Impl_mod.get_mod_path () in
-      let n = U.mk_ident_l [ name_impl ] in
-      let r = Uniq_ref.make mp ~retype:false name n in
-      (* slightly redundant. But it's an usual to name the function like
-         a Ctypes.typ value that is used to construct the function. I won't
-         waste time for a nicer  solution... *)
-      Impl_mod.add_entry
-        [%stri
-          include struct
-            [@@@ocaml.warning "-32"]
+    (if rec' then
+     let mp = Impl_mod.get_mod_path () in
+     let n = U.mk_ident_l [ name_impl ] in
+     let r = Uniq_ref.make mp ~retype:false name n in
+     (* slightly redundant. But it's an usual to name the function like
+        a Ctypes.typ value that is used to construct the function. I won't
+        waste time for a nicer  solution... *)
+     Impl_mod.add_entry
+       [%stri
+         include struct
+           [@@@ocaml.warning "-32"]
 
-            [%%s [ r.Uniq_ref.topmod_vb; r.Uniq_ref.topmod_ref ]]
-          end] );
+           [%%s [ r.Uniq_ref.topmod_vb; r.Uniq_ref.topmod_ref ]]
+         end]);
     let vb = Vb.mk ~attrs (U.mk_pat name) fres in
     let fres = Str.value Asttypes.Nonrecursive [ vb ] in
     let marshal_info =
@@ -923,7 +923,7 @@ end = struct
       Hashtbl.add htl_tdl_entries id (t' false);
       match OSTypes.add_abstract name with
       | None -> ()
-      | Some x -> Hashtbl.add htl_tdl_entries id x )
+      | Some x -> Hashtbl.add htl_tdl_entries id x)
 
   let union_struct ~tdl_entry_id ?alias_name ~type_name ~stype xtype orig_name =
     let alias_name = match alias_name with None -> orig_name | Some s -> s in
@@ -1032,7 +1032,7 @@ end = struct
               field ?name ~prefix:field_name ~structure:struct_expr ~str_expr
                 field_expr
             in
-            ( match stype with
+            (match stype with
             | Struct_record -> ()
             | Union | Struct_normal | Struct_both ->
               let t = U.mk_typc orig_name in
@@ -1042,7 +1042,7 @@ end = struct
               in
               let t = [%type: (_, [%t t]) Ctypes.field] in
               let x = U.named_stri ~constr:t field_name e in
-              Hashtbl.add htl_tdl_entries tdl_entry_id x );
+              Hashtbl.add htl_tdl_entries tdl_entry_id x);
             n)
       in
       ignore (seal [ (Nolabel, struct_expr) ] : Parsetree.expression);
@@ -1064,9 +1064,9 @@ end = struct
           ~f:(Hashtbl.add htl_tdl_entries tdl_entry_id)
           r.Gen_ml.r_stri_bottom;
         List.iter ~f:Type_mod.add_entry r.Gen_ml.r_stri_type_mod;
-        ( match OSTypes.add_struct_view orig_name with
+        (match OSTypes.add_struct_view orig_name with
         | None -> ()
-        | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b );
+        | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b);
         let view =
           let init = [%expr ppxc__res] in
           let param = U.mk_ident_l [ Myconst.private_prefix ^ "param" ] in
@@ -1226,12 +1226,12 @@ end = struct
             let s = U.named_stri ~constr name s2 in
             Hashtbl.add htl_tdl_entries tdl_entry_id s
         in
-        ( match enum_type with
+        (match enum_type with
         | Enum_normal -> f ~is_list:false alias_name id
         | Enum_bitmask -> f ~is_list:true alias_name id_bitmask
         | Enum_both ->
           f ~is_list:false alias_name id;
-          f ~is_list:true ~bitmask_name:true alias_name_bitmask id_bitmask );
+          f ~is_list:true ~bitmask_name:true alias_name_bitmask id_bitmask);
         None
       | Struct ({ sname; sl = _; sname_c; stypedef; stype; sloc } as swhole) ->
         U.with_loc sloc @@ fun () ->
@@ -1256,8 +1256,7 @@ end = struct
       && List.for_all tl ~f:(function Enum _ -> false | Struct _ -> true)
     then error "struct entry marked as bitmask";
     let names =
-      List.fold_left ~init:[] tl ~f:(fun ac ->
-        function
+      List.fold_left ~init:[] tl ~f:(fun ac -> function
         | Struct { sname = s; sl; _ } ->
           check_reserved_type s;
           List.fold_left ~init:(s :: ac) sl ~f:(fun ac el ->
@@ -1295,20 +1294,19 @@ end = struct
             | Enum_bitmask ->
               error "@@@@as_bitmask and type%%c_bitmask f = ... are redundant"
           in
-          ( match (res.enum_type, res.eunexpected) with
+          (match (res.enum_type, res.eunexpected) with
           | Enum_bitmask, Some _ ->
             error "@@@@unexpected not supported for bitmasks"
-          | (Enum_both | Enum_normal | Enum_bitmask), (Some _ | None) -> () );
-          ( match (res.enum_type, res.eunexpected_bits) with
+          | (Enum_both | Enum_normal | Enum_bitmask), (Some _ | None) -> ());
+          (match (res.enum_type, res.eunexpected_bits) with
           | Enum_normal, Some _ ->
             error "@@@@unexpected_bits not supported for enums"
-          | (Enum_both | Enum_normal | Enum_bitmask), (Some _ | None) -> () );
+          | (Enum_both | Enum_normal | Enum_bitmask), (Some _ | None) -> ());
           Enum res
         | Struct _ as x -> x)
     in
     let cnt_structs, cnt_records =
-      List.fold_left tl ~init:(0, 0) ~f:(fun ((cns, cnr) as ac) ->
-        function
+      List.fold_left tl ~init:(0, 0) ~f:(fun ((cns, cnr) as ac) -> function
         | Enum _ -> ac
         | Struct s ->
           let cns = succ cns in
@@ -1353,7 +1351,7 @@ end = struct
             | Nolabel, str_expr -> (
               match Extract.constant_string str_expr with
               | Some _ -> Some str_expr
-              | None -> er ~loc:str_expr.pexp_loc () )
+              | None -> er ~loc:str_expr.pexp_loc ())
             | (Labelled _ | Optional _), _ -> None)
         in
         match x with Some s -> s | None -> er ()
@@ -1401,9 +1399,9 @@ end = struct
       let stri = Str.module_ (Mb.mk lmod_name t) in
       let tdl_entry_id, tdl_entry = Id.get_tdl_entries_id () in
       Hashtbl.add htl_tdl_entries tdl_entry_id stri;
-      ( match OSTypes.add_abstract ~sub_module:mod_name "t" with
+      (match OSTypes.add_abstract ~sub_module:mod_name "t" with
       | None -> ()
-      | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b );
+      | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b);
       tdl_entry
 
   let opaque =
@@ -1454,9 +1452,9 @@ end = struct
       let stri = mk_str_type ~attrs ~manifest binding_name in
       let tdl_entry_id, tdl_entry = Id.get_tdl_entries_id () in
       Hashtbl.add htl_tdl_entries tdl_entry_id stri;
-      ( match OSTypes.add_abstract binding_name with
+      (match OSTypes.add_abstract binding_name with
       | None -> ()
-      | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b );
+      | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b);
       Str.value Nonrecursive [ Vb.mk ~attrs:vb_attrs pat main_ref ]
       |> Hashtbl.add htl_tdl_entries tdl_entry_id;
       tdl_entry
@@ -1502,9 +1500,9 @@ end = struct
     let at2 = [ Attributes.manifest_replace_attrib ] in
     let stri = mk_str_type ~attrs:at2 ~manifest binding_name in
     Hashtbl.add htl_tdl_entries tdl_entry_id stri;
-    ( match OSTypes.add_abstract binding_name with
+    (match OSTypes.add_abstract binding_name with
     | None -> ()
-    | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b );
+    | Some b -> Hashtbl.add htl_tdl_entries tdl_entry_id b);
     let main_ref =
       Impl_mod.add_named ~constr ~retype:false ~attrs binding_name expr
     in
@@ -1673,7 +1671,7 @@ end = struct
       if g s.popen_expr then f ()
       else (
         incr depth;
-        Std.finally ~h:(fun () -> decr depth) f )
+        Std.finally ~h:(fun () -> decr depth) f)
 
     let check () =
       if !depth <> 0 then
@@ -1776,7 +1774,7 @@ end = struct
          _;
         } ->
           { a with pvb_attributes = [ Attributes.remove_attrib ] }
-        | _ -> a )
+        | _ -> a)
       | _ -> a
 
   let rec unbox_box_constr e f =
@@ -1891,10 +1889,10 @@ end = struct
       let thread_registration = ref false in
       let acquire_runtime = ref false in
       List.iter p.pvb_attributes ~f:(fun x ->
-          ( match x.attr_name.txt with
+          (match x.attr_name.txt with
           | "acquire_runtime_lock" -> acquire_runtime := true
           | "thread_registration" -> thread_registration := true
-          | y -> error ~loc:x.attr_loc "unsupported attribute %s" y );
+          | y -> error ~loc:x.attr_loc "unsupported attribute %s" y);
           if x.attr_payload <> PStr [] then
             error ~loc:x.attr_loc "unknown content in attribute %s"
               x.attr_name.txt);
@@ -1913,10 +1911,10 @@ end = struct
               | Some (e'', t) ->
                 let pexp_desc = Pexp_fun (a, b, c, e'') in
                 Some ({ e with pexp_desc }, t)
-              | None -> None )
+              | None -> None)
             | _ -> None
           in
-          match iter exp with None -> (exp, None) | Some (e, t) -> (e, Some t) )
+          match iter exp with None -> (exp, None) | Some (e, t) -> (e, Some t))
         | _ -> (exp, None)
       in
       let typ =
@@ -1931,7 +1929,7 @@ end = struct
               (* simple equality works surprisingly, probably a very fragile
                  test *)
               t2
-            | _ -> U.error "conflicting type definitions for callback" )
+            | _ -> U.error "conflicting type definitions for callback")
       in
       let name =
         match Extract.variable_from_pattern_constr pat with
@@ -2052,7 +2050,7 @@ end = struct
         check_save_pos "ocaml callback";
         if mod_name = "" then
           U.error "module for ocaml callback must have a name";
-        H.type_cb lname mod_name [ (Asttypes.Nolabel, exp) ] )
+        H.type_cb lname mod_name [ (Asttypes.Nolabel, exp) ])
       else
         let s, l, loc =
           match exp.pexp_desc with
@@ -2077,7 +2075,7 @@ end = struct
         | "int" -> f `Int
         | "uint" -> f `Uint
         | "aint" -> f `Aint
-        | _ -> U.error ~loc "unsupported function %S" s )
+        | _ -> U.error ~loc "unsupported function %S" s)
     | { pstr_desc = Pstr_extension (({ txt; loc }, _), _); _ }
       when List.mem ~eq:CCString.equal txt own_extensions ->
       error ~loc "extension '%s' is not supported here" txt
@@ -2086,17 +2084,17 @@ end = struct
           Pstr_value
             ( Nonrecursive,
               [
-                ( {
-                    pvb_expr =
-                      {
-                        pexp_desc =
-                          Pexp_extension
-                            ( { txt = "c"; _ },
-                              PStr [ { pstr_desc = Pstr_eval (e, []); _ } ] );
-                        _;
-                      };
-                    _;
-                  } as a );
+                ({
+                   pvb_expr =
+                     {
+                       pexp_desc =
+                         Pexp_extension
+                           ( { txt = "c"; _ },
+                             PStr [ { pstr_desc = Pstr_eval (e, []); _ } ] );
+                       _;
+                     };
+                   _;
+                 } as a);
               ] );
         _;
       } as stri ->
@@ -2300,8 +2298,7 @@ end = struct
     default_mapper.structure_item mapper stri'
 
   let add_tdl_entries str =
-    List.fold_left ~init:[] str ~f:(fun ac ->
-      function
+    List.fold_left ~init:[] str ~f:(fun ac -> function
       | {
           pstr_desc =
             Pstr_eval
@@ -2315,7 +2312,7 @@ end = struct
         match Hashtbl.find_all htl_tdl_entries @@ int_of_string s with
         | exception Failure _ ->
           error ~loc:pstr_loc "fatal: type info not found"
-        | x -> x @ ac )
+        | x -> x @ ac)
       | x -> x :: ac)
     |> List.rev
 
@@ -2338,7 +2335,7 @@ end = struct
                    || x.attr_name.txt = Attributes.open_struct_openmod_string)
           ->
           remove_end_open tl
-        | _ -> l )
+        | _ -> l)
     in
     add_tdl_entries str
     |> default_mapper.structure mapper
@@ -2370,14 +2367,14 @@ end = struct
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
-      with Not_found -> error "fatal error: external not found" )
+      with Not_found -> error "fatal error: external not found")
     | {
         pstr_desc =
           Pstr_value
             ( Nonrecursive,
               [
-                ( { pvb_expr = { pexp_attributes = _ :: _ as l; _ } as pexp; _ }
-                as pvb );
+                ({ pvb_expr = { pexp_attributes = _ :: _ as l; _ } as pexp; _ }
+                as pvb);
               ] );
         _;
       } as stri
@@ -2389,16 +2386,16 @@ end = struct
           Pstr_value
             ( Nonrecursive,
               [
-                ( {
-                    pvb_expr =
-                      {
-                        pexp_desc =
-                          Pexp_constraint
-                            (({ pexp_attributes = _ :: _ as l; _ } as pexp), ct);
-                        _;
-                      } as pexp_outer;
-                    _;
-                  } as pvb );
+                ({
+                   pvb_expr =
+                     {
+                       pexp_desc =
+                         Pexp_constraint
+                           (({ pexp_attributes = _ :: _ as l; _ } as pexp), ct);
+                       _;
+                     } as pexp_outer;
+                   _;
+                 } as pvb);
               ] );
         _;
       } as stri
@@ -2440,7 +2437,7 @@ end = struct
       when List.exists attribs ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_expr (int_of_string s)
-      with Not_found -> error "fatal: constant not found" )
+      with Not_found -> error "fatal: constant not found")
     | {
         pexp_desc = Pexp_ifthenelse (_, _, Some e3);
         pexp_attributes = _ :: _ as l;
@@ -2475,7 +2472,7 @@ end = struct
           | _ :: tl -> (
             match U.lid_unflatten (!Lconst.type_mod_name :: tl) with
             | None -> assert false
-            | Some l -> l )
+            | Some l -> l)
       in
       let w2 = { w2 with ptyp_desc = Ptyp_constr ({ txt; loc }, cl) } in
       { w with ptype_manifest = Some w2; ptype_attributes = a }
@@ -2613,9 +2610,9 @@ let mapper top _config _cookies =
 
 let mapper top conf cookies =
   if
-    ( match !Options.mode with
+    (match !Options.mode with
     | Options.Regular -> false
-    | Options.Emulate -> true )
+    | Options.Emulate -> true)
     && CCString.find ~sub:"merlin" conf.Migrate_parsetree.Driver.tool_name < 0
   then
     {

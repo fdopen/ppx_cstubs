@@ -29,7 +29,7 @@ let config =
      in
      let stderr = if !Options.verbosity > 1 then `Stderr else `Null in
      let prog = Options.ocamlfind in
-     ( match Run.run prog args ~stdout:(`Buffer buffer) ~stderr with
+     (match Run.run prog args ~stdout:(`Buffer buffer) ~stderr with
      | exception Unix.Unix_error (e, s, _) ->
        let cmd = Run.cmd_to_string prog args in
        Printf.sprintf "Process creation \"%s\" failed with %s (%S)" cmd
@@ -37,8 +37,7 @@ let config =
        |> failwith
      | 0 -> ()
      | x ->
-       Printf.sprintf "`ocamlfind ocamlc -config` failed with %d" x |> failwith
-     );
+       Printf.sprintf "`ocamlfind ocamlc -config` failed with %d" x |> failwith);
      let r =
        Buffer.contents buffer
        |> CCString.split_on_char '\n'
@@ -57,20 +56,20 @@ let config =
 
 let ext_obj =
   lazy
-    ( if Options.(!mode = Emulate) then ".o"
+    (if Options.(!mode = Emulate) then ".o"
     else
       match StringMap.find "ext_obj" (Lazy.force config) with
       | exception Not_found ->
         failwith "`ocamlc -config` doesn't contain ext_obj"
       | "" -> failwith "ext_obj in `ocamlc -config` is empty"
-      | x -> x )
+      | x -> x)
 
 let runtime_version =
   Scanf.sscanf Sys.ocaml_version "%u.%u.%u" (fun a b c -> (a, b, c))
 
 let version =
   lazy
-    ( if Options.(!mode = Emulate) then runtime_version
+    (if Options.(!mode = Emulate) then runtime_version
     else
       match StringMap.find "version" (Lazy.force config) with
       | exception Not_found ->
@@ -80,11 +79,11 @@ let version =
       | x -> (
         try Scanf.sscanf x "%u.%u.%u" (fun a b c -> (a, b, c))
         with End_of_file | Scanf.Scan_failure _ | Failure _ ->
-          failwith "`ocamlc -config` contains a surprising version string" ) )
+          failwith "`ocamlc -config` contains a surprising version string"))
 
 let word_size =
   lazy
-    ( if Options.(!mode = Emulate) then Sys.word_size
+    (if Options.(!mode = Emulate) then Sys.word_size
     else
       match StringMap.find "word_size" (Lazy.force config) with
       | exception Not_found ->
@@ -98,15 +97,15 @@ let word_size =
         | (32 | 64) as x -> x
         | x ->
           Printf.sprintf "unusual word_size (%d) reported by `ocamlc -config`" x
-          |> failwith ) )
+          |> failwith))
 
 let system =
   lazy
-    ( if Options.(!mode = Emulate) then "linux"
+    (if Options.(!mode = Emulate) then "linux"
     else
       match StringMap.find "system" (Lazy.force config) with
       | exception Not_found -> failwith "`ocamlc -config` doesn't report system"
-      | x -> x )
+      | x -> x)
 
 let init () =
   (* trigger fatal errors *)

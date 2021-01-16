@@ -605,7 +605,7 @@ DISABLE_LIMIT_WARNINGS_POP()
                "( %s | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
                cstr s_user_min s_user_max
         in
-        ({ id; intern = Integer id_x }, str) )
+        ({ id; intern = Integer id_x }, str))
   in
   (res, s_check, src2)
 
@@ -723,7 +723,7 @@ let compile ~ebuf c_prog =
               if id1 = id2 then (
                 let str = Re.Group.get g 2 in
                 Hashtbl.add htl (int_of_string id1) str;
-                Re.Group.stop g 0 )
+                Re.Group.stop g 0)
               else succ i
             with Not_found | Failure _ -> succ i
           in
@@ -763,7 +763,7 @@ let normalise_int r str =
     match str.[0] with
     | '-' -> "-" ^ e
     | '0' -> e
-    | _ -> r.return (Error Info_not_found) )
+    | _ -> r.return (Error Info_not_found))
   | _ -> r.return (Error Info_not_found)
 
 let extract info htl =
@@ -775,9 +775,9 @@ let extract info htl =
     | s -> s
   in
   let res = extract_single info.id in
-  ( match info.intern with
+  (match info.intern with
   | String -> r.return (Ok res)
-  | Unchecked_integer | Integer _ | Integer_no_type _ -> () );
+  | Unchecked_integer | Integer _ | Integer_no_type _ -> ());
   let res = normalise_int r res in
   let int' =
     match info.intern with
@@ -791,10 +791,10 @@ let extract info htl =
   if int' land (1 lsl 0) = 0 then er Not_an_integer;
   if int' land (1 lsl 1) = 0 then er (Underflow res);
   if int' land (1 lsl 2) = 0 then er (Overflow res);
-  ( match info.intern with
+  (match info.intern with
   | Integer _ ->
     if int' land (1 lsl 3) = 0 then er (Underflow res);
     if int' land (1 lsl 4) = 0 then er (Overflow res)
   | Integer_no_type _ -> ()
-  | String | Unchecked_integer -> assert false );
+  | String | Unchecked_integer -> assert false);
   Ok res

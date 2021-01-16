@@ -45,7 +45,7 @@ let rec format_typ' :
         fprintf fmt "struct %s {@;<1 2>@[" tag;
         format_fields fields fmt;
         fprintf fmt "@]@;}%t" (k `nonarray)
-      | _ -> fprintf fmt "struct %s%t" tag (k `nonarray) )
+      | _ -> fprintf fmt "struct %s%t" tag (k `nonarray))
     | Union { utag = ""; ufields; _ } ->
       fprintf fmt "union {@;<1 2>@[";
       format_fields ufields fmt;
@@ -56,7 +56,7 @@ let rec format_typ' :
         fprintf fmt "union %s {@;<1 2>@[" utag;
         format_fields ufields fmt;
         fprintf fmt "@]@;}%t" (k `nonarray)
-      | _ -> fprintf fmt "union %s%t" utag (k `nonarray) )
+      | _ -> fprintf fmt "union %s%t" utag (k `nonarray))
     | Pointer ty ->
       format_typ' ty
         (fun context fmt ->

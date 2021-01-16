@@ -355,7 +355,7 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
             | In_ptr_bind (p, e, f') -> In_ptr_bind (p, e, h f')
             | In_fptr_bind (p, e, f') -> In_fptr_bind (p, e, h f')
           in
-          (Some pat, fexpr) )
+          (Some pat, fexpr))
       | Array _ -> error t
       | Bigarray _ -> error t
   (* various dirty tricks to reduce the lines of boilerplate code *)
@@ -375,7 +375,7 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
               | Some x -> x]
           in
           Some (None, mptr ~f `Ptr)
-        | None -> None )
+        | None -> None)
       | _ -> None
   in
   iter t ?type_expr false
@@ -432,7 +432,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
       | None ->
         let e, p = mk_ex_pat @@ param_name () in
         (Some [%pat? Ctypes_static.Pointer [%p p]], Some (f e))
-      | Some e -> (None, Some (f e)) )
+      | Some e -> (None, Some (f e)))
     | Funptr _ ->
       let e, p = mk_ex_pat @@ param_name () in
       let f expr =
@@ -469,7 +469,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
               Ctypes_static.View
                 { Ctypes_static.read = [%p p]; Ctypes_static.ty = [%p pat2]; _ }]
         in
-        (Some pat, Some f) )
+        (Some pat, Some f))
     | Abstract _ -> structured `Abstract
     | OCaml _ -> error t
     | Array _ -> error t
@@ -479,8 +479,8 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
       ?type_expr:Parsetree.expression ->
       a typ ->
       bool ->
-      ( Parsetree.pattern option
-      * (Parsetree.expression -> Parsetree.expression) option )
+      (Parsetree.pattern option
+      * (Parsetree.expression -> Parsetree.expression) option)
       option =
    fun ?type_expr tchild inside_view ->
     if inside_view then None
@@ -499,7 +499,7 @@ let pat_expand_out ?type_expr ?cinfo t param_name =
                      (Ppx_cstubs.Ppx_cstubs_internals.to_voidp ppxc__not_null))]
           in
           Some (None, Some f)
-        | None -> None )
+        | None -> None)
       | _ -> None
   in
   iter ?type_expr t false
@@ -626,7 +626,7 @@ let build_ignore_expr (el, params) (retexpr, ret_info) =
     | _, true -> (
       let e = ctypes_typ_constr e i ct in
       let e = [%expr [%e ignore_fun ()] [%e e]] in
-      match ac with None -> Some e | Some x -> Some (Exp.sequence x e) )
+      match ac with None -> Some e | Some x -> Some (Exp.sequence x e))
   in
   let i, e =
     ListLabels.fold_left2 ~init:(0, None) el params ~f:(fun (i, ac) (_, e) a ->
@@ -681,17 +681,17 @@ let build_pattern fn_expr patterns ~func =
     | [ hd ] -> (
       match hd with
       | None -> None
-      | Some s -> Some [%pat? Ctypes_static.Returns [%p s]] )
+      | Some s -> Some [%pat? Ctypes_static.Returns [%p s]])
     | hd :: tl -> (
       match iter tl with
       | None -> (
         match hd with
         | None -> None
-        | Some s -> Some [%pat? Ctypes_static.Function ([%p s], _)] )
+        | Some s -> Some [%pat? Ctypes_static.Function ([%p s], _)])
       | Some s -> (
         match hd with
         | None -> Some [%pat? Ctypes_static.Function (_, [%p s])]
-        | Some x -> Some [%pat? Ctypes_static.Function ([%p x], [%p s])] ) )
+        | Some x -> Some [%pat? Ctypes_static.Function ([%p x], [%p s])]))
   in
   match iter patterns with
   | None -> None
@@ -862,7 +862,7 @@ let common fn ext_name cinfo common =
           [%stri
             let [%p ext_fun_pat] = [%e res_c] ()
 
-            and _ = [%e dexpr]] )
+            and _ = [%e dexpr]])
   in
   let intern =
     match intern_expanded with
@@ -884,7 +884,7 @@ let common fn ext_name cinfo common =
           in
           match build_pattern fn_expr pats ~func with
           | None -> (false, func)
-          | Some pat -> (true, pat) )
+          | Some pat -> (true, pat))
       in
       build_stri constr_used res
   in
@@ -1015,7 +1015,7 @@ let ocaml_funptr mof callback_fn =
         List.map param_infos ~f:(fun a -> a.cb_match_pat)
         @ [ ret_info.cb_rmatch_pat ]
       in
-      match build_pattern fn_ref pats ~func with None -> func | Some f -> f )
+      match build_pattern fn_ref pats ~func with None -> func | Some f -> f)
   in
   let stri = [%stri let [%p pat_binding_name] = [%e expr]] in
   let m = Mod.structure [ external'; stri ] in
@@ -1176,7 +1176,7 @@ let gen_record_stris ~mod_path ~type_name l =
 
                 [%%s [ make_type ?attrs ~manifest os_path ]]
               end
-            end )]
+            end)]
     in
     let attrs = Some [ Attributes.manifest_replace_attrib ] in
     { r_stri_top; r_stri_bottom = f attrs; r_stri_type_mod = f None }

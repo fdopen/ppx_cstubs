@@ -694,7 +694,7 @@ extern "C" {
       List.iteri params ~f:(fun i _ ->
           if i <> 0 then Buffer.add_string buf ", ";
           Buffer.add_string buf "value");
-      Buffer.add_string buf ");\n" );
+      Buffer.add_string buf ");\n");
   Printf.bprintf buf {|#ifdef __cplusplus
 }
 #endif
@@ -716,7 +716,7 @@ extern "C" {
       List.filter_map params ~f:(fun x ->
           if x.runtime_protect = false then None else Some x.ocaml_param)
   in
-  ( match params_with_protection with
+  (match params_with_protection with
   | [] -> ()
   | [ h ] -> Printf.bprintf buf "  CAMLparam1(%s);\n" h
   | [ h1; h2 ] -> Printf.bprintf buf "  CAMLparam2(%s,%s);\n" h1 h2
@@ -737,7 +737,7 @@ extern "C" {
         Printf.bprintf buf "  CAMLxparam5(%s,%s,%s,%s,%s);\n" h1 h2 h3 h4 h5;
         iter tl
     in
-    iter tl );
+    iter tl);
   (* declare variables, convert ocaml values to native ctypes *)
   List.iter params ~f:(fun x ->
       Buffer.add_string buf "  ";
@@ -746,13 +746,13 @@ extern "C" {
   (* declare variables for result *)
   if ret.r_typ <> Rvoid then (
     Printf.bprintf buf "  %s %s;\n" native_ret_type ret.ocaml_ret_var;
-    Printf.bprintf buf "  %s;\n" @@ ret.decl_rvar () );
+    Printf.bprintf buf "  %s;\n" @@ ret.decl_rvar ());
   if release_runtime_lock then
     Printf.bprintf buf "  caml_release_runtime_system();\n";
   if return_errno then Printf.bprintf buf "  errno = 0;\n";
   if ret.r_typ <> Rvoid then Printf.bprintf buf "  %s = " ret.c_rvar
   else Buffer.add_string buf "  ";
-  ( match cfunc_value with
+  (match cfunc_value with
   | `Fun cfunc ->
     Buffer.add_string buf cfunc;
     Buffer.add_char buf '(';
@@ -760,14 +760,14 @@ extern "C" {
         if i <> 0 then Buffer.add_string buf ", ";
         if x.typ <> Rvoid then Buffer.add_string buf x.c_var);
     Buffer.add_string buf ");\n"
-  | `Value v -> Printf.bprintf buf "&%s;\n" v );
+  | `Value v -> Printf.bprintf buf "&%s;\n" v);
   if release_runtime_lock then
     Printf.bprintf buf "  caml_acquire_runtime_system();\n";
   if ret.r_typ <> Rvoid then (
     Printf.bprintf buf "  %s = " ret.ocaml_ret_var;
     let s = if return_errno then ret.inj_alloc () else ret.inj_noalloc () in
     Buffer.add_string buf s;
-    Buffer.add_string buf ";\n" );
+    Buffer.add_string buf ";\n");
   let return_val =
     if ret.r_typ = Rvoid then "Val_unit" else ret.ocaml_ret_var
   in
@@ -786,12 +786,11 @@ extern "C" {
       Printf.bprintf buf "value %s(value *a,int n)\n{\n  return(" cname_byte
     else (
       Printf.bprintf buf "value %s(value a0" cname_byte;
-      ( match params with
+      (match params with
       | [] -> ()
       | _ :: tl ->
-        List.iteri tl ~f:(fun i _ -> Printf.bprintf buf ", value a%d" (succ i))
-      );
-      Buffer.add_string buf ")  {\n  return(" );
+        List.iteri tl ~f:(fun i _ -> Printf.bprintf buf ", value a%d" (succ i)));
+      Buffer.add_string buf ")  {\n  return(");
     let l =
       List.mapi params ~f:(fun i x ->
           let t =
@@ -804,7 +803,7 @@ extern "C" {
     let t = String.concat "" [ "("; cname_main; "("; t; ")"; ")" ] in
     let t = if return_errno then t else ret.inj_byte_noalloc t in
     Buffer.add_string buf t;
-    Buffer.add_string buf ");\n}\n" );
+    Buffer.add_string buf ");\n}\n");
   Buffer.add_string buf "DISABLE_CONST_WARNINGS_POP();\n";
   let float =
     noalloc
@@ -906,7 +905,7 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc el =
             in
             if el_len = 1 && is_void_fn fn then (
               fun_is_void := true;
-              "$dummy$" )
+              "$dummy$")
             else U.error "inline code requires named parameters"
           | Asttypes.Optional _ -> assert false
           | Asttypes.Labelled s -> s
@@ -1038,27 +1037,27 @@ extern int ( *ctypes_thread_register)(void);
         | Noalloc_never | Noalloc_opt -> true
         | Noalloc_always -> false)
   in
-  ( if List.length alloc_params > 6 then (
-    Buffer.add_string buf "  CAMLparam0();\n";
-    Printf.bprintf buf "  CAMLlocalN(%sbuf, %d);\n" Myconst.private_prefix
-      params_length;
-    List.iteri params ~f:(fun i s ->
-        Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
-        @@ s.inj_alloc ());
-    Buffer.add_string buf "  CAMLdrop;\n";
-    Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, %sbuf);\n"
-      ret.ocaml_param global_callback_var params_length Myconst.private_prefix )
+  (if List.length alloc_params > 6 then (
+   Buffer.add_string buf "  CAMLparam0();\n";
+   Printf.bprintf buf "  CAMLlocalN(%sbuf, %d);\n" Myconst.private_prefix
+     params_length;
+   List.iteri params ~f:(fun i s ->
+       Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
+       @@ s.inj_alloc ());
+   Buffer.add_string buf "  CAMLdrop;\n";
+   Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, %sbuf);\n"
+     ret.ocaml_param global_callback_var params_length Myconst.private_prefix)
   else
     let g p s =
       Printf.bprintf buf "  %s%s = %s;\n" p s.ocaml_ret_var @@ s.inj_alloc ()
     in
     let g_val = g "value " in
-    ( match alloc_params with
+    (match alloc_params with
     | [] -> ()
     | [ hd ] -> g_val hd
     | hd :: tl ->
       Buffer.add_string buf "  CAMLparam0();\n";
-      ( match tl with
+      (match tl with
       | [ s1 ] -> Printf.bprintf buf "  CAMLlocal1(%s);\n" s1.ocaml_ret_var
       | [ s1; s2 ] ->
         Printf.bprintf buf "  CAMLlocal2(%s, %s);\n" s1.ocaml_ret_var
@@ -1073,10 +1072,10 @@ extern int ( *ctypes_thread_register)(void);
         Printf.bprintf buf "  CAMLlocal5(%s, %s, %s, %s, %s);\n"
           s1.ocaml_ret_var s2.ocaml_ret_var s3.ocaml_ret_var s4.ocaml_ret_var
           s5.ocaml_ret_var
-      | [] | _ :: _ -> assert false );
+      | [] | _ :: _ -> assert false);
       List.iter tl ~f:(g "");
       g_val hd;
-      Buffer.add_string buf "  CAMLdrop;\n" );
+      Buffer.add_string buf "  CAMLdrop;\n");
     if params_length > 3 then (
       Printf.bprintf buf "  value %sbuf[%d];\n" Myconst.private_prefix
         params_length;
@@ -1089,8 +1088,7 @@ extern int ( *ctypes_thread_register)(void);
             Printf.bprintf buf "  %sbuf[%d] = %s;\n" Myconst.private_prefix i
             @@ s.inj_alloc ());
       Printf.bprintf buf "  value %s = caml_callbackN(%s, %d, %sbuf);\n"
-        ret.ocaml_param global_callback_var params_length Myconst.private_prefix
-      )
+        ret.ocaml_param global_callback_var params_length Myconst.private_prefix)
     else (
       List.iter params ~f:(fun s ->
           match s.r_noalloc_typ with
@@ -1107,12 +1105,12 @@ extern int ( *ctypes_thread_register)(void);
       | [ s1; s2; s3 ] ->
         Printf.bprintf buf "caml_callback3(%s, %s, %s, %s);\n"
           global_callback_var s1.ocaml_ret_var s2.ocaml_ret_var s3.ocaml_ret_var
-      | [] | _ :: _ -> assert false ) );
+      | [] | _ :: _ -> assert false));
   if ret.typ = Rvoid then Printf.bprintf buf "  (void)%s;\n" ret.ocaml_param
   else (
     Buffer.add_string buf "  ";
     Buffer.add_string buf @@ ret.prj_alloc ();
-    Buffer.add_char buf '\n' );
+    Buffer.add_char buf '\n');
   if acquire_runtime then
     Buffer.add_string buf "  caml_enter_blocking_section();\n";
   if ret.typ <> Rvoid then Printf.bprintf buf "  return %s;\n" ret.c_var;
