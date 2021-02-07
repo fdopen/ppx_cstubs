@@ -301,7 +301,7 @@ let pat_expand_in t ?cinfo ?type_expr param_name =
     let x = Ctypes.string_of_typ t in
     U.error "cstubs does not support passing %s as parameter" x
   in
-  let mptr ?(f = fun x -> x) w =
+  let mptr ?(f = Std.identity) w =
     let n = param_name () in
     let e = U.mk_ident_l [ n ] in
     match w with

@@ -204,7 +204,6 @@ module Util = struct
      resolved through constrained alias modules, although it doesn't matter
      at runtime. *)
   let alias_type ?attrs e =
-    let module A = Ast_helper in
     let module P = Parsetree in
     let res ?attrs e =
       match attrs with

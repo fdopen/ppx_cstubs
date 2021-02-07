@@ -29,10 +29,12 @@ let set_binary () =
   set_binary_mode_out stderr true;
   set_binary_mode_in stdin true
 
-let common_main top argv =
+let common_main top mode =
   set_binary ();
   Ppx_main.init top;
-  Migrate_parsetree.Driver.run_main ~argv ()
+  match mode with
+  | `Merlin -> ()
+  | `Main argv -> Migrate_parsetree.Driver.run_main ~argv ()
 
 let cpp_main top =
   let usage =
@@ -128,6 +130,12 @@ let cpp_main top =
         ( "-cc",
           arg_string (fun s -> cc := Some s),
           "<command>      Use <command> as the C compiler" );
+        ( "-version",
+          Arg.Unit
+            (fun () ->
+              print_endline Ppx_cstubs_version.version;
+              exit 0),
+          "     Print the version of the program and exit" );
         ( "--",
           Arg.Rest (fun a -> cflags_rest := a :: !cflags_rest),
           "     Pass all following parameters verbatim to the c compiler" );
@@ -202,11 +210,11 @@ let cpp_main top =
   let l = source :: l in
   let l = if !pretty then l else "--dump-ast" :: l in
   let l = Sys.argv.(0) :: l in
-  common_main top (Array.of_list l)
+  common_main top (`Main (Array.of_list l))
 
 let merlin_main top =
   Options.mode := Options.Emulate;
-  common_main top Sys.argv
+  common_main top `Merlin
 
 let merlin_run_top top =
   set_binary ();
@@ -228,8 +236,7 @@ let merlin_run_top top =
   exit 0
 
 let init top =
-  let flags_ppx = [ "--as-ppx"; "--impl"; "--dump-ast" ] in
-  if CCArray.exists (( = ) "--run-merlin-top") Sys.argv then merlin_run_top top
-  else if List.exists (fun s -> CCArray.exists (( = ) s) Sys.argv) flags_ppx
-  then merlin_main top
+  if top#is_merlin_ppx then merlin_main top
+  else if CCArray.exists (( = ) "--run-merlin-top") Sys.argv then
+    merlin_run_top top
   else cpp_main top

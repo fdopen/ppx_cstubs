@@ -133,6 +133,7 @@ let get_top () =
     method init ~nopervasives ~pkgs ~use_threads ~cma_files () =
       init ~nopervasives ~pkgs ~use_threads ~cma_files ()
     method eval st = eval st
+    method is_merlin_ppx = false
   end
 
 let init () =

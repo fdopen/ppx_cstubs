@@ -1845,46 +1845,36 @@ end = struct
     H.external' ~is_inline ~remove_labels ~return_errno ~attrs
       ~release_runtime_lock ~noalloc strpri
 
-  let rec structure_item mapper = function
-    | {
-        pstr_desc =
-          Pstr_extension
-            ( ( { txt = "c"; _ },
-                PStr [ { pstr_desc = Pstr_primitive strpri; pstr_loc; _ } ] ),
-              _ );
-        _;
-      }
+  let rec structure_item mapper stri =
+    let stri_loc = stri.pstr_loc in
+    Ast_helper.default_loc := stri_loc;
+    match stri.pstr_desc with
+    | Pstr_extension
+        ( ( { txt = "c"; _ },
+            PStr [ { pstr_desc = Pstr_primitive strpri; pstr_loc; _ } ] ),
+          _ )
       when strpri.pval_prim <> [] ->
       check_save_pos "external";
       OSTypes.types_maybe_used ();
       external' ~is_inline:true pstr_loc strpri
-    | { pstr_desc = Pstr_primitive strpri; pstr_loc }
-      when strpri.pval_prim <> [] ->
+    | Pstr_primitive strpri when strpri.pval_prim <> [] ->
       check_save_pos "external";
       OSTypes.types_maybe_used ();
-      external' ~is_inline:false pstr_loc strpri
-    | {
-        pstr_desc =
-          Pstr_extension
-            ( ( { txt = ("c" | "c_union" | "c_bitmask") as txt; _ },
-                PStr [ { pstr_desc = Pstr_type (rf, tl); pstr_loc } ] ),
-              _ );
-        _;
-      } ->
+      external' ~is_inline:false stri_loc strpri
+    | Pstr_extension
+        ( ( { txt = ("c" | "c_union" | "c_bitmask") as txt; _ },
+            PStr [ { pstr_desc = Pstr_type (rf, tl); pstr_loc } ] ),
+          _ ) ->
       check_save_type_pos ();
       check_save_pos txt;
       Ast_helper.default_loc := pstr_loc;
       let enforce_union = txt = "c_union" in
       let c_bitmask = txt = "c_bitmask" in
       H.type_decl ~enforce_union ~c_bitmask rf tl
-    | {
-        pstr_desc =
-          Pstr_extension
-            ( ( { txt = "cb"; _ },
-                PStr [ { pstr_desc = Pstr_value (Nonrecursive, [ p ]); _ } ] ),
-              _ );
-        _;
-      } ->
+    | Pstr_extension
+        ( ( { txt = "cb"; _ },
+            PStr [ { pstr_desc = Pstr_value (Nonrecursive, [ p ]); _ } ] ),
+          _ ) ->
       OSTypes.types_maybe_used ();
       let pat = p.pvb_pat in
       let exp = p.pvb_expr in
@@ -1943,30 +1933,20 @@ end = struct
       let thread_registration = !thread_registration in
       let acquire_runtime = !acquire_runtime in
       H.ocaml_funptr ~acquire_runtime ~thread_registration name exp typ
-    | {
-        pstr_desc =
-          Pstr_extension
-            ( ( { txt = "c"; _ },
-                PStr
-                  [
-                    {
-                      pstr_desc =
-                        Pstr_value
-                          ( Nonrecursive,
-                            [
-                              {
-                                pvb_pat = pat;
-                                pvb_expr = exp;
-                                pvb_attributes;
-                                _;
-                              };
-                            ] );
-                      _;
-                    };
-                  ] ),
-              _ );
-        _;
-      } ->
+    | Pstr_extension
+        ( ( { txt = "c"; _ },
+            PStr
+              [
+                {
+                  pstr_desc =
+                    Pstr_value
+                      ( Nonrecursive,
+                        [ { pvb_pat = pat; pvb_expr = exp; pvb_attributes; _ } ]
+                      );
+                  _;
+                };
+              ] ),
+          _ ) ->
       (*| [%stri let%c [%p? pat] = [%e? exp]]*)
       Std.with_return @@ fun ret ->
       let t =
@@ -2020,23 +2000,19 @@ end = struct
       in
       let vb = Ast_helper.Vb.mk ~attrs:pvb_attributes pat t |> mark_empty in
       Ast_helper.Str.value Nonrecursive [ vb ]
-    | {
-        pstr_desc =
-          Pstr_module
+    | Pstr_module
+        {
+          pmb_name = lname;
+          pmb_expr =
             {
-              pmb_name = lname;
-              pmb_expr =
-                {
-                  pmod_desc =
-                    Pmod_extension
-                      ( { txt = ("cb" | "c") as txt; _ },
-                        PStr [ { pstr_desc = Pstr_eval (exp, _); _ } ] );
-                  _;
-                };
+              pmod_desc =
+                Pmod_extension
+                  ( { txt = ("cb" | "c") as txt; _ },
+                    PStr [ { pstr_desc = Pstr_eval (exp, _); _ } ] );
               _;
             };
-        _;
-      } -> (
+          _;
+        } -> (
       check_save_type_pos ();
       let mod_name =
         match lname.txt with
@@ -2078,28 +2054,24 @@ end = struct
         | "uint" -> f `Uint
         | "aint" -> f `Aint
         | _ -> U.error ~loc "unsupported function %S" s )
-    | { pstr_desc = Pstr_extension (({ txt; loc }, _), _); _ }
+    | Pstr_extension (({ txt; loc }, _), _)
       when List.mem ~eq:CCString.equal txt own_extensions ->
       error ~loc "extension '%s' is not supported here" txt
-    | {
-        pstr_desc =
-          Pstr_value
-            ( Nonrecursive,
-              [
-                ( {
-                    pvb_expr =
-                      {
-                        pexp_desc =
-                          Pexp_extension
-                            ( { txt = "c"; _ },
-                              PStr [ { pstr_desc = Pstr_eval (e, []); _ } ] );
-                        _;
-                      };
+    | Pstr_value
+        ( Nonrecursive,
+          [
+            ( {
+                pvb_expr =
+                  {
+                    pexp_desc =
+                      Pexp_extension
+                        ( { txt = "c"; _ },
+                          PStr [ { pstr_desc = Pstr_eval (e, []); _ } ] );
                     _;
-                  } as a );
-              ] );
-        _;
-      } as stri ->
+                  };
+                _;
+              } as a );
+          ] ) ->
       let t =
         unbox_box_constr e @@ fun e ->
         let prefix = Extract.variable_from_pattern a.pvb_pat in
@@ -2132,34 +2104,32 @@ end = struct
       in
       let na = mark_empty { a with pvb_expr = t } in
       { stri with pstr_desc = Pstr_value (Nonrecursive, [ na ]) }
-    | { pstr_desc = Pstr_module x; _ } as stri ->
+    | Pstr_module x ->
       Include_str.cond_disable (x.pmb_name.txt = None) @@ fun () ->
       let f () = default_mapper.structure_item mapper stri in
       Ptree.Modules.pstr_module x f |> stri_and_open
-    | { pstr_desc = Pstr_recmodule l; pstr_loc } ->
+    | Pstr_recmodule l ->
       let f x =
         Include_str.cond_disable (x.pmb_name.txt = None) @@ fun () ->
         default_mapper.module_binding mapper x
       in
       let l' = Ptree.Modules.pstr_recmodule l f in
-      { pstr_desc = Pstr_recmodule l'; pstr_loc }
-    | { pstr_desc = Pstr_include i; _ } as stri ->
+      { pstr_desc = Pstr_recmodule l'; pstr_loc = stri_loc }
+    | Pstr_include i ->
       Include_str.new' i.pincl_mod @@ fun () ->
       let f () = default_mapper.structure_item mapper stri in
       Ptree.Modules.pstr_include i f |> stri_and_open
-    | { pstr_desc = Pstr_open odl; _ } as stri ->
+    | Pstr_open odl ->
       Ptree.Modules.pstr_open odl (fun () ->
           default_mapper.structure_item mapper stri)
       |> stri_and_open
-    | stri -> default_mapper.structure_item mapper stri
+    | _ -> default_mapper.structure_item mapper stri
 
-  and expr mapper = function
-    | {
-        pexp_desc =
-          Pexp_extension
-            ({ txt = "c"; _ }, PStr [ { pstr_desc = Pstr_eval (e, []); _ } ]);
-        _;
-      } ->
+  and expr mapper pexp =
+    Ast_helper.default_loc := pexp.pexp_loc;
+    match pexp.pexp_desc with
+    | Pexp_extension
+        ({ txt = "c"; _ }, PStr [ { pstr_desc = Pstr_eval (e, []); _ } ]) ->
       OSTypes.types_maybe_used ();
       unbox_box_constr e @@ fun e ->
       let s, l =
@@ -2184,28 +2154,40 @@ end = struct
       in
       check_save_pos s;
       r
-    | { pexp_desc = Pexp_extension ({ txt; loc }, _); _ }
+    | Pexp_extension ({ txt; loc }, _)
       when List.mem ~eq:CCString.equal txt own_extensions ->
       error ~loc "extension '%s' is not allowed here" txt
-    | { pexp_desc = Pexp_letmodule (name, mexpr, e); _ } as pexp ->
+    | Pexp_letmodule (name, mexpr, e) ->
       Include_str.cond_disable true @@ fun () ->
       Static_level.disable @@ fun () ->
       let fmexpr () = module_expr mapper mexpr
       and fexpr () = expr mapper e in
       let m, e = Ptree.Modules.pexp_letmodule name ~mexpr ~fmexpr ~fexpr in
       { pexp with pexp_desc = Pexp_letmodule (name, m, e) }
-    | { pexp_desc = Pexp_pack m; _ } as pexp ->
+    | Pexp_pack m ->
       Include_str.cond_disable true @@ fun () ->
       Static_level.disable @@ fun () ->
       Ptree.Modules.pexp_pack m @@ fun () -> default_mapper.expr mapper pexp
-    | { pexp_desc = Pexp_open (odl, e); _ } as w ->
+    | Pexp_open (odl, e) ->
       let fodl () = open_declaration mapper odl in
       let fexpr () = expr mapper e in
       let odl, e = Ptree.Modules.pexp_open odl ~fodl ~fexpr in
-      { w with pexp_desc = Pexp_open (odl, e) }
-    | pexp -> default_mapper.expr mapper pexp
+      { pexp with pexp_desc = Pexp_open (odl, e) }
+    | Pexp_sequence (e1, e2) when pexp.pexp_attributes = [] ->
+      (* prefer ppxlib order *)
+      let e1 = expr mapper e1 in
+      let e2 = expr mapper e2 in
+      { pexp with pexp_desc = Pexp_sequence (e1, e2) }
+    | Pexp_let (r, vbl, e) when pexp.pexp_attributes = [] ->
+      (* prefer ppxlib order *)
+      let f vb = default_mapper.value_binding mapper vb in
+      let vbl = List.map vbl ~f in
+      let e = expr mapper e in
+      { pexp with pexp_desc = Pexp_let (r, vbl, e) }
+    | _ -> default_mapper.expr mapper pexp
 
   and module_expr mapper m =
+    Ast_helper.default_loc := m.pmod_loc;
     match m.pmod_desc with
     | Pmod_ident _ | Pmod_structure _ | Pmod_constraint _ ->
       default_mapper.module_expr mapper m
@@ -2219,6 +2201,7 @@ end = struct
       Save_position.disable @@ fun () -> default_mapper.module_expr mapper m
 
   and module_type mapper m =
+    Ast_helper.default_loc := m.pmty_loc;
     match m.pmty_desc with
     | Pmty_typeof _ ->
       Static_level.disable @@ fun () ->
@@ -2333,10 +2316,10 @@ end = struct
         match hd.pstr_desc with
         | Pstr_open { popen_attributes = _ :: _ as l; _ }
           when List.exists l ~f:(fun x ->
-                   x.attr_name.txt = Attributes.open_struct_body_string
-                   || x.attr_name.txt = Attributes.open_struct_type_mod_string
-                   || x.attr_name.txt = Attributes.open_struct_openmod_string)
-          ->
+                   let t = x.attr_name.txt in
+                   t = Attributes.open_struct_body_string
+                   || t = Attributes.open_struct_type_mod_string
+                   || t = Attributes.open_struct_openmod_string) ->
           remove_end_open tl
         | _ -> l )
     in
@@ -2359,61 +2342,46 @@ end = struct
 
   let structure_item mapper stri =
     let stri = Uniq_ref.replace_stri stri in
-    match stri with
-    | {
-     pstr_desc =
-       Pstr_eval
-         ( { pexp_desc = Pexp_constant (Pconst_integer (s, None)); _ },
-           (_ :: _ as l) );
-     _;
-    }
+    match stri.pstr_desc with
+    | Pstr_eval
+        ( { pexp_desc = Pexp_constant (Pconst_integer (s, None)); _ },
+          (_ :: _ as l) )
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_expr_string) -> (
       try Hashtbl.find Script_result.htl_stri (int_of_string s)
       with Not_found -> error "fatal error: external not found" )
-    | {
-        pstr_desc =
-          Pstr_value
-            ( Nonrecursive,
-              [
-                ( { pvb_expr = { pexp_attributes = _ :: _ as l; _ } as pexp; _ }
-                as pvb );
-              ] );
-        _;
-      } as stri
+    | Pstr_value
+        ( Nonrecursive,
+          [
+            ( { pvb_expr = { pexp_attributes = _ :: _ as l; _ } as pexp; _ } as
+            pvb );
+          ] )
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_attr_string) ->
       mark_if_used mapper stri pvb pexp
-    | {
-        pstr_desc =
-          Pstr_value
-            ( Nonrecursive,
-              [
-                ( {
-                    pvb_expr =
-                      {
-                        pexp_desc =
-                          Pexp_constraint
-                            (({ pexp_attributes = _ :: _ as l; _ } as pexp), ct);
-                        _;
-                      } as pexp_outer;
+    | Pstr_value
+        ( Nonrecursive,
+          [
+            ( {
+                pvb_expr =
+                  {
+                    pexp_desc =
+                      Pexp_constraint
+                        (({ pexp_attributes = _ :: _ as l; _ } as pexp), ct);
                     _;
-                  } as pvb );
-              ] );
-        _;
-      } as stri
+                  } as pexp_outer;
+                _;
+              } as pvb );
+          ] )
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_attr_string) ->
       mark_if_used ~pexp_outer:(pexp_outer, ct) mapper stri pvb pexp
-    | {
-        pstr_desc = Pstr_module ({ pmb_attributes = _ :: _ as l; _ } as w2);
-        pstr_loc = loc;
-      } as w1
+    | Pstr_module ({ pmb_attributes = _ :: _ as l; _ } as w2)
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.replace_attr_string) ->
       let pmb_attributes, id = get_usage_id_from_attribs_exn l in
       let pstr_desc = Pstr_module { w2 with pmb_attributes } in
-      let w1 = { w1 with pstr_desc } in
+      let w1 = { stri with pstr_desc } in
       let w = default_mapper.structure_item mapper w1 in
       (* TODO: modules are now always used because of the __alias redirection.
          Is this avoidable somehow? *)
@@ -2421,41 +2389,36 @@ end = struct
         false = Hashtbl.mem Script_result.htl_used id
         || Ocaml_config.use_open_struct ()
       then w
-      else U.no_warn_unused_module ~loc w
-    | { pstr_desc = Pstr_open { popen_attributes = _ :: _ as l; _ }; _ }
+      else U.no_warn_unused_module ~loc:stri.pstr_loc w
+    | Pstr_open { popen_attributes = _ :: _ as l; _ }
       when List.exists l ~f:(fun x ->
                x.attr_name.txt = Attributes.open_struct_type_mod_string)
            && OSTypes.delete_os_inside_type_mod () ->
       U.empty_stri ()
-    | stri -> default_mapper.structure_item mapper stri
+    | _ -> default_mapper.structure_item mapper stri
 
   let rec expr mapper pexp =
     let pexp = Uniq_ref.replace_expr pexp in
-    match pexp with
-    | {
-     pexp_desc = Pexp_constant (Pconst_integer (s, None));
-     pexp_attributes = _ :: _ as attribs;
-     _;
-    }
-      when List.exists attribs ~f:(fun x ->
-               x.attr_name.txt = Attributes.replace_expr_string) -> (
-      try Hashtbl.find Script_result.htl_expr (int_of_string s)
-      with Not_found -> error "fatal: constant not found" )
-    | {
-        pexp_desc = Pexp_ifthenelse (_, _, Some e3);
-        pexp_attributes = _ :: _ as l;
-        _;
-      } as w
-      when List.exists l ~f:(fun x ->
-               x.attr_name.txt = Attributes.open_struct_ifthenelse_string) ->
-      let a = remove_attrib Attributes.open_struct_ifthenelse_string l in
-      let e =
-        if OSTypes.remove_alias_types () then
-          { e3 with pexp_attributes = e3.pexp_attributes @ a }
-        else { w with pexp_attributes = a }
-      in
-      expr mapper e
-    | pexp -> default_mapper.expr mapper pexp
+    let al = pexp.pexp_attributes in
+    if al = [] then default_mapper.expr mapper pexp
+    else
+      match pexp.pexp_desc with
+      | Pexp_constant (Pconst_integer (s, None))
+        when List.exists al ~f:(fun x ->
+                 x.attr_name.txt = Attributes.replace_expr_string) -> (
+        try Hashtbl.find Script_result.htl_expr (int_of_string s)
+        with Not_found -> error "fatal: constant not found" )
+      | Pexp_ifthenelse (_, _, Some e3)
+        when List.exists al ~f:(fun x ->
+                 x.attr_name.txt = Attributes.open_struct_ifthenelse_string) ->
+        let a = remove_attrib Attributes.open_struct_ifthenelse_string al in
+        let e =
+          if OSTypes.remove_alias_types () then
+            { e3 with pexp_attributes = e3.pexp_attributes @ a }
+          else { pexp with pexp_attributes = a }
+        in
+        expr mapper e
+      | _ -> default_mapper.expr mapper pexp
 
   let type_declaration mapper = function
     | {
