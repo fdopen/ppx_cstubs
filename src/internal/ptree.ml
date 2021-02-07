@@ -116,7 +116,7 @@ module Make_ocaml_types () = struct
         | Simple -> ([], None)
         | Poly ->
           let a' = Typ.var "a" in
-          ([ a' ], Some [ (a', Invariant) ])
+          ([ a' ], Some [ (a', (NoVariance, NoInjectivity)) ])
       in
       let l' = sub_parents @ [ name ] in
       let l' = match os_parent with None -> l' | Some x -> x :: l' in

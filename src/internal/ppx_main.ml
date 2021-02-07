@@ -1605,7 +1605,7 @@ end = struct
             if invar = false then ([], None)
             else
               let a' = Typ.var "a" in
-              ([ a' ], Some [ (a', Invariant) ])
+              ([ a' ], Some [ (a', (NoVariance, NoInjectivity)) ])
           in
           let manifest = U.mk_typc_l ~l (fname s) in
           let attrs = [ Attributes.manifest_replace_attrib ] in
