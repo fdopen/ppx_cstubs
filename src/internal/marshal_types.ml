@@ -19,8 +19,8 @@
 open Mparsetree.Ast_cur
 
 type fun_params = {
-  el : (Asttypes.arg_label * Parsetree.expression) list;
-  ret : Parsetree.expression;
+  el : (arg_label * expression) list;
+  ret : expression;
   release_runtime_lock : bool;
   noalloc : bool;
   is_inline : bool;
@@ -39,7 +39,7 @@ type loc = Ast_helper.loc
 
 type id_loc_param = id * loc
 
-type expr = Parsetree.expression
+type expr = expression
 
 type enum_type =
   | E_normal of id
@@ -84,6 +84,6 @@ type ocaml_funptr = {
   cb_top_mod : string;
   cb_acquire_runtime : bool;
   cb_thread_registration : bool;
-  cb_user_fun : Parsetree.expression;
+  cb_user_fun : expression;
   cb_init_fun : string;
 }

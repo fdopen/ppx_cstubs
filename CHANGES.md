@@ -1,3 +1,19 @@
+0.6.0 (07/02/2021)
+------------------
+
+- first version that depends on ppxlib
+
+
+0.5.0 (07/02/2021)
+------------------
+
+- support for OCaml 4.12.0+beta1
+
+- minor changes in order to be compatible with the upcoming 0.6.0
+  version that is based on ppxlib instead of
+  ocaml-migrate-parstree.1.x
+
+
 0.4.3 (26/07/2020)
 ------------------
 

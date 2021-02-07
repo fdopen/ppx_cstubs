@@ -22,3 +22,5 @@ val init : Ppxc__script_real.top_run -> unit
 val set_absname : bool -> unit
 
 val serialize_location_error : Location.error -> Location.t * string
+
+val set_argv : string array -> unit

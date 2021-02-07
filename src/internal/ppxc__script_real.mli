@@ -697,6 +697,7 @@ type top_run =
       cma_files:string list ->
       unit ->
       unit
-  ; eval : Parsetree.structure -> unit >
+  ; eval : Parsetree.structure -> unit
+  ; is_merlin_ppx : bool >
 
 val _init : top_run option -> unit

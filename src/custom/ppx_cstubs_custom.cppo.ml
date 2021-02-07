@@ -133,9 +133,42 @@ let get_top () =
     method init ~nopervasives ~pkgs ~use_threads ~cma_files () =
       init ~nopervasives ~pkgs ~use_threads ~cma_files ()
     method eval st = eval st
+    method is_merlin_ppx = false
   end
 
 let init () =
   let top = get_top () in
   Ppxc__script._init (Some top)
 
+#if OCAML_VERSION < (4, 9, 0)
+(* FIXME: remove this ugly code, once ppxlib supports passing argv to
+   Ppxlib.Driver.standalone *)
+let init () =
+  let good_args = [| "-version"; "--help"; "-help"; "--run-merlin-top" |] in
+  let min_len = 5 in
+  let argv_len = Array.length Sys.argv in
+  if
+    argv_len >= min_len
+    || CCArray.exists
+         (fun a -> CCArray.exists (fun a' -> a = a') good_args)
+         Sys.argv
+  then init ()
+  else
+    match Array.to_list Sys.argv with
+    | [] -> init ()
+    | hd :: tl ->
+      let dummy = "\002--ignore-ppx_cstubs\003" in
+      let x = Array.make (min_len - argv_len) dummy |> Array.to_list in
+      let argv = Array.of_list (hd :: (x @ tl)) in
+      if not Sys.win32 then Unix.execv Sys.executable_name argv
+      else
+        let pid =
+          Unix.create_process Sys.executable_name argv Unix.stdin Unix.stdout
+            Unix.stderr
+        in
+        let _, process_status = Unix.waitpid [] pid in
+        exit (match process_status with
+          | Unix.WEXITED n -> n
+          | Unix.WSIGNALED _ -> 2
+          | Unix.WSTOPPED _ -> 3)
+#endif

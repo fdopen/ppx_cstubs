@@ -57,6 +57,8 @@ let _init top =
           | Error e -> Merlin_state.raise_error e
 
         method init ~nopervasives:_ ~pkgs:_ ~use_threads:_ ~cma_files:_ () = ()
+
+        method is_merlin_ppx = true
       end
   in
   real_init top

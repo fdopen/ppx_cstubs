@@ -898,7 +898,7 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc el =
     List.mapi el ~f:(fun i (label, _) ->
         let r =
           match label with
-          | Asttypes.Nolabel ->
+          | Nolabel ->
             let is_void_fn : type a. a Ctypes.fn -> bool = function
               | Ctypes_static.Function (a, _) -> is_void a
               | Ctypes_static.Returns _ -> false
@@ -907,8 +907,8 @@ let build_inline_fun fn ~c_name ~c_body ~locs ~noalloc el =
               fun_is_void := true;
               "$dummy$")
             else U.error "inline code requires named parameters"
-          | Asttypes.Optional _ -> assert false
-          | Asttypes.Labelled s -> s
+          | Optional _ -> assert false
+          | Labelled s -> s
         in
         if Hashtbl.mem htl_names r then U.error "labels must be unique";
         let s =

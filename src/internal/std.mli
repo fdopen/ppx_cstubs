@@ -120,7 +120,7 @@ module Util : sig
 end
 
 module Result : sig
-  type ('a, 'b) result = ('a, 'b) Result.result =
+  type ('a, 'b) result = ('a, 'b) CCResult.result =
     | Ok of 'a
     | Error of 'b
 end

@@ -257,6 +257,8 @@ module Signed = struct
 
     let to_int64 = Int64.of_nativeint
 
+    [@@@ocaml.warning "-32"]
+
     let max = max
 
     let min = min
@@ -369,11 +371,11 @@ module Signed = struct
 
     let neg x = of_int (-x)
 
+    [@@@ocaml.warning "-32"]
+
     let max = max
 
     let min = min
-
-    [@@@ocaml.warning "-32"]
 
     let equal (x : t) (y : t) = x = y
 
