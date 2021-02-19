@@ -34,9 +34,16 @@ let init ~nopervasives ~pkgs ~use_threads ~cma_files () =
      Toploop.set_paths ();
      toplevel_env := Compmisc.initial_env () ;
      Topfind.log := ignore ;
-     let l = [ "integers"; "ctypes"; "ppx_cstubs" ; "ppx_cstubs.internal" ] in
-     CCListLabels.iter l ~f:(fun p ->
-         Topdirs.dir_directory @@ flib_protect Findlib.package_directory p);
+     let l =
+       flib_protect
+         (Findlib.package_deep_ancestors ["byte"])
+         ["bigarray-compat"; "ctypes"]
+     in
+     let l = l @ [ "ppx_cstubs" ; "ppx_cstubs.internal" ] in
+     CCListLabels.fold_left ~init:[] l ~f:(fun ac el ->
+         (flib_protect Findlib.package_directory el)::ac) |>
+       CCListLabels.uniq ~eq:CCString.equal |> List.rev |>
+       CCListLabels.iter ~f:Topdirs.dir_directory;
      if pkgs <> [] then (
        Topfind.add_predicates ["byte"];
        flib_protect Topfind.don't_load_deeply ["ppx_cstubs.internal"];
