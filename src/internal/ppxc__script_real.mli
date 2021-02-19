@@ -163,7 +163,7 @@ module Ctypes_make : sig
 
     val genarray :
       < ba_repr : 'b
-      ; bigarray : ('a, 'b, 'l) Bigarray.Genarray.t
+      ; bigarray : ('a, 'b, 'l) Bigarray_compat.Genarray.t
       ; carray : 'a carray
       ; dims : int array
       ; element : 'a
@@ -172,7 +172,7 @@ module Ctypes_make : sig
 
     val array1 :
       < ba_repr : 'b
-      ; bigarray : ('a, 'b, 'l) Bigarray.Array1.t
+      ; bigarray : ('a, 'b, 'l) Bigarray_compat.Array1.t
       ; carray : 'a carray
       ; dims : int
       ; element : 'a
@@ -181,7 +181,7 @@ module Ctypes_make : sig
 
     val array2 :
       < ba_repr : 'b
-      ; bigarray : ('a, 'b, 'l) Bigarray.Array2.t
+      ; bigarray : ('a, 'b, 'l) Bigarray_compat.Array2.t
       ; carray : 'a carray carray
       ; dims : int * int
       ; element : 'a
@@ -190,7 +190,7 @@ module Ctypes_make : sig
 
     val array3 :
       < ba_repr : 'b
-      ; bigarray : ('a, 'b, 'l) Bigarray.Array3.t
+      ; bigarray : ('a, 'b, 'l) Bigarray_compat.Array3.t
       ; carray : 'a carray carray carray
       ; dims : int * int * int
       ; element : 'a
@@ -303,10 +303,10 @@ module Ctypes_make : sig
       ; carray : 'c
       ; dims : 'dims
       ; element : 'a
-      ; layout : Bigarray.c_layout >
+      ; layout : Bigarray_compat.c_layout >
       Ctypes_static.bigarray_class ->
       'dims ->
-      ('a, 'b) Bigarray.kind ->
+      ('a, 'b) Bigarray_compat.kind ->
       'bigarray typ
 
     val fortran_bigarray :
@@ -315,13 +315,13 @@ module Ctypes_make : sig
       ; carray : 'c
       ; dims : 'dims
       ; element : 'a
-      ; layout : Bigarray.fortran_layout >
+      ; layout : Bigarray_compat.fortran_layout >
       Ctypes_static.bigarray_class ->
       'dims ->
-      ('a, 'b) Bigarray.kind ->
+      ('a, 'b) Bigarray_compat.kind ->
       'bigarray typ
 
-    val typ_of_bigarray_kind : ('a, 'b) Bigarray.kind -> 'a typ
+    val typ_of_bigarray_kind : ('a, 'b) Bigarray_compat.kind -> 'a typ
 
     (* missing:
        val structure : string -> 's Ctypes_static.structure typ
@@ -432,10 +432,10 @@ module Ctypes_make : sig
       ; carray : 'c
       ; dims : 'i
       ; element : 'a
-      ; layout : Bigarray.c_layout >
+      ; layout : Bigarray_compat.c_layout >
       bigarray_class ->
       'i ->
-      ('a, 'f) Bigarray.kind ->
+      ('a, 'f) Bigarray_compat.kind ->
       'a ptr ->
       'b
 
@@ -445,10 +445,10 @@ module Ctypes_make : sig
       ; carray : 'c
       ; dims : 'i
       ; element : 'a
-      ; layout : Bigarray.fortran_layout >
+      ; layout : Bigarray_compat.fortran_layout >
       bigarray_class ->
       'i ->
-      ('a, 'f) Bigarray.kind ->
+      ('a, 'f) Bigarray_compat.kind ->
       'a ptr ->
       'b
 
@@ -458,7 +458,7 @@ module Ctypes_make : sig
       ; carray : 'c
       ; dims : 'd
       ; element : 'e
-      ; layout : Bigarray.c_layout >
+      ; layout : Bigarray_compat.c_layout >
       bigarray_class ->
       'b ->
       'c
@@ -469,9 +469,9 @@ module Ctypes_make : sig
       ; carray : 'c carray
       ; dims : 'i
       ; element : 'a
-      ; layout : Bigarray.c_layout >
+      ; layout : Bigarray_compat.c_layout >
       bigarray_class ->
-      ('a, 'f) Bigarray.kind ->
+      ('a, 'f) Bigarray_compat.kind ->
       'c carray ->
       'b
 
