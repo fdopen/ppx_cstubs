@@ -219,6 +219,9 @@ module Signed = struct
       let equal (x : nativeint) (y : nativeint) = x = y
 
       let pp fmt x = Format.fprintf fmt "%nd" x
+
+      let pp_hex fmt n = Format.fprintf fmt "%nx" n
+
     end
 
     include Nativeint
@@ -262,11 +265,22 @@ module Signed = struct
     let max = max
 
     let min = min
+
+    let of_string_opt x =
+      try
+        Some (of_string x)
+      with
+      | Failure _ -> None
+
+    let to_hexstring n = Format.asprintf "%nx" n
+
   end
 
   module type Int_size = sig
     val int_size : int
   end
+
+  external format_int : string -> int -> string = "caml_format_int"
 
   module Short_int (X : Int_size) = struct
     open X
@@ -379,7 +393,20 @@ module Signed = struct
 
     let equal (x : t) (y : t) = x = y
 
+    let of_string_opt x =
+      match int_of_string x with
+      | exception (Failure _) -> None
+      | r ->
+         if r < min_int || r > max_int then
+           None
+         else
+           Some r
+
     let pp fmt n = Format.fprintf fmt "%d" n
+
+    let pp_hex fmt n = Format.fprintf fmt "%x" n
+
+    let to_hexstring = format_int "%x"
   end
 
   module Int8 = Short_int (struct
