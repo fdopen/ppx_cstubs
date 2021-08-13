@@ -21,7 +21,7 @@ default: ftw.exe $(EXAMPLES)
 	@dune exec --no-print-directory --display=quiet -- ppx_cstubs $< -pretty -o-ml $(basename $@).ml -o-c $(basename $@)_stubs.c
 
 %.exe: %_stubs.c %.ml
-	@dune exec --no-print-directory --display=quiet -- ocamlfind opt -package ctypes,ctypes.foreign,ppx_cstubs -linkpkg $^ -o $@
+	@dune exec --no-print-directory --display=quiet -- ocamlfind opt -thread -package ctypes,ctypes.foreign,ppx_cstubs -linkpkg $^ -o $@
 
 clean:
 	rm -f *.obj *.o *.cm* *.exe *_stubs.c ftw.ml inline.ml time.ml getpwent.ml
