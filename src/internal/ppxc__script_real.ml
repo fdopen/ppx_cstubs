@@ -1045,7 +1045,9 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
         let info_str = "type of " ^ c.ee_cname in
         Printf.sprintf "PPXC_ENUM_MEMBER_CHECK(%s,%s)" cname type_str
         |> Const.add ~info_str c.ee_type_check c.ee_loc `U8);
-    let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ type_str ^ ")" in
+    let str =
+      Printf.sprintf "PPXC_CTYPES_ARITHMETIC_TYPEINFO(%s,%s)" type_str evar
+    in
     let eid = get_enum_id enum_type_id in
     Const.add ~info_str eid enum_loc `U32 str;
     (* wrong size, but not used inside extraction script *)
@@ -1241,7 +1243,7 @@ module Build = struct
     let is_unsigned = res land (1 lsl unsigned_flag_bit) <> 0 in
     let size = res land lnot (1 lsl float_flag_bit) in
     let size = size land lnot (1 lsl unsigned_flag_bit) in
-    if is_float then U.error "Enum type detected as floating type: %s" name;
+    if is_float then U.error "Enum type detected as float type: %s" name;
     (size, is_unsigned)
 
   let enum (l : 'a list) (p : string) : 'a Ctypes.typ * 'a list Ctypes.typ =
@@ -1536,7 +1538,7 @@ module Build = struct
           f Ctypes.int8_t [%expr Ctypes.int8_t] [%type: int]
         else if is_set r 16 then
           f Ctypes.int16_t [%expr Ctypes.int16_t] [%type: int]
-        else if ws64 && is_set r 8 && is_set r 3 then
+        else if ws64 && is_set r 8 && (is_set r 3 || is_set r 17) then
           f Ctypes.int [%expr Ctypes.int] [%type: int]
         else if is_set r 17 then
           f Ctypes.int32_t [%expr Ctypes.int32_t] [%type: int32]

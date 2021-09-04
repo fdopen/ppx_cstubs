@@ -54,6 +54,20 @@ let prologue =
 #define PPXC_HAS_BUILTIN_CHOOSE_EXPR 1
 #endif
 
+#if defined(_WIN32) && defined(_MSC_VER) && !defined(__cplusplus) && defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+
+enum ppx_cstubs_dummy_enum {
+  PPX_CSTUBS_DUMMY_ENUM_A,
+  PPX_CSTUBS_DUMMY_ENUM_B = INT_MAX
+};
+
+#define PPXC_MSVC_IS_ENUM(x)                            \
+  (_Generic((x),                                        \
+            enum ppx_cstubs_dummy_enum: 1,              \
+            default: 0))
+
+#endif
+
 #define PPXC__UD00(x) (unsigned char)( (x) & UINT64_C(255) )
 #define PPXC__UD01(x) (unsigned char)( ( (x) >>  8u ) & UINT64_C(255) ), PPXC__UD00(x)
 #define PPXC__UD02(x) (unsigned char)( ( (x) >> 16u ) & UINT64_C(255) ), PPXC__UD01(x)
@@ -103,41 +117,82 @@ let prologue =
 #define PPXC_IS_INTEGER(var)                                       \
   ((unsigned)(PPXC_CLASSIFY_TYPE(var) == PPXC_CLASSIFY_TYPE(0)))
 #define PPXC_IS_INTEGER_DEF_TRUE(x) PPXC_IS_INTEGER(x)
-#elif !defined(__cplusplus) && (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L))
-#define PPXC_IS_INTEGER_DEF_TRUE(var)             \
-  (_Generic( (var),                               \
+#elif !defined(__cplusplus) && defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+
+#ifdef PPXC_MSVC_IS_ENUM
+#define PPXC_IS_INTEGER_DEF_TRUE_2(x)             \
+  ((_Generic((x),                                 \
+             char: 1,                             \
              ptrdiff_t: 1,                        \
-             float: 0,                            \
-             double: 0,                           \
-             long double: 0,                      \
-             float _Complex: 0,                   \
-             double _Complex: 0,                  \
-             long double _Complex: 0,             \
-             default: (_Generic(((var) - (var)),  \
+             default: (_Generic(((x) - (x)),      \
                                 ptrdiff_t: 0,     \
-                                default:1  ))))
+                                default:1  ))))|| \
+   (PPXC_MSVC_IS_ENUM(x)))
+#else
+#define PPXC_IS_INTEGER_DEF_TRUE_2(x)           \
+  (_Generic((x),                                \
+            char: 1,                            \
+            ptrdiff_t: 1,                       \
+            float _Complex: 0,                  \
+            double _Complex: 0,                 \
+            long double _Complex: 0,            \
+            default: (_Generic(((x) - (x)),     \
+                               ptrdiff_t: 0,    \
+                               default:1  ))))
+#endif
+
+#define PPXC_IS_INTEGER_DEF_TRUE(x)                     \
+  (_Generic((x),                                        \
+            _Bool: 1,                                   \
+            unsigned char: 1,                           \
+            unsigned short: 1,                          \
+            unsigned int: 1,                            \
+            unsigned long: 1,                           \
+            unsigned long long: 1,                      \
+            signed char: 1,                             \
+            short: 1,                                   \
+            int: 1,                                     \
+            long: 1,                                    \
+            long long: 1,                               \
+            float: 0,                                   \
+            double: 0,                                  \
+            long double: 0,                             \
+            default: PPXC_IS_INTEGER_DEF_TRUE_2(x)))
+
 #else
 #define PPXC_IS_INTEGER_DEF_TRUE(x) 1
 #endif
 
 #if defined(_WIN32) && defined(_MSC_VER)
-
 /* macro doesn't work for doubles .... */
 
-#define PPXC_CTYPES_CHECK_UNSIGNED(TYPENAME)             \
-  ((unsigned)(((TYPENAME) (-1)) > 0)         \
-   << ((unsigned)CTYPES_UNSIGNED_FLAG_BIT))
+#if !defined(__cplusplus) && defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#define PPXC_IS_FLOAT_TYPE(var)                 \
+  (_Generic( (var),                             \
+             float: 1u,                         \
+             double: 1u,                        \
+             long double: 1u,                   \
+             default: 0u))
+#define PPXC_CTYPES_CHECK_FLOAT(VAR)                          \
+  ((PPXC_IS_FLOAT_TYPE(VAR)) <<  (CTYPES_FLOATING_FLAG_BIT))
+#else
+#define PPXC_CTYPES_CHECK_FLOAT(VAR) 0u
+#endif /* !defined(__cplusplus) && defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) */
 
-#define PPXC_CTYPES_CLASSIFY(TYPENAME) (PPXC_CTYPES_CHECK_UNSIGNED(TYPENAME))
+#define PPXC_CTYPES_CHECK_UNSIGNED(TYPENAME)                            \
+  ((unsigned)(((TYPENAME) (-1)) > 0) << ((unsigned)CTYPES_UNSIGNED_FLAG_BIT))
 
-#define PPXC_CTYPES_ARITHMETIC_TYPEINFO(TYPENAME) (PPXC_CTYPES_CLASSIFY(TYPENAME)   \
-                                       | sizeof(TYPENAME))
+#define PPXC_CTYPES_CLASSIFY(TYPENAME,VAR)                              \
+  ( (PPXC_CTYPES_CHECK_UNSIGNED(TYPENAME)) | (PPXC_CTYPES_CHECK_FLOAT(VAR)) )
+
+#define PPXC_CTYPES_ARITHMETIC_TYPEINFO(TYPENAME,VAR)     \
+  (PPXC_CTYPES_CLASSIFY(TYPENAME,VAR) | sizeof(TYPENAME))
 
 #else
 
-#define PPXC_CTYPES_ARITHMETIC_TYPEINFO(x) CTYPES_ARITHMETIC_TYPEINFO(x)
+#define PPXC_CTYPES_ARITHMETIC_TYPEINFO(x,y) CTYPES_ARITHMETIC_TYPEINFO(x)
 
-#endif
+#endif /* defined(_WIN32) && defined(_MSC_VER) */
 
 #if !defined(__cplusplus)
 
@@ -159,16 +214,21 @@ let prologue =
 #endif /* defined(PPXC_HAS_TYPEOF) && defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE) */
 
 #if !defined(PPXC_IS_UNSIGNED) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+
+#define PPXC_IS_UNSIGNED_VAR_2(x)               \
+  (_Generic((x),                                \
+            char: CHAR_MAX == UCHAR_MAX,        \
+            default: 0 ))
+
 #define PPXC_IS_UNSIGNED_VAR(x)                 \
   (_Generic((x),                                \
             _Bool: 1,                           \
-            char: CHAR_MAX == UCHAR_MAX,        \
             unsigned char: 1,                   \
             unsigned short: 1,                  \
             unsigned int: 1,                    \
             unsigned long: 1,                   \
             unsigned long long: 1,              \
-            default: 0))
+            default: PPXC_IS_UNSIGNED_VAR_2(x)))
 
 #define PPXC_IS_UNSIGNED(x)                     \
   PPXC_IS_UNSIGNED_VAR( *((x*)NULL) )
@@ -201,6 +261,42 @@ namespace pxxc_signedness {
 #ifdef PPXC_HAS_BUILTIN_CLASSIFY_TYPE
 #define PPXC_TYPES_COMPATIBLE_CT(a,b)  \
   (PPXC_CLASSIFY_TYPE(a) == PPXC_CLASSIFY_TYPE(b))
+#elif !defined(__cplusplus) && defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+
+#ifdef PPXC_MSVC_IS_ENUM
+#define PPXC_CLASSIFY_TYPE_GENERIC_H(x)                 \
+  (_Generic((x),                                        \
+            char: 1,                                    \
+            enum ppx_cstubs_dummy_enum: 1,              \
+            default: 4))
+#else
+#define PPXC_CLASSIFY_TYPE_GENERIC_H(x)                 \
+  (_Generic((x),                                        \
+            char: 1,                                    \
+            default: 4))
+#endif
+
+#define PPXC_CLASSIFY_TYPE_GENERIC(x)                   \
+  (_Generic((x),                                        \
+            _Bool: 1,                                   \
+            unsigned char: 1,                           \
+            unsigned short: 1,                          \
+            unsigned int: 1,                            \
+            unsigned long: 1,                           \
+            unsigned long long: 1,                      \
+            signed char: 1,                             \
+            short: 1,                                   \
+            int: 1,                                     \
+            long: 1,                                    \
+            long long: 1,                               \
+            float: 2,                                   \
+            double: 2,                                  \
+            long double: 2,                             \
+            default: PPXC_CLASSIFY_TYPE_GENERIC_H(x)))
+
+#define PPXC_TYPES_COMPATIBLE_CT(a,b)                                 \
+  (PPXC_CLASSIFY_TYPE_GENERIC(a) == PPXC_CLASSIFY_TYPE_GENERIC(b))
+
 #else
 #define PPXC_TYPES_COMPATIBLE_CT(a,b) 1
 #endif
@@ -329,6 +425,16 @@ namespace ppxc_types_compatible
     (PPXC_INT_ALIGN_SIZE(typ,stru,var)) :                       \
     (PPXC_CLASSIFY_TYPE(var) == PPXC_CLASSIFY_TYPE((void*)0) ?  \
      (1u << 28u) : 0u) )
+#elif defined(PPXC_MSVC_IS_ENUM)
+#define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,ex)     \
+  (((PPXC_MSVC_IS_ENUM(ex))                         \
+    && (sizeof(typ) == sizeof(int))                 \
+    && (sizeof(typ) == 4)                           \
+    && (sizeof(int32_t) == sizeof(int))             \
+    && (_Alignof(typ) == _Alignof(int))             \
+    && (_Alignof(int) == _Alignof(int32_t))         \
+    && (((enum ppx_cstubs_dummy_enum)(-1)) < 0 )) ? \
+   ((1u << 8u) | (1u << 17u)) : 0u )
 #else
 #define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,var) 0u
 #endif
