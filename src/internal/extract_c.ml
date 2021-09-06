@@ -439,9 +439,25 @@ namespace ppxc_types_compatible
 #define PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,var) 0u
 #endif
 
+#if !defined(PPXC_HAS_BUILTIN_CLASSIFY_TYPE) && !defined(__cplusplus)
+#define PPXC_OPAQUE_MANUAL_INT(typ,stru,ex)                             \
+  ( ( sizeof(ex) == sizeof(int8_t) || sizeof(ex) == sizeof(int16_t) ||  \
+      sizeof(ex) == sizeof(int32_t) || sizeof(ex) == sizeof(int64_t) ) ? \
+    (PPXC_INT_ALIGN_SIZE(typ,stru,ex) | (1u << 30u)) : 0u )
+
+#define PPXC_OPAQUE_MANUAL_POINTER(ex)                \
+  (sizeof(ex) == sizeof((void*)0) ? (1u << 30u) : 0u)
+
+#define PPXC_OPAQUE_MANUAL(typ,stru,ex)                                 \
+  (PPXC_OPAQUE_MANUAL_INT(typ,stru,ex) | PPXC_OPAQUE_MANUAL_POINTER(ex))
+#else
+#define PPXC_OPAQUE_MANUAL(typ,stru,ex) 0u
+#endif
+
 #define PPXC_OPAQUE(typ,stru,ex)                                  \
   (PPXC_TYPE_HELPER_OPAQUE_TC(ex,typ) |                           \
    PPXC_TYPE_HELPER_OPAQUE_CT(typ,stru,ex) |                      \
+   PPXC_OPAQUE_MANUAL(typ,stru,ex) |                              \
    (((unsigned)(PPXC_IS_UNSIGNED(typ))) << 29u))
 
 #define PPXC_INTALIAS(typ,stru,ex)                           \
@@ -570,8 +586,6 @@ union ppxc_example_union {
 #define PPXC_MAX_TYPE(typ) ( (typ) (~PPXC_MIN_TYPE(typ)))
 |}
 
-module List = CCListLabels
-
 let cnt =
   let i = ref 0 in
   fun () ->
@@ -597,8 +611,6 @@ type extract_info = {
   id : id;
   intern : intern;
 }
-
-let remove_file f = try Sys.remove f with Sys_error _ -> ()
 
 type extract_int =
   [ `Unchecked_U8
@@ -738,74 +750,14 @@ char *ppx_c_extract_char_string%d = (char*)"PPXC_CONST_NR_%d|" %s "|%d_RN_TSNOC_
 type obj = (int, string) Hashtbl.t
 
 let compile ~ebuf c_prog =
-  let ocaml_flags = !Options.ocaml_flags in
-  let dir =
-    match !Options.ml_input_file with
-    | None -> failwith "ml_input_file not set"
-    | Some s -> Filename.dirname s
-  in
-  let pre_suf =
-    match Std.Util.unsuffixed_file_name () with "" -> "" | x -> x ^ "_"
-  in
-  let pre = "ppxc_extract_" ^ pre_suf in
-  let cfln = Filename.temp_file pre ".c" in
-  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file cfln)
-  @@ fun () ->
-  CCIO.with_out ?mode:None ~flags:[ Open_creat; Open_trunc; Open_binary ] cfln
-    (fun ch -> output_string ch c_prog);
-  let obj = Filename.chop_suffix cfln ".c" ^ Ocaml_config.ext_obj () in
-  let c_flags =
-    (* that's a suboptimal solution. `ocamlc -c foo.c -o foo.o` doesn't work:
-       "Options -c and -o are incompatible when compiling C files" But I might
-       have no write access in the current directory and I'm unsure how '-I'
-       flags and similar options are affected, if I change the current working
-       directory ... *)
-    match Ocaml_config.system () |> CCString.lowercase_ascii with
-    | "win32" | "win64" -> [ "-Fo:" ^ obj ]
-    | _ -> [ "-o"; obj ]
-  in
-  let c_flags = "-I" :: dir :: c_flags in
-  let c_flags = !Options.c_flags @ c_flags in
-  let args = List.map c_flags ~f:(fun c -> [ "-ccopt"; c ]) |> List.flatten in
-  let args' =
-    List.map !Options.findlib_pkgs ~f:(fun c -> [ "-package"; c ])
-    |> List.flatten
-  in
-  let args = args' @ args in
-  let args = if !Options.verbosity > 2 then args @ [ "-verbose" ] else args in
-  let args = ocaml_flags @ args in
-  let args =
-    match Std.Various.use_threads () with
-    | false -> args
-    | true -> "-thread" :: args
-    (* just to make ocamlfind silent. *)
-  in
-  let args =
-    match !Options.cc with None -> args | Some s -> "-cc" :: s :: args
-  in
-  let args = "c" :: "-c" :: cfln :: args in
-  let args =
-    match !Options.toolchain with
-    | None -> args
-    | Some s -> "-toolchain" :: s :: args
-  in
-  let stdout = if !Options.verbosity > 0 then `Stdout else `Null in
-  let prog = Options.ocamlfind in
-  finally ~h:(fun () -> if not !Options.keep_tmp then remove_file obj)
-  @@ fun () ->
-  if !Options.verbosity > 1 then Run.cmd_to_string prog args |> prerr_endline;
-  match Run.run prog args ~stdout ~stderr:(`Buffer ebuf) with
-  | exception Unix.Unix_error (e, s, _) ->
-    let cmd = Run.cmd_to_string prog args in
-    Error
-      (Printf.sprintf "Process creation \"%s\" failed with %s (%S)" cmd
-         (Unix.error_message e) s)
-  | 0 ->
-    CCIO.with_in ?mode:None ~flags:[ Open_binary ] obj @@ fun ch ->
-    let s = CCIO.read_all ch in
-    if s = "" then Error "`ocamlfind ocamlc -c` created an empty obj file"
-    else Ok s
-  | ec -> Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
+  C_compile.compile ~stderr:(`Buffer ebuf) c_prog (fun ec obj ->
+      if ec <> 0 then
+        Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
+      else
+        CCIO.with_in ?mode:None ~flags:[ Open_binary ] obj @@ fun ch ->
+        let s = CCIO.read_all ch in
+        if s = "" then Error "`ocamlfind ocamlc -c` created an empty obj file"
+        else Ok s)
 
 let rex =
   Re.Perl.re ~opts:[ `Ungreedy; `Dotall ]
