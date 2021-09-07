@@ -161,6 +161,7 @@ enum ppx_cstubs_dummy_enum {
 
 #else
 #define PPXC_IS_INTEGER_DEF_TRUE(x) 1
+#define PPXC_NO_PROPER_INTEGER_TEST 1
 #endif
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -634,13 +635,18 @@ let prepare_extract_int ~loc etyp expr =
         | `Unchecked_U8 | `Unchecked_U32 -> assert false
       in
       let var = Std.Util.safe_cname ~prefix:"extract_is_constexpr" in
+      let var2 = Std.Util.safe_cname ~prefix:"extract_is_integer" in
       Printf.sprintf
         {|
 %s%s
 char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
+#if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
+int64_t %s = (int64_t)(~(%s)); /* enforce error for doubles */
+#endif
 |}
         com_loc assign var expr
         (Std.Util.no_c_comments expr)
+        var2 expr
   in
   let expr, prepend =
     match etyp with

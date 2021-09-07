@@ -690,6 +690,7 @@ module Extract_phase0 = struct
     let id, loc = U.from_id_loc_param id_loc in
     let stru = U.safe_cname ~prefix:ctyp in
     let expl = U.safe_cname ~prefix:ctyp in
+    let expl2 = U.safe_cname ~prefix:ctyp in
     let cloc = U.cloc_comment loc in
     let txt =
       Printf.sprintf
@@ -697,11 +698,14 @@ module Extract_phase0 = struct
 struct %s {char c; %s x;};
 #if !defined(__cplusplus)
 %s %s = 0; /* trigger error for non scalar types */
+#if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
+%s %s = ~((%s)0); /* enforce error for doubles */
+#endif
 #else
 %s %s = static_cast<%s>(0);
 #endif
 |}
-        cloc stru ctyp ctyp expl ctyp expl ctyp
+        cloc stru ctyp ctyp expl ctyp expl2 ctyp ctyp expl ctyp
     in
     let exn = U.error_exn "%s not defined or not an integer?" ctyp in
     let to_extract = Printf.sprintf "PPXC_INTALIAS(%s,%s,%s)" ctyp stru expl in
@@ -1038,10 +1042,19 @@ DISABLE_CONST_WARNINGS_POP()
       | true -> enum_name
     in
     let evar = U.safe_cname ~prefix:enum_name in
+    let evar2 = U.safe_cname ~prefix:enum_name in
     let cloc = U.cloc_comment enum_loc in
     let txt =
-      Printf.sprintf "%s\n%s %s; /* type %s defined? */\n" cloc type_str evar
+      Printf.sprintf
+        {|%s
+%s %s; /* type %s defined? */
+#if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
+%s %s = ~((%s)0); /* enforce error for doubles */
+#endif
+|}
+        cloc type_str evar
         (U.no_c_comments enum_name)
+        type_str evar2 type_str
     in
     let exn = U.error_exn ~loc:enum_loc "type %s not defined?" enum_name in
     C_content.add_extract_header txt enum_loc exn;
@@ -1050,6 +1063,7 @@ DISABLE_CONST_WARNINGS_POP()
         let cname = c.ee_cname in
         let evar1 = U.safe_cname ~prefix:cname in
         let evar2 = U.safe_cname ~prefix:("char_" ^ cname) in
+        let evar3 = U.safe_cname ~prefix:cname in
         let cloc = U.cloc_comment c.ee_loc in
         let txt =
           Printf.sprintf
@@ -1057,8 +1071,12 @@ DISABLE_CONST_WARNINGS_POP()
 %s
 %s %s = %s; /* trigger errors */
 char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
+#if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
+%s %s = ~(%s); /* enforce error for doubles */
+#endif
 |}
             cloc type_str evar1 cname evar2 cname (U.no_c_comments cname)
+            type_str evar3 cname
         in
         let exn = U.error_exn "enum %s not defined?" cname in
         C_content.add_extract_header txt c.ee_loc exn;
