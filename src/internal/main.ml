@@ -172,20 +172,27 @@ let cpp_main top =
     |> List.rev
     |> Array.of_list
   in
-  Arg.parse_argv argv spec
-    (fun a ->
-      if a = "" then raise (Arg.Bad a);
-      let la = CCString.lowercase_ascii a in
-      if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo" then (
-        anon_is_target := false;
-        add_cma_file a)
-      else if !anon_is_target then (
-        anon_is_target := false;
-        set_output_by_suffix a)
-      else (
-        if !source <> None then raise (Arg.Bad a);
-        source := Some a))
-    usage;
+  let arg_fun a =
+    if a = "" then raise (Arg.Bad a);
+    let la = CCString.lowercase_ascii a in
+    if Filename.check_suffix la ".cma" || Filename.check_suffix la ".cmo" then (
+      anon_is_target := false;
+      add_cma_file a)
+    else if !anon_is_target then (
+      anon_is_target := false;
+      set_output_by_suffix a)
+    else (
+      if !source <> None then raise (Arg.Bad a);
+      source := Some a)
+  in
+  (match Arg.parse_argv argv spec arg_fun usage with
+  | () -> ()
+  | exception Arg.Bad message ->
+    prerr_string message;
+    exit 2
+  | exception Arg.Help message ->
+    print_string message;
+    exit 0);
   let source =
     match !source with
     | None -> error_exit "no source file specified"
