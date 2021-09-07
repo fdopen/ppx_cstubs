@@ -281,19 +281,13 @@ module Signed = struct
 
     type t = int
 
-    let land_mask = (1 lsl int_size) - 1
+    let max_int = (1 lsl (int_size - 1)) - 1
 
-    let cor = (1 lsl int_size) * -1
+    let min_int = (1 lsl (int_size - 1)) * -1
 
-    let min_int = cor / 2
+    let sfactor = Sys.word_size - 1 - int_size
 
-    let max_int = land_mask / 2
-
-    let sign_bit = int_size - 1
-
-    let of_int x =
-      let res = x land land_mask in
-      (cor * (res lsr sign_bit)) + res
+    let of_int x = (x lsl sfactor) asr sfactor
 
     let add x y = of_int (x + y)
 
