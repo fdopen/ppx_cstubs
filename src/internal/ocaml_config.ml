@@ -47,7 +47,7 @@ let config =
               | Some (a, b) ->
                 let a = String.trim a
                 and b = String.trim b in
-                if a = "" || b = "" then None else Some (a, b))
+                if a = "" then None else Some (a, b))
        |> StringMap.of_list
      in
      if r = StringMap.empty then
@@ -105,6 +105,42 @@ let system =
     else
       match StringMap.find "system" (Lazy.force config) with
       | exception Not_found -> failwith "`ocamlc -config` doesn't report system"
+      | "" -> failwith "`ocamlc -config` reports an empty system"
+      | x -> x)
+
+let re_space = Re.Perl.re "[\r\n\t ]+" |> Re.compile
+
+let c_compiler_flags =
+  lazy
+    (if Options.(!mode = Emulate) then ("gcc", [])
+    else
+      let c = Lazy.force config in
+      match
+        ( StringMap.find "c_compiler" c,
+          StringMap.find "ocamlc_cflags" c,
+          StringMap.find "ocamlc_cppflags" c )
+      with
+      | exception Not_found -> (
+        if runtime_version >= (4, 6, 0) then
+          failwith "`ocamlc -config` doesn't list c_compiler and flags";
+        match StringMap.find "bytecomp_c_compiler" c with
+        | exception Not_found ->
+          failwith "`ocamlc -config` doesn't report bytecomp_c_compiler"
+        | s -> (
+          match Re.split re_space s with
+          | [] -> failwith "`ocamlc -config` doesn't report bytecomp_c_compiler"
+          | hd :: tl -> (hd, tl)))
+      | "", _, _ -> failwith "`ocamlc -config` does report an empty c compiler"
+      | a, b, c -> (a, Re.split re_space b @ Re.split re_space c))
+
+let standard_library =
+  lazy
+    (if Options.(!mode = Emulate) then "/tmp"
+    else
+      match StringMap.find "standard_library" (Lazy.force config) with
+      | exception Not_found ->
+        failwith "`ocamlc -config` doesn't report standard_library"
+      | "" -> failwith "`ocamlc -config` standard_library entry is empty"
       | x -> x)
 
 let init () =
@@ -112,7 +148,9 @@ let init () =
   ignore (Lazy.force word_size : int);
   ignore (Lazy.force ext_obj : string);
   ignore (Lazy.force version : int * int * int);
-  ignore (Lazy.force system : string)
+  ignore (Lazy.force system : string);
+  ignore (Lazy.force c_compiler_flags : string * string list);
+  ignore (Lazy.force standard_library : string)
 
 let word_size () = Lazy.force word_size
 
@@ -123,3 +161,7 @@ let version () = Lazy.force version
 let system () = Lazy.force system
 
 let use_open_struct () = !Options.use_open_struct && version () >= (4, 8, 0)
+
+let c_compiler_flags () = Lazy.force c_compiler_flags
+
+let standard_library () = Lazy.force standard_library
