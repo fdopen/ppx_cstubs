@@ -16,7 +16,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-let ocaml_flags_default = [ "-package"; "ctypes" ]
+let ocaml_include_dirs_default = []
 
 let keep_tmp = ref false
 
@@ -28,7 +28,7 @@ let verbosity = ref 1
 
 let c_flags : string list ref = ref []
 
-let ocaml_flags : string list ref = ref ocaml_flags_default
+let ocaml_include_dirs : string list ref = ref ocaml_include_dirs_default
 
 let c_output_file : string option ref = ref None
 
@@ -59,7 +59,7 @@ let merlin_save () =
     noperv = !nopervasives;
     uos = !use_open_struct;
     verb = !verbosity;
-    oflags = !ocaml_flags;
+    oflags = !ocaml_include_dirs;
     cmas = !cma_files;
     tlc = !toolchain;
     fpkgs = !findlib_pkgs;
@@ -69,7 +69,7 @@ let merlin_restore { noperv; uos; verb; oflags; cmas; tlc; fpkgs } =
   nopervasives := noperv;
   use_open_struct := uos;
   verbosity := verb;
-  ocaml_flags := oflags;
+  ocaml_include_dirs := oflags;
   cma_files := cmas;
   toolchain := tlc;
   findlib_pkgs := fpkgs
@@ -86,6 +86,8 @@ let mode = ref Regular
 
 let cc : string option ref = ref None
 
+let use_cxx = ref false
+
 let toolchain_used () =
   if !toolchain <> None then true
   else
@@ -99,7 +101,7 @@ let toolchain_used () =
   nopervasives := false;
   verbosity := 1;
   c_flags := [];
-  ocaml_flags := ocaml_flags_default;
+  ocaml_include_dirs := ocaml_include_dirs_default;
   c_output_file := None;
   ml_input_file := None;
   ml_output_file := None;

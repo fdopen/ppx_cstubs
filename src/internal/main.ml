@@ -52,10 +52,11 @@ let cpp_main top =
   let arg_set_int v = Arg.Int (na (fun a -> v := a)) in
   let ml_output = ref "" in
   let c_output = ref "" in
+  let use_cxx = ref false in
   let pretty = ref false in
   let cflags = ref [] in
   let cflags_rest = ref [] in
-  let oflags = ref (List.rev Options.ocaml_flags_default) in
+  let oflags = ref (List.rev Options.ocaml_include_dirs_default) in
   let include_dirs = ref [] in
   let keep_tmp = ref false in
   let toolchain = ref None in
@@ -100,7 +101,7 @@ let cpp_main top =
         ( "-I",
           arg_string (fun s ->
               include_dirs := s :: !include_dirs;
-              oflags := s :: "-I" :: !oflags;
+              oflags := s :: !oflags;
               anon_is_target := false),
           "<dir>     Add <dir> to the list of include directories" );
         ( "-pkg",
@@ -129,7 +130,10 @@ let cpp_main top =
         ("-nopervasives", arg_set nopervasives, "     (undocumented)");
         ( "-cc",
           arg_string (fun s -> cc := Some s),
-          "<command>      Use <command> as the C compiler" );
+          "<command>      Use <command> as the C/C++ compiler" );
+        ( "-cxx",
+          arg_set use_cxx,
+          "    use the default compiler in c++ mode to extract constants" );
         ( "-version",
           Arg.Unit
             (fun () ->
@@ -189,7 +193,7 @@ let cpp_main top =
     if h ml_output = h c_output then
       error_exit "filenames must differ, not only their suffix";
     Options.c_output_file := Some c_output );
-  Options.ocaml_flags := List.rev !oflags;
+  Options.ocaml_include_dirs := List.rev !oflags;
   Options.c_flags := List.rev !cflags @ List.rev !cflags_rest;
   Options.keep_tmp := !keep_tmp;
   Options.nopervasives := !nopervasives;
@@ -203,9 +207,20 @@ let cpp_main top =
   Options.verbosity := !verbose;
   Options.cc := !cc;
   Options.pretty := !pretty;
+  Options.use_cxx := !use_cxx;
   (* trigger exceptions *)
   Ocaml_config.init ();
-  if !findlib_pkgs <> [] || !cma_files <> [] then Toplevel.init top;
+  (* use native Findlib.init () *)
+  let stc =
+    match Sys.getenv "OCAMLFIND_TOOLCHAIN" with
+    | exception Not_found -> None
+    | "" -> None
+    | tc ->
+      Unix.putenv "OCAMLFIND_TOOLCHAIN" "";
+      Some tc
+  in
+  Toplevel.init top;
+  (match stc with None -> () | Some x -> Unix.putenv "OCAMLFIND_TOOLCHAIN" x);
   let l = if ml_output = "-" then [] else [ "-o"; ml_output ] in
   let l = source :: l in
   let l = if !pretty then l else "--dump-ast" :: l in

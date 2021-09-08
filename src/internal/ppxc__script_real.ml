@@ -691,6 +691,7 @@ module Extract_phase0 = struct
 
   let int_alias id_loc ctyp =
     let id, loc = U.from_id_loc_param id_loc in
+    let ntyp = U.safe_cname ~prefix:ctyp in
     let stru = U.safe_cname ~prefix:ctyp in
     let expl = U.safe_cname ~prefix:ctyp in
     let expl2 = U.safe_cname ~prefix:ctyp in
@@ -698,6 +699,7 @@ module Extract_phase0 = struct
     let txt =
       Printf.sprintf
         {|%s
+typedef %s %s; /* does the type exist at all? */
 struct %s {char c; %s x;};
 #if !defined(__cplusplus)
 %s %s = 0; /* trigger error for non scalar types */
@@ -708,10 +710,10 @@ struct %s {char c; %s x;};
 %s %s = static_cast<%s>(0);
 #endif
 |}
-        cloc stru ctyp ctyp expl ctyp expl2 ctyp ctyp expl ctyp
+        cloc ctyp ntyp stru ntyp ntyp expl ntyp expl2 ntyp ntyp expl ntyp
     in
     let exn = U.error_exn "%s not defined or not an integer?" ctyp in
-    let to_extract = Printf.sprintf "PPXC_INTALIAS(%s,%s,%s)" ctyp stru expl in
+    let to_extract = Printf.sprintf "PPXC_INTALIAS(%s,%s,%s)" ntyp stru expl in
     let info_str = Printf.sprintf "type info %s" ctyp in
     C_content_phase0.add_extract_header txt loc exn;
     Const_phase0.add ~info_str id loc to_extract `Unchecked_U32
@@ -828,13 +830,20 @@ module Extract = struct
     let id, loc = U.from_id_loc_param id_loc in
     let var = Std.Util.safe_cname ~prefix:"type_defined" in
     let cloc = U.cloc_comment loc in
-    let ctype =
+    let orig_ctype =
       match Extract_c_ml.prepare t with
       | None ->
         U.error "can't extract constants of type %s" (Ctypes.string_of_typ t)
       | Some x -> x.Extract_c_ml.ctype
     in
-    let eheader = Printf.sprintf "%s\n%s %s = %s;\n" cloc ctype var str in
+    let ctype = U.safe_cname ~prefix:orig_ctype in
+    let eheader =
+      Printf.sprintf {|%s
+typedef %s %s;
+%s %s = %s;
+|} cloc orig_ctype ctype
+        ctype var str
+    in
     let exn = U.error_exn "%s not defined" ctype in
     C_content.add_extract_header eheader loc exn;
     let min =
@@ -912,20 +921,22 @@ module Extract = struct
         CCString.replace ~which:`All ~sub:" " ~by:"_" msg1 |> U.safe_ascii_only
       in
       let msg1 = String.concat "" [ "\""; msg1; "\"" ] in
+      let ctyp_tp = U.safe_cname ~prefix:ctyp in
       let txt =
         Printf.sprintf
           {|
 %s
 #ifndef __cplusplus
-  DISABLE_STRUCT_WARNINGS_PUSH();
+  DISABLE_STRUCT_WARNINGS_PUSH()
   %s = {0};
-  DISABLE_STRUCT_WARNINGS_POP();
-  %s(%s,%s,%s);
+  DISABLE_STRUCT_WARNINGS_POP()
 #else
   %s;
 #endif
+  typedef %s %s;
+  %s(%s,%s,%s,%s)
 |}
-          com_loc var1_typed ass var1 msg1 msg2 var1_typed
+          com_loc var1_typed var1_typed ctyp ctyp_tp ass ctyp_tp var1 msg1 msg2
       in
       let e = U.error_exn "%s" msg1 in
       C_content.add_extract_header txt loc e
@@ -935,9 +946,9 @@ module Extract = struct
           {|
 %s
 #ifndef __cplusplus
-  DISABLE_STRUCT_WARNINGS_PUSH();
+  DISABLE_STRUCT_WARNINGS_PUSH()
   %s = {0};
-  DISABLE_STRUCT_WARNINGS_POP();
+  DISABLE_STRUCT_WARNINGS_POP()
 #else
   %s;
 #endif
@@ -978,7 +989,7 @@ DISABLE_CONST_WARNINGS_POP()
     C_content.add_extract_header txt loc e;
     let to_extract =
       Printf.sprintf
-        "((offsetof(%s,%s))|(PPXC_TYPES_COMPATIBLE(%s.%s,%s) << 29u))" ctyp
+        "((PPXC_OFFSETOF(%s,%s))|(PPXC_TYPES_COMPATIBLE(%s.%s,%s) << 29u))" ctyp
         field_name var1 field_name var2
     in
     let info_str = Printf.sprintf "field %s in %s" field_name ctyp in
@@ -996,7 +1007,7 @@ DISABLE_CONST_WARNINGS_POP()
     in
     let exn = U.error_exn "%s not defined?" ctyp in
     C_content.add_extract_header txt loc_size exn;
-    let align_str = Printf.sprintf "offsetof(struct %s,x)" struct_name in
+    let align_str = Printf.sprintf "PPXC_OFFSETOF(struct %s,x)" struct_name in
     Const.add ~info_str:("size of " ^ ctyp) id_size loc_size x size_str;
     Const.add ~info_str:("align of " ^ ctyp) id_align loc_align x align_str;
     struct_name
@@ -1039,25 +1050,25 @@ DISABLE_CONST_WARNINGS_POP()
     in
     U.with_loc enum_loc @@ fun () ->
     let info_str = "enum_type " ^ enum_name in
-    let type_str =
+    let orig_type_str =
       match enum_is_typedef with
       | false -> String.concat " " [ "enum"; enum_name ]
       | true -> enum_name
     in
+    let type_str = U.safe_cname ~prefix:enum_name in
     let evar = U.safe_cname ~prefix:enum_name in
-    let evar2 = U.safe_cname ~prefix:enum_name in
     let cloc = U.cloc_comment enum_loc in
     let txt =
       Printf.sprintf
         {|%s
-%s %s; /* type %s defined? */
+typedef %s %s; /* type %s defined? */
 #if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
 %s %s = ~((%s)0); /* enforce error for doubles */
 #endif
 |}
-        cloc type_str evar
+        cloc orig_type_str type_str
         (U.no_c_comments enum_name)
-        type_str evar2 type_str
+        type_str evar type_str
     in
     let exn = U.error_exn ~loc:enum_loc "type %s not defined?" enum_name in
     C_content.add_extract_header txt enum_loc exn;
@@ -1088,9 +1099,7 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
         let info_str = "type of " ^ c.ee_cname in
         Printf.sprintf "PPXC_ENUM_MEMBER_CHECK(%s,%s)" cname type_str
         |> Const.add ~info_str c.ee_type_check c.ee_loc `U8);
-    let str =
-      Printf.sprintf "PPXC_CTYPES_ARITHMETIC_TYPEINFO(%s,%s)" type_str evar
-    in
+    let str = "PPXC_CTYPES_ARITHMETIC_TYPEINFO(" ^ type_str ^ ")" in
     let eid = get_enum_id enum_type_id in
     Const.add ~info_str eid enum_loc `U32 str;
     (* wrong size, but not used inside extraction script *)
@@ -1121,17 +1130,23 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
   let common_abstract ~size ~align x ctyp =
     let _, loc = U.from_id_loc_param size in
     let cloc = U.cloc_comment loc in
+    let ntyp = U.safe_cname ~prefix:ctyp in
     let var = U.safe_cname ~prefix:ctyp in
-    let txt = Printf.sprintf "%s\n%s %s;\n" cloc ctyp var in
+    let txt =
+      Printf.sprintf {|%s
+typedef %s %s;
+%s %s;
+|} cloc ctyp ntyp ntyp var
+    in
     let exn = U.error_exn "%s not defined?" ctyp in
     C_content.add_extract_header txt loc exn;
     let stru' = size_align size align x ctyp in
-    (stru', var)
+    (stru', var, ntyp)
 
   let opaque ~size ~align ~typ ~mi:_ ctyp : (module Opaque_result) =
-    let stru, var = common_abstract ~size ~align `U32 ctyp in
+    let stru, var, ntyp = common_abstract ~size ~align `U32 ctyp in
     let id, loc = U.from_id_loc_param typ in
-    let te = Printf.sprintf "PPXC_OPAQUE(%s, %s, %s)" ctyp stru var in
+    let te = Printf.sprintf "PPXC_OPAQUE(%s, %s, %s)" ntyp stru var in
     let info_str = Printf.sprintf "type info %s" ctyp in
     Const.add ~info_str id loc `U32 te;
     Opaque_try_compile.save_cur_headers id;
@@ -1144,7 +1159,9 @@ char %s[2] = { ((char)((%s) > 1)), '\0' };  /* %s not a constant expression? */
     end )
 
   let abstract ~size ~align ctyp =
-    ignore (common_abstract ~size ~align `U32_to_expr ctyp : string * string);
+    ignore
+      (common_abstract ~size ~align `U32_to_expr ctyp
+        : string * string * string);
     Ctypes.abstract ~name:ctyp ~size:1 ~alignment:1
 
   let ocaml_funptr _ _ = () (* just to trigger errors early *)

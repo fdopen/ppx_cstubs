@@ -1,26 +1,3 @@
-(* This file is part of ppx_cstubs (https://github.com/fdopen/ppx_cstubs)
- * Copyright (c) 2018-2019 fdopen
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, with linking exception;
- * either version 2.1 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
- *)
-
-open Std
-open Std.Result
-
-let prologue =
-  {|
 #ifdef __cplusplus
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -1067,280 +1044,461 @@ namespace ppxc_extract
 
 #define PPXC_MIN_TYPE(typ) ( PPXC_SCAST(typ,-1) < 1 ? PPXC_MIN_SIGNED_TYPE(typ) : PPXC_SCAST(typ,0) )
 #define PPXC_MAX_TYPE(typ) ( PPXC_SCAST(typ, ~PPXC_MIN_TYPE(typ)) )
-|}
 
-let cnt =
-  let i = ref 0 in
-  fun () ->
-    let res = !i in
-    incr i;
-    res
 
-let int_to_char_array i =
-  let s = string_of_int i in
-  let b = Buffer.create (String.length s * 4) in
-  String.iter (fun c -> Printf.bprintf b "'%c'," c) s;
-  Buffer.contents b
+#include <stdio.h>
 
-type id = int
+struct foo {
+    int a;
+    char b;
+};
 
-type intern =
-  | String
-  | Integer of id
-  | Integer_no_type of id
-  | Unchecked_integer
+union ufoo {
+    int a;
+    char b;
+};
 
-type extract_info = {
-  id : id;
-  intern : intern;
-}
 
-type extract_int =
-  [ `Unchecked_U8
-  | `Unchecked_U32
-  | `Any_int
-  | `Int_type of string
-  ]
+typedef enum { Clubs =-1, Diamonds, Spades, Hearts = INT_MAX} card;
 
-let prepare_extract_int ~loc etyp expr =
-  let com_loc = Std.Util.cloc_comment loc in
-  let s_check =
-    match etyp with
-    | `Unchecked_U8 | `Unchecked_U32 -> ""
-    | `Any_int | `Int_type _ ->
-      let assign =
-        match etyp with
-        | `Any_int -> ""
-        | `Int_type ctype ->
-          let var = Std.Util.safe_cname ~prefix:"type_defined" in
-          Printf.sprintf "\n%s %s = %s;" ctype var expr
-        | `Unchecked_U8 | `Unchecked_U32 -> assert false
-      in
-      let var = Std.Util.safe_cname ~prefix:"extract_is_constexpr" in
-      let var2 = Std.Util.safe_cname ~prefix:"extract_is_integer" in
-      Printf.sprintf
-        {|
-%s%s
-char %s[2] = { ((char)((%s) > 0)), '\0' }; /* %s not a constant expression? */
-#if defined(PPXC_NO_PROPER_INTEGER_TEST) && !defined(__cplusplus)
-int64_t %s = (int64_t)(~(%s)); /* enforce error for doubles */
-#endif
-|}
-        com_loc assign var expr
-        (Std.Util.no_c_comments expr)
-        var2 expr
-  in
-  let expr, prepend =
-    match etyp with
-    | `Unchecked_U32 ->
-      let var = Std.Util.safe_cname ~prefix:expr in
-      let prepend =
-        Printf.sprintf
-          {|#if !defined(__cplusplus) || PPXC_MODERN_CPP || defined(__clang__) || !defined(__GNUC__)
-DISABLE_LIMIT_WARNINGS_PUSH()
-enum { %s = (%s) };
-DISABLE_LIMIT_WARNINGS_POP()
+
+#ifdef PPXC_MODERN_CPP
+#define UENUM 1
+typedef enum uenum : unsigned int { UA = 0, UB = 2 } uenum;
+#elif !defined(_MSC_VER)
+#define UENUM 1
+typedef enum uenum { UA = 0, UB = UINT64_MAX } uenum;
 #else
-#define %s (%s)
+#define UENUM 0
 #endif
-|}
-          var expr var expr
-      in
-      (var, prepend)
-    | `Any_int | `Int_type _ | `Unchecked_U8 -> (expr, "")
-  in
-  let gen ~etyp prepend info =
-    let stringify =
-      match etyp with
-      | `Unchecked_U8 -> "PPXC__SUD00"
-      | `Unchecked_U32 -> "PPXC__SUD03"
-      | `Any_int | `Int_type _ -> "PPXC__NSTR"
-    in
-    let id = cnt () in
-    let ar = int_to_char_array id in
-    let s =
-      Printf.sprintf
-        {|%s
-%s
-DISABLE_LIMIT_WARNINGS_PUSH()
-unsigned char ppx_c_extract_char_array_%d[] = {
-'P','P','X','C','_','C','O','N','S','T','_','N','R','_', %s '|',
-%s(%s),
-'|', %s '_','R','N','_','T','S','N','O','C','_','C','X','P','P', '\0' };
-DISABLE_LIMIT_WARNINGS_POP()
-|}
-        prepend com_loc id ar stringify info ar
-    in
-    (id, s)
-  in
-  let id, res_str1 = gen ~etyp prepend expr in
-  let res, src2 =
-    match etyp with
-    | `Unchecked_U8 | `Unchecked_U32 ->
-      ({ id; intern = Unchecked_integer }, res_str1)
-    | `Any_int | `Int_type _ -> (
-      let s_int = Printf.sprintf "( PPXC_IS_INTEGER_EXPR_DEF_TRUE(%s) )" expr in
-      let s_min =
-        Printf.sprintf "( (%s) >= 0 || (%s) >= INT64_MIN )" expr expr
-      in
-      let s_max =
-        Printf.sprintf "( (%s) <= 0 || (%s) <= UINT64_MAX )" expr expr
-      in
-      let cstr =
-        Printf.sprintf
-          "(((unsigned)(%s)) | (((unsigned)(%s)) << 1u) | (((unsigned)(%s)) << 2u))"
-          s_int s_min s_max
-      in
-      match etyp with
-      | `Unchecked_U8 | `Unchecked_U32 -> assert false
-      | `Any_int ->
-        let id_x, str = gen ~etyp:`Unchecked_U8 res_str1 cstr in
-        ({ id; intern = Integer_no_type id_x }, str)
-      | `Int_type ctype ->
-        let s_user_min =
-          Printf.sprintf "( (%s) >= 0 || (%s) >= (PPXC_MIN_TYPE(%s)) )" expr
-            expr ctype
-        in
-        let s_user_max =
-          Printf.sprintf "( (%s) <= 0 || (%s) <= (PPXC_MAX_TYPE(%s)) )" expr
-            expr ctype
-        in
-        let id_x, str =
-          gen ~etyp:`Unchecked_U8 res_str1
-          @@ Printf.sprintf
-               "( %s | (((unsigned)(%s)) << 3u) | (((unsigned)(%s)) << 4u) )"
-               cstr s_user_min s_user_max
-        in
-        ({ id; intern = Integer id_x }, str) )
-  in
-  (res, s_check, src2)
 
-let prepare_extract_string ~loc expr =
-  let cnt = cnt () in
-  let com_loc = Std.Util.cloc_comment loc in
-  let var = Std.Util.safe_cname ~prefix:"extract_is_string" in
-  (* src1 is redudant, but it makes the algorithm to locate errors easier *)
-  let src1 =
-    Printf.sprintf {|
-    %s
-char * %s = (char*) "test" %s;
-|} com_loc var expr
-  in
-  let src2 =
-    Printf.sprintf
-      {|
-char *ppx_c_extract_char_string%d = (char*)"PPXC_CONST_NR_%d|" %s "|%d_RN_TSNOC_CXPP";
-     |}
-      cnt cnt expr cnt
-  in
-  ({ id = cnt; intern = String }, src1, src2)
 
-type obj = (int, string) Hashtbl.t
+#if defined(__GNUC__) && defined(__x86_64__) && ( !defined(__cplusplus) || (defined(__cplusplus) && __cplusplus >= 201103L) )
+#define I128 1
+#else
+#define I128 0
+#endif
 
-let compile ~ebuf c_prog =
-  C_compile.compile ~stderr:(`Buffer ebuf) c_prog (fun ec obj ->
-      if ec <> 0 then
-        Error (Printf.sprintf "`ocamlfind ocamlc -c` failed with %d" ec)
-      else
-        CCIO.with_in ?mode:None ~flags:[ Open_binary ] obj @@ fun ch ->
-        let s = CCIO.read_all ch in
-        if s = "" then Error "`ocamlfind ocamlc -c` created an empty obj file"
-        else Ok s)
+#if defined(__cplusplus)
+#define TCOMPLEX 0
+#else
+#define TCOMPLEX 1
+#ifdef _MSC_VER
+typedef _Dcomplex dcomplex;
+#else
+typedef _Complex double dcomplex;
+#endif
+#endif
 
-let rex =
-  Re.Perl.re ~opts:[ `Ungreedy; `Dotall ]
-    "PPXC_CONST_NR_([0-9]+)\\|(.*)\\|([0-9]+)_RN_TSNOC_CXPP\000"
-  |> Re.compile
 
-let compile ~ebuf c_prog =
-  match compile ~ebuf c_prog with
-  | Error _ as x -> x
-  | Ok s ->
-    let rec iter i s len htl =
-      if i >= len then htl
-      else
-        match Re.exec_opt ~pos:i rex s with
-        | None -> htl
-        | Some g ->
-          let end' =
-            try
-              let id1 = Re.Group.get g 1 in
-              let id2 = Re.Group.get g 3 in
-              if id1 = id2 then (
-                let str = Re.Group.get g 2 in
-                Hashtbl.add htl (int_of_string id1) str;
-                Re.Group.stop g 0 )
-              else succ i
-            with Not_found | Failure _ -> succ i
-          in
-          iter end' s len htl
-    in
-    let h = iter 0 s (String.length s) (Hashtbl.create 64) in
-    Ok h
+#define AS(x)                                   \
+  do {                                          \
+    assert(x);                                  \
+    fputs(".",stdout);                          \
+  } while(0)
 
-type extract_error =
-  | Info_not_found
-  | Overflow of string
-  | Underflow of string
-  | Not_an_integer
+int main(void){
+  struct foo myfoo;
+  union ufoo myufoo;
+  const char * p = "Hallo";
+  bool b = 1;
+  int i = 3;
+  char c = 'a';
+  unsigned int ui = 1;
+  double d = 3.0;
+  card mcard = Clubs;
+#if UENUM
+  uenum muenum = UB;
+#endif
+#if TCOMPLEX
+  dcomplex dcplx;
+#endif
+#if I128
+  __uint128_t u128;
+  __int128_t i128;
+#endif
 
-let normalise_int r str =
-  match String.length str with
-  | 1 -> Char.code str.[0] |> string_of_int
-  | 4 ->
-    let c i = Char.code str.[i] |> Unsigned.UInt32.of_int in
-    let open Unsigned.UInt32.Infix in
-    let e = (c 0 lsl 24) lor (c 1 lsl 16) lor (c 2 lsl 8) lor c 3 in
-    Unsigned.UInt32.to_string e
-  | 9 -> (
-    let c i = Char.code str.[i] |> Unsigned.UInt64.of_int in
-    let open Unsigned.UInt64.Infix in
-    let e =
-      (c 1 lsl 56)
-      lor (c 2 lsl 48)
-      lor (c 3 lsl 40)
-      lor (c 4 lsl 32)
-      lor (c 5 lsl 24)
-      lor (c 6 lsl 16)
-      lor (c 7 lsl 8)
-      lor c 8
-    in
-    let e = Unsigned.UInt64.to_string e in
-    match str.[0] with
-    | '-' -> "-" ^ e
-    | '0' -> e
-    | _ -> r.return (Error Info_not_found) )
-  | _ -> r.return (Error Info_not_found)
+#ifdef PPXC_IS_INTEGER_TYPE
+  AS(!PPXC_IS_INTEGER_TYPE(struct foo));
+  AS(!PPXC_IS_INTEGER_TYPE(union ufoo));
+  AS(!PPXC_IS_INTEGER_TYPE(char *));
+  AS(!PPXC_IS_INTEGER_TYPE(double));
+  AS(PPXC_IS_INTEGER_TYPE(long));
+  AS(PPXC_IS_INTEGER_TYPE(unsigned long));
+  AS(PPXC_IS_INTEGER_TYPE(bool));
+  AS(PPXC_IS_INTEGER_TYPE(wchar_t));
+  AS(PPXC_IS_INTEGER_TYPE(char));
+  AS(PPXC_IS_INTEGER_TYPE(card));
+#if UENUM
+  AS(PPXC_IS_INTEGER_TYPE(uenum));
+#endif
+#if I128
+  AS(PPXC_IS_INTEGER_TYPE(__uint128_t));
+  AS(PPXC_IS_INTEGER_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_INTEGER_TYPE(dcomplex));
+#endif
+#endif
 
-let extract info htl =
-  with_return @@ fun r ->
-  let er er = r.return (Error er) in
-  let extract_single id =
-    match Hashtbl.find htl id with
-    | exception Not_found -> er Info_not_found
-    | s -> s
-  in
-  let res = extract_single info.id in
-  ( match info.intern with
-  | String -> r.return (Ok res)
-  | Unchecked_integer | Integer _ | Integer_no_type _ -> () );
-  let res = normalise_int r res in
-  let int' =
-    match info.intern with
-    | String -> assert false
-    | Unchecked_integer -> r.return (Ok res)
-    | Integer x | Integer_no_type x ->
-      let s = extract_single x in
-      if String.length s <> 1 then er Info_not_found;
-      Char.code s.[0]
-  in
-  if int' land (1 lsl 0) = 0 then er Not_an_integer;
-  if int' land (1 lsl 1) = 0 then er (Underflow res);
-  if int' land (1 lsl 2) = 0 then er (Overflow res);
-  ( match info.intern with
-  | Integer _ ->
-    if int' land (1 lsl 3) = 0 then er (Underflow res);
-    if int' land (1 lsl 4) = 0 then er (Overflow res)
-  | Integer_no_type _ -> ()
-  | String | Unchecked_integer -> assert false );
-  Ok res
+#ifdef PPXC_IS_INTEGER_EXPR
+  AS(!PPXC_IS_INTEGER_EXPR(myfoo));
+  AS(!PPXC_IS_INTEGER_EXPR(myufoo));
+  AS(!PPXC_IS_INTEGER_EXPR(p));
+  AS(!PPXC_IS_INTEGER_EXPR(d));
+  AS(PPXC_IS_INTEGER_EXPR(i));
+  AS(PPXC_IS_INTEGER_EXPR(ui));
+  AS(PPXC_IS_INTEGER_EXPR(b));
+  AS(PPXC_IS_INTEGER_EXPR(c));
+  AS(PPXC_IS_INTEGER_EXPR(mcard));
+#if UENUM
+  AS(PPXC_IS_INTEGER_EXPR(muenum));
+#endif
+#if I128
+  AS(PPXC_IS_INTEGER_EXPR(u128));
+  AS(PPXC_IS_INTEGER_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_INTEGER_EXPR(dcplx));
+#endif
+#endif
+
+#ifdef PPXC_IS_UNSIGNED_TYPE
+  AS(!PPXC_IS_UNSIGNED_TYPE(struct foo));
+  AS(!PPXC_IS_UNSIGNED_TYPE(union ufoo));
+  AS(!PPXC_IS_UNSIGNED_TYPE(char *));
+  AS(!PPXC_IS_UNSIGNED_TYPE(double));
+  AS(!PPXC_IS_UNSIGNED_TYPE(long));
+  AS(PPXC_IS_UNSIGNED_TYPE(unsigned long));
+  AS(PPXC_IS_UNSIGNED_TYPE(bool));
+  AS(!PPXC_IS_UNSIGNED_TYPE(card));
+#if UENUM
+  AS(PPXC_IS_UNSIGNED_TYPE(uenum));
+#endif
+#if I128
+  AS(PPXC_IS_UNSIGNED_TYPE(__uint128_t));
+  AS(!PPXC_IS_UNSIGNED_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_UNSIGNED_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_UNSIGNED_EXPR
+  AS(!PPXC_IS_UNSIGNED_EXPR(myfoo));
+  AS(!PPXC_IS_UNSIGNED_EXPR(myufoo));
+  AS(!PPXC_IS_UNSIGNED_EXPR(p));
+  AS(!PPXC_IS_UNSIGNED_EXPR(d));
+  AS(!PPXC_IS_UNSIGNED_EXPR(i));
+  AS(PPXC_IS_UNSIGNED_EXPR(ui));
+  AS(PPXC_IS_UNSIGNED_EXPR(b));
+  AS(!PPXC_IS_UNSIGNED_EXPR(Clubs));
+#if UENUM
+  AS(PPXC_IS_UNSIGNED_EXPR(UB));
+#endif
+#if I128
+  AS(PPXC_IS_UNSIGNED_EXPR(u128));
+  AS(!PPXC_IS_UNSIGNED_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_UNSIGNED_EXPR(dcplx));
+#endif
+#endif
+
+
+#ifdef PPXC_IS_FLOAT_TYPE
+  AS(!PPXC_IS_FLOAT_TYPE(struct foo));
+  AS(!PPXC_IS_FLOAT_TYPE(union ufoo));
+  AS(!PPXC_IS_FLOAT_TYPE(char *));
+  AS(PPXC_IS_FLOAT_TYPE(double));
+  AS(!PPXC_IS_FLOAT_TYPE(long));
+  AS(!PPXC_IS_FLOAT_TYPE(unsigned long));
+  AS(!PPXC_IS_FLOAT_TYPE(bool));
+  AS(!PPXC_IS_FLOAT_TYPE(char));
+  AS(!PPXC_IS_FLOAT_TYPE(card));
+#if UENUM
+  AS(!PPXC_IS_FLOAT_TYPE(uenum));
+#endif
+#if I128
+  AS(!PPXC_IS_FLOAT_TYPE(__uint128_t));
+  AS(!PPXC_IS_FLOAT_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_FLOAT_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_FLOAT_EXPR
+  AS(!PPXC_IS_FLOAT_EXPR(myfoo));
+  AS(!PPXC_IS_FLOAT_EXPR(myufoo));
+  AS(!PPXC_IS_FLOAT_EXPR(p));
+  AS(PPXC_IS_FLOAT_EXPR(d));
+  AS(!PPXC_IS_FLOAT_EXPR(i));
+  AS(!PPXC_IS_FLOAT_EXPR(ui));
+  AS(!PPXC_IS_FLOAT_EXPR(b));
+  AS(!PPXC_IS_FLOAT_EXPR(c));
+  AS(!PPXC_IS_FLOAT_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_FLOAT_EXPR(UB));
+#endif
+#if I128
+  AS(!PPXC_IS_FLOAT_EXPR(u128));
+  AS(!PPXC_IS_FLOAT_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_FLOAT_EXPR(dcplx));
+#endif
+#endif
+
+#ifdef PPXC_IS_COMPLEX_TYPE
+  AS(!PPXC_IS_COMPLEX_TYPE(struct foo));
+  AS(!PPXC_IS_COMPLEX_TYPE(union ufoo));
+  AS(!PPXC_IS_COMPLEX_TYPE(char *));
+  AS(!PPXC_IS_COMPLEX_TYPE(double));
+  AS(!PPXC_IS_COMPLEX_TYPE(long));
+  AS(!PPXC_IS_COMPLEX_TYPE(unsigned long));
+  AS(!PPXC_IS_COMPLEX_TYPE(bool));
+  AS(!PPXC_IS_COMPLEX_TYPE(char));
+  AS(!PPXC_IS_COMPLEX_TYPE(card));
+#if UENUM
+  AS(!PPXC_IS_COMPLEX_TYPE(uenum));
+#endif
+#if I128
+  AS(!PPXC_IS_COMPLEX_TYPE(__uint128_t));
+  AS(!PPXC_IS_COMPLEX_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(PPXC_IS_COMPLEX_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_COMPLEX_EXPR
+  AS(!PPXC_IS_COMPLEX_EXPR(myfoo));
+  AS(!PPXC_IS_COMPLEX_EXPR(myufoo));
+  AS(!PPXC_IS_COMPLEX_EXPR(p));
+  AS(!PPXC_IS_COMPLEX_EXPR(d));
+  AS(!PPXC_IS_COMPLEX_EXPR(i));
+  AS(!PPXC_IS_COMPLEX_EXPR(ui));
+  AS(!PPXC_IS_COMPLEX_EXPR(b));
+  AS(!PPXC_IS_COMPLEX_EXPR(c));
+  AS(!PPXC_IS_COMPLEX_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_COMPLEX_EXPR(UB));
+#endif
+#if I128
+  AS(!PPXC_IS_COMPLEX_EXPR(u128));
+  AS(!PPXC_IS_COMPLEX_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(PPXC_IS_COMPLEX_EXPR(dcplx));
+#endif
+#endif
+
+
+#ifdef PPXC_IS_POINTER_TYPE
+  AS(!PPXC_IS_POINTER_TYPE(struct foo));
+  AS(!PPXC_IS_POINTER_TYPE(union ufoo));
+  AS(PPXC_IS_POINTER_TYPE(char *));
+  AS(!PPXC_IS_POINTER_TYPE(double));
+  AS(!PPXC_IS_POINTER_TYPE(long));
+  AS(!PPXC_IS_POINTER_TYPE(unsigned long));
+  AS(!PPXC_IS_POINTER_TYPE(bool));
+  AS(!PPXC_IS_POINTER_TYPE(char));
+  AS(!PPXC_IS_POINTER_TYPE(card));
+#if UENUM
+  AS(!PPXC_IS_POINTER_TYPE(uenum));
+#endif
+#if I128
+  AS(!PPXC_IS_POINTER_TYPE(__uint128_t));
+  AS(!PPXC_IS_POINTER_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_POINTER_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_POINTER_EXPR
+  AS(!PPXC_IS_POINTER_EXPR(myfoo));
+  AS(!PPXC_IS_POINTER_EXPR(myufoo));
+  AS(PPXC_IS_POINTER_EXPR(p));
+  AS(!PPXC_IS_POINTER_EXPR(d));
+  AS(!PPXC_IS_POINTER_EXPR(i));
+  AS(!PPXC_IS_POINTER_EXPR(ui));
+  AS(!PPXC_IS_POINTER_EXPR(b));
+  AS(!PPXC_IS_POINTER_EXPR(c));
+  AS(!PPXC_IS_POINTER_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_POINTER_EXPR(UB));
+#endif
+#if I128
+  AS(!PPXC_IS_POINTER_EXPR(u128));
+  AS(!PPXC_IS_POINTER_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_POINTER_EXPR(dcplx));
+#endif
+#endif
+
+
+#ifdef PPXC_IS_UNION_TYPE
+  AS(!PPXC_IS_UNION_TYPE(struct foo));
+  AS(PPXC_IS_UNION_TYPE(union ufoo));
+  AS(!PPXC_IS_UNION_TYPE(char *));
+  AS(!PPXC_IS_UNION_TYPE(double));
+  AS(!PPXC_IS_UNION_TYPE(long));
+  AS(!PPXC_IS_UNION_TYPE(unsigned long));
+  AS(!PPXC_IS_UNION_TYPE(bool));
+  AS(!PPXC_IS_UNION_TYPE(char));
+  AS(!PPXC_IS_UNION_TYPE(card));
+#if UENUM
+  AS(!PPXC_IS_UNION_TYPE(uenum));
+#endif
+#if I128
+  AS(!PPXC_IS_UNION_TYPE(__uint128_t));
+  AS(!PPXC_IS_UNION_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_UNION_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_UNION_EXPR
+  AS(!PPXC_IS_UNION_EXPR(myfoo));
+  AS(PPXC_IS_UNION_EXPR(myufoo));
+  AS(!PPXC_IS_UNION_EXPR(p));
+  AS(!PPXC_IS_UNION_EXPR(d));
+  AS(!PPXC_IS_UNION_EXPR(i));
+  AS(!PPXC_IS_UNION_EXPR(ui));
+  AS(!PPXC_IS_UNION_EXPR(b));
+  AS(!PPXC_IS_UNION_EXPR(c));
+  AS(!PPXC_IS_UNION_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_UNION_EXPR(UB));
+#endif
+#if I128
+  AS(!PPXC_IS_UNION_EXPR(u128));
+  AS(!PPXC_IS_UNION_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_UNION_EXPR(dcplx));
+#endif
+#endif
+
+
+#ifdef PPXC_IS_STRUCT_TYPE
+  AS(!PPXC_IS_STRUCT_TYPE(struct foo));
+  AS(PPXC_IS_STRUCT_TYPE(union ufoo));
+  AS(!PPXC_IS_STRUCT_TYPE(char *));
+  AS(!PPXC_IS_STRUCT_TYPE(double));
+  AS(!PPXC_IS_STRUCT_TYPE(long));
+  AS(!PPXC_IS_STRUCT_TYPE(unsigned long));
+  AS(!PPXC_IS_STRUCT_TYPE(bool));
+  AS(!PPXC_IS_STRUCT_TYPE(char));
+  AS(!PPXC_IS_STRUCT_TYPE(card));
+  AS(!PPXC_IS_STRUCT_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_STRUCT_EXPR(UB));
+#endif
+#if UENUM
+  AS(!PPXC_IS_STRUCT_TYPE(uenum));
+#endif
+#if I128
+  AS(!PPXC_IS_STRUCT_TYPE(__uint128_t));
+  AS(!PPXC_IS_STRUCT_TYPE(__int128_t));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_STRUCT_TYPE(dcomplex));
+#endif
+#endif
+
+#ifdef PPXC_IS_STRUCT_EXPR
+  AS(!PPXC_IS_STRUCT_EXPR(myfoo));
+  AS(PPXC_IS_STRUCT_EXPR(myufoo));
+  AS(!PPXC_IS_STRUCT_EXPR(p));
+  AS(!PPXC_IS_STRUCT_EXPR(d));
+  AS(!PPXC_IS_STRUCT_EXPR(i));
+  AS(!PPXC_IS_STRUCT_EXPR(ui));
+  AS(!PPXC_IS_STRUCT_EXPR(b));
+  AS(!PPXC_IS_STRUCT_EXPR(c));
+  AS(!PPXC_IS_STRUCT_EXPR(Clubs));
+#if UENUM
+  AS(!PPXC_IS_STRUCT_EXPR(UB));
+#endif
+#if I128
+  AS(!PPXC_IS_STRUCT_EXPR(u128));
+  AS(!PPXC_IS_STRUCT_EXPR(i128));
+#endif
+#if TCOMPLEX
+  AS(!PPXC_IS_STRUCT_EXPR(dcplx));
+#endif
+#endif
+
+/*
+  int a;
+  int b;
+  int c;
+
+  a = PPXC_IS_INTEGER_TYPE(struct foo);
+  b = PPXC_IS_INTEGER_TYPE(__uint128_t);
+  c = PPXC_IS_INTEGER_TYPE(card);
+  printf("unssigned type: %d %d %d\n", a, b, c);
+
+  a = PPXC_IS_INTEGER_EXPR(myfoo);
+  b = PPXC_IS_INTEGER_EXPR(128);
+  c = PPXC_IS_INTEGER_EXPR(Hearts);
+  printf("integer expr: %d %d %d\n", a, b, c);
+
+  puts("");
+
+  a = PPXC_IS_UNSIGNED_TYPE(struct foo);
+  b = PPXC_IS_UNSIGNED_TYPE(__uint128_t);
+  c = PPXC_IS_UNSIGNED_TYPE(card);
+  printf("unssigned type: %d %d %d\n", a, b, c);
+
+  a = PPXC_IS_UNSIGNED_EXPR(myfoo);
+  b = PPXC_IS_UNSIGNED_EXPR(128);
+  c = PPXC_IS_UNSIGNED_EXPR(Hearts);
+  printf("unsigned expr: %d %d %d\n", a, b, c);
+  puts("");
+
+
+  a = PPXC_IS_FLOAT_TYPE(struct foo);
+  b = PPXC_IS_FLOAT_TYPE(double);
+  c = PPXC_IS_FLOAT_TYPE(card);
+  printf("float type: %d %d %d\n", a, b, c);
+
+  a = PPXC_IS_FLOAT_EXPR(myfoo);
+  b = PPXC_IS_FLOAT_EXPR(d);
+  c = PPXC_IS_FLOAT_EXPR(dcplx;
+  printf("float expr: %d %d %d\n", a, b, c);
+  puts("");
+
+#ifdef PPXC_IS_COMPLEX_TYPE
+  a = PPXC_IS_COMPLEX_TYPE(struct foo);
+  b = PPXC_IS_COMPLEX_TYPE(double);
+  c = PPXC_IS_COMPLEX_TYPE(_Complex float);
+  printf("complex type: %d %d %d\n", a, b, c);
+
+  a = PPXC_IS_COMPLEX_EXPR(myfoo);
+  b = PPXC_IS_COMPLEX_EXPR(d);
+  c = PPXC_IS_COMPLEX_EXPR(dcplx;
+  printf("complex expr: %d %d %d\n", a, b, c);
+  puts("");
+#endif
+
+  a = PPXC_IS_POINTER_TYPE(struct foo *);
+  b = PPXC_IS_POINTER_TYPE(void *);
+  c = PPXC_IS_POINTER_TYPE(_Complex float);
+  printf("pointer type: %d %d %d\n", a, b, c);
+
+  a = PPXC_IS_POINTER_EXPR(myfoo);
+  b = PPXC_IS_POINTER_EXPR((int*)0);
+  c = PPXC_IS_POINTER_EXPR(dcplx;
+  printf("pointer expr: %d %d %d\n", a, b, c);
+  puts("");
+
+  */
+    puts("");
+
+  return 0;
+}

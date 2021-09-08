@@ -16,7 +16,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-val ocaml_flags_default : string list
+val ocaml_include_dirs_default : string list
 
 val keep_tmp : bool ref
 
@@ -28,7 +28,7 @@ val verbosity : int ref
 
 val c_flags : string list ref
 
-val ocaml_flags : string list ref
+val ocaml_include_dirs : string list ref
 
 val c_output_file : string option ref
 
@@ -53,6 +53,8 @@ type mode =
 val mode : mode ref
 
 val cc : string option ref
+
+val use_cxx : bool ref
 
 val toolchain_used : unit -> bool
 

@@ -30,3 +30,7 @@ val system : unit -> string
 val runtime_version : int * int * int
 
 val use_open_struct : unit -> bool
+
+val c_compiler_flags : unit -> string * string list
+
+val standard_library : unit -> string
