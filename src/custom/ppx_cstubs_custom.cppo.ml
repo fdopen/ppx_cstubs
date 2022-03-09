@@ -71,7 +71,9 @@ let eval st =
     in
 #endif
     Typecore.reset_delayed_checks () ;
-#if OCAML_VERSION >= (4, 12, 0)
+#if OCAML_VERSION >= (4, 14, 0)
+    let (str, _sg, _sn, _shape, newenv) = Typemod.type_structure !toplevel_env st in
+#elif OCAML_VERSION >= (4, 12, 0)
     let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st in
 #elif OCAML_VERSION >= (4, 8, 0)
     let (str, _sg, _sn, newenv) = Typemod.type_structure !toplevel_env st loc in
