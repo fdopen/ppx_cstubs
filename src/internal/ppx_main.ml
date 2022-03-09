@@ -1620,7 +1620,7 @@ end = struct
     let tdl_entry_id, tdl_entry = Id.get_tdl_entries_id () in
     Hashtbl.add htl_tdl_entries tdl_entry_id stri;
     OSTypes.add_types_cb mod_name
-    |> CCOpt.iter (Hashtbl.add htl_tdl_entries tdl_entry_id);
+    |> CCOption.iter (Hashtbl.add htl_tdl_entries tdl_entry_id);
     tdl_entry
 
   let typ name e =
