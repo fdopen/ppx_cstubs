@@ -54,7 +54,11 @@ let init ~nopervasives ~pkgs ~use_threads ~cma_files () =
      ListLabels.iter cma_files ~f:(fun s ->
           let dir = Filename.dirname s in
           if dir <> "." then Topdirs.dir_directory dir ;
+#if OCAML_VERSION < (4, 13, 0)
+          let b = Topdirs.load_file Format.str_formatter s in
+#else
           let b = Toploop.load_file Format.str_formatter s in
+#endif
           let msg = Format.flush_str_formatter () in
           if not b then (
             Printf.eprintf "fatal:failed to load %s (%s)\n%!" s msg ;
