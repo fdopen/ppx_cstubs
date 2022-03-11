@@ -1619,8 +1619,9 @@ end = struct
     let stri = Str.module_ mb in
     let tdl_entry_id, tdl_entry = Id.get_tdl_entries_id () in
     Hashtbl.add htl_tdl_entries tdl_entry_id stri;
-    OSTypes.add_types_cb mod_name
-    |> CCOption.iter (Hashtbl.add htl_tdl_entries tdl_entry_id);
+    (match OSTypes.add_types_cb mod_name with
+    | None -> ()
+    | Some x -> Hashtbl.add htl_tdl_entries tdl_entry_id x);
     tdl_entry
 
   let typ name e =
