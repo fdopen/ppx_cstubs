@@ -1,3 +1,15 @@
+0.7.0 (13/03/2022)
+------------------
+
+- support for OCaml 4.14.0
+
+- better support for ancient C compilers like msvc
+
+- easier handling when a C++ compiler must be used, see the new `-cxx`
+  command-line flag. Compatibility with varios C++ compilers has also
+  been improved.
+
+
 0.6.1.2 (10/08/2021)
 ------------------
 
