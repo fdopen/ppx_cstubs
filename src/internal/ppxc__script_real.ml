@@ -57,6 +57,9 @@ module C_content_make (E : Empty) = struct
 
   let default_header =
     {|
+#ifndef CAML_NAME_SPACE
+#define CAML_NAME_SPACE
+#endif
 #include <ctypes_cstubs_internals.h>
 #include <caml/callback.h>
 #include <caml/fail.h>

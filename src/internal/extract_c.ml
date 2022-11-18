@@ -36,6 +36,9 @@ let prologue =
 #include <inttypes.h>
 #include <string.h>
 #include <assert.h>
+#ifndef CAML_NAME_SPACE
+#define CAML_NAME_SPACE
+#endif
 #include <ctypes_cstubs_internals.h>
 
 #if (defined(__GNUC__) && ( __GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 3))) || (defined(__clang_major__) && (__clang_major__ >= 3))
